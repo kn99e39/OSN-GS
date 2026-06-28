@@ -1,0 +1,42 @@
+pipeline:
+  base_curve_count: 4
+  occlusion_offset_scale: 0.25
+  uncertain_samples_u: 8
+  uncertain_samples_v: 2
+  color_cluster_count: 4
+  uncertain_opacity: 0.2
+  uncertain_scale: 0.02
+
+training:
+  iterations: 10
+  batch_size: 1
+  surface_loss_weight: 0.01
+  uncertainty_loss_weight: 0.1
+
+schedule:
+  curve_update_interval: 100
+  density_control_interval: 100
+
+torch_pipeline:
+  sh_degree: 3
+  base_curve_count: 8
+  occlusion_offset_scale: 0.25
+  uncertain_samples_u: 16
+  uncertain_samples_v: 3
+  uncertain_opacity: 0.08
+  uncertain_scale: 0.025
+  color_cluster_count: 6
+
+torch_training:
+  iterations: 1000
+  batch_size: 1
+  lambda_l1: 0.8
+  lambda_mse: 0.2
+  lambda_surface: 0.01
+  lambda_uncertainty: 0.05
+  lambda_anchor: 0.01
+  sh_increment_interval: 1000
+  surface_rebuild_interval: 1000
+  density_control_interval: 500
+  save_interval: 1000
+  prefer_cuda: true
