@@ -1,18 +1,14 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
-"""COLMAP/Graphdeco-style dataset loader for OSN-GS.
+"""COLMAP and Graphdeco-style dataset loader for OSN-GS.
 
-OSN-GS가 기존 3DGS 데이터셋을 직접 받을 수 있게 하는 모듈이다.
-지원하는 기본 layout:
+This module lets OSN-GS consume a standard 3DGS dataset layout:
 
 scene_root/
   images/
   sparse/0/cameras.bin or cameras.txt
   sparse/0/images.bin or images.txt
   sparse/0/points3D.bin or points3D.txt
-
-초기 certain Gaussian은 COLMAP sparse point cloud의 `points3D`에서 만들고,
-학습 target은 `images/` 아래의 RGB 이미지를 Torch tensor로 읽는다.
 """
 
 import math
@@ -72,15 +68,18 @@ class ColmapPointCloud:
 def load_colmap_scene(
     scene_root: str | Path,
     device: str = "cuda",
+    image_device: str | None = None,
     image_dir_name: str = "images",
     sparse_dir_name: str = "sparse/0",
     image_downscale: int = 1,
     max_images: int = 0,
 ) -> TorchScene:
-    """COLMAP scene을 OSN-GS TorchScene으로 변환한다."""
+    """Convert a COLMAP scene into the TorchScene format used by OSN-GS."""
 
     torch = require_torch()
     scene_root = Path(scene_root)
+    if image_device is None:
+        image_device = device
     image_root = scene_root / image_dir_name
     sparse_root = scene_root / sparse_dir_name
     if not image_root.exists():
@@ -104,7 +103,7 @@ def load_colmap_scene(
     for image in ordered_images:
         colmap_camera = cameras[image.camera_id]
         image_path = resolve_image_path(image_root, image.name)
-        image_tensor, height, width = load_image_tensor(image_path, device=device, downscale=image_downscale)
+        image_tensor, height, width = load_image_tensor(image_path, device=image_device, downscale=image_downscale)
         fovx, fovy = camera_fovs(colmap_camera, width=width, height=height, downscale=image_downscale)
         world_view, full_proj, center = camera_matrices(image.qvec, image.tvec, fovx, fovy, device=device)
         torch_cameras.append(
@@ -132,6 +131,7 @@ def load_colmap_scene(
         initial_colors=colors,
         cameras=torch_cameras,
         images=torch.stack(image_tensors, dim=0),
+        device=device,
         extent=extent,
     )
 

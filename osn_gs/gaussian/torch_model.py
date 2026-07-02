@@ -1,11 +1,11 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 """3DGS-style Torch Gaussian parameter container.
 
-기존 Inria 3DGS의 `GaussianModel`이 rasterizer와 약속하는 핵심 property
-(`get_xyz`, `get_features`, `get_opacity`, `get_scaling`, `get_rotation`)를
-OSN-GS 내부 모델도 제공한다. 덕분에 CUDA rasterizer adapter가 이 모델을
-거의 같은 방식으로 넘길 수 있다.
+湲곗〈 Inria 3DGS??`GaussianModel`??rasterizer? ?쎌냽?섎뒗 ?듭떖 property
+(`get_xyz`, `get_features`, `get_opacity`, `get_scaling`, `get_rotation`)瑜?
+OSN-GS ?대? 紐⑤뜽???쒓났?쒕떎. ?뺣텇??CUDA rasterizer adapter媛 ??紐⑤뜽??
+嫄곗쓽 媛숈? 諛⑹떇?쇰줈 ?섍만 ???덈떎.
 """
 
 from dataclasses import dataclass
@@ -17,9 +17,9 @@ from osn_gs.utils.torch_ops import inverse_sigmoid, quaternion_identity, require
 
 @dataclass
 class GaussianParameterGroups:
-    """Gaussian parameter group별 learning rate."""
+    """Gaussian parameter group蹂?learning rate."""
 
-    # Gaussian center 위치.
+    # Gaussian center ?꾩튂.
     xyz_lr: float = 1.6e-4
     # SH DC color coefficient.
     feature_lr: float = 2.5e-3
@@ -29,23 +29,23 @@ class GaussianParameterGroups:
     scaling_lr: float = 5.0e-3
     # quaternion rotation.
     rotation_lr: float = 1.0e-3
-    # OSN-GS에서 추가한 uncertain confidence logit.
+    # OSN-GS?먯꽌 異붽???uncertain confidence logit.
     confidence_lr: float = 1.0e-3
 
 
 class TorchGaussianModel:
-    """Certain/uncertain Gaussian을 하나의 parameter tensor 묶음으로 보관한다."""
+    """Certain/uncertain Gaussian???섎굹??parameter tensor 臾띠쓬?쇰줈 蹂닿??쒕떎."""
 
     def __init__(self, sh_degree: int = 3, device: str = "cuda") -> None:
         torch = require_torch()
         self.torch = torch
         self.device = device
-        # active_sh_degree는 학습 중 점진적으로 증가한다.
+        # active_sh_degree???숈뒿 以??먯쭊?곸쑝濡?利앷??쒕떎.
         self.max_sh_degree = sh_degree
         self.active_sh_degree = 0
 
-        # 아래 Parameter들은 initialize 전에는 빈 tensor다.
-        # initialize 이후 optimizer가 이 Parameter들을 잡는다.
+        # ?꾨옒 Parameter?ㅼ? initialize ?꾩뿉??鍮?tensor??
+        # initialize ?댄썑 optimizer媛 ??Parameter?ㅼ쓣 ?〓뒗??
         self._xyz = torch.nn.Parameter(torch.empty((0, 3), dtype=torch.float32, device=device))
         self._features_dc = torch.nn.Parameter(torch.empty((0, 1, 3), dtype=torch.float32, device=device))
         self._features_rest = torch.nn.Parameter(
@@ -56,7 +56,7 @@ class TorchGaussianModel:
         self._opacity = torch.nn.Parameter(torch.empty((0, 1), dtype=torch.float32, device=device))
         self._confidence = torch.nn.Parameter(torch.empty((0, 1), dtype=torch.float32, device=device))
 
-        # OSN-GS metadata. optimizer 대상은 아니지만 loss/policy에서 필요하다.
+        # OSN-GS metadata. optimizer ??곸? ?꾨땲吏留?loss/policy?먯꽌 ?꾩슂?섎떎.
         self.is_uncertain = torch.empty((0,), dtype=torch.bool, device=device)
         self.surface_uv = torch.empty((0, 2), dtype=torch.float32, device=device)
         self.cluster_ids = torch.empty((0,), dtype=torch.long, device=device)
@@ -64,32 +64,32 @@ class TorchGaussianModel:
 
     @property
     def get_xyz(self) -> Any:
-        # Rasterizer가 직접 gradient를 흘리는 Gaussian center.
+        # Rasterizer媛 吏곸젒 gradient瑜??섎━??Gaussian center.
         return self._xyz
 
     @property
     def get_scaling(self) -> Any:
-        # 3DGS convention: raw scale은 log domain에 두고 exp로 양수화한다.
+        # 3DGS convention: raw scale? log domain???먭퀬 exp濡??묒닔?뷀븳??
         return self.torch.exp(self._scaling)
 
     @property
     def get_rotation(self) -> Any:
-        # quaternion은 normalize해서 rotation parameter로 사용한다.
+        # quaternion? normalize?댁꽌 rotation parameter濡??ъ슜?쒕떎.
         return self.torch.nn.functional.normalize(self._rotation, dim=-1)
 
     @property
     def get_opacity(self) -> Any:
-        # opacity도 logit으로 들고 sigmoid로 [0, 1] 범위에 둔다.
+        # opacity??logit?쇰줈 ?ㅺ퀬 sigmoid濡?[0, 1] 踰붿쐞???붾떎.
         return self.torch.sigmoid(self._opacity)
 
     @property
     def get_confidence(self) -> Any:
-        # OSN-GS 전용: uncertain Gaussian의 구조 신뢰도.
+        # OSN-GS ?꾩슜: uncertain Gaussian??援ъ“ ?좊ː??
         return self.torch.sigmoid(self._confidence)
 
     @property
     def get_features(self) -> Any:
-        # CUDA rasterizer가 기대하는 SH feature tensor.
+        # CUDA rasterizer媛 湲곕??섎뒗 SH feature tensor.
         return self.torch.cat([self._features_dc, self._features_rest], dim=1)
 
     @property
@@ -102,14 +102,14 @@ class TorchGaussianModel:
 
     @property
     def rgb(self) -> Any:
-        # 현재 color 초기화/저장은 SH DC만 RGB로 되돌려 사용한다.
+        # ?꾩옱 color 珥덇린????μ? SH DC留?RGB濡??섎룎???ъ슜?쒕떎.
         return self.torch.clamp(sh_dc_to_rgb(self._features_dc[:, 0, :]), 0.0, 1.0)
 
     def __len__(self) -> int:
         return int(self._xyz.shape[0])
 
     def oneup_sh_degree(self) -> None:
-        # 기존 3DGS와 동일하게 coarse-to-fine color 표현을 위해 SH degree를 올린다.
+        # 湲곗〈 3DGS? ?숈씪?섍쾶 coarse-to-fine color ?쒗쁽???꾪빐 SH degree瑜??щ┛??
         if self.active_sh_degree < self.max_sh_degree:
             self.active_sh_degree += 1
 
@@ -124,19 +124,19 @@ class TorchGaussianModel:
         cluster_ids: Any | None = None,
         confidence: Any | None = None,
     ) -> None:
-        """Gaussian parameter tensor들을 새 값으로 초기화한다.
+        """Gaussian parameter tensor?ㅼ쓣 ??媛믪쑝濡?珥덇린?뷀븳??
 
-        prune/rebuild/append에서도 이 함수를 재사용한다. 이 방식은 optimizer state를
-        보존하지는 않지만, 연구 초기 단계에서 shape 변경을 단순하게 처리할 수 있다.
+        prune/rebuild/append?먯꽌?????⑥닔瑜??ъ궗?⑺븳?? ??諛⑹떇? optimizer state瑜?
+        蹂댁〈?섏????딆?留? ?곌뎄 珥덇린 ?④퀎?먯꽌 shape 蹂寃쎌쓣 ?⑥닚?섍쾶 泥섎━?????덈떎.
         """
 
         torch = self.torch
-        # 모든 입력은 device-local float tensor로 통일한다.
+        # 紐⑤뱺 ?낅젰? device-local float tensor濡??듭씪?쒕떎.
         positions = torch.as_tensor(positions, dtype=torch.float32, device=self.device)
         colors = torch.as_tensor(colors, dtype=torch.float32, device=self.device)
         count = positions.shape[0]
 
-        # opacity/scale이 없으면 3DGS 초기값에 가까운 작은 Gaussian으로 시작한다.
+        # opacity/scale???놁쑝硫?3DGS 珥덇린媛믪뿉 媛源뚯슫 ?묒? Gaussian?쇰줈 ?쒖옉?쒕떎.
         if opacities is None:
             opacities = torch.full((count, 1), 0.1, dtype=torch.float32, device=self.device)
         else:
@@ -146,25 +146,25 @@ class TorchGaussianModel:
         else:
             scales = torch.as_tensor(scales, dtype=torch.float32, device=self.device).reshape(count, 3)
 
-        # uncertain_mask는 certain/uncertain을 loss와 density policy에서 분기하는 핵심 flag다.
+        # uncertain_mask??certain/uncertain??loss? density policy?먯꽌 遺꾧린?섎뒗 ?듭떖 flag??
         if uncertain_mask is None:
             uncertain_mask = torch.zeros((count,), dtype=torch.bool, device=self.device)
         else:
             uncertain_mask = torch.as_tensor(uncertain_mask, dtype=torch.bool, device=self.device).reshape(count)
 
-        # surface_uv는 uncertain Gaussian이 NURBS surface의 어느 parameter에 묶였는지 저장한다.
+        # surface_uv??uncertain Gaussian??NURBS surface???대뒓 parameter??臾띠??붿? ??ν븳??
         if surface_uv is None:
             surface_uv = torch.zeros((count, 2), dtype=torch.float32, device=self.device)
         else:
             surface_uv = torch.as_tensor(surface_uv, dtype=torch.float32, device=self.device).reshape(count, 2)
 
-        # cluster_ids는 color prior/ADC pattern transfer를 위한 hook이다.
+        # cluster_ids??color prior/ADC pattern transfer瑜??꾪븳 hook?대떎.
         if cluster_ids is None:
             cluster_ids = torch.full((count,), -1, dtype=torch.long, device=self.device)
         else:
             cluster_ids = torch.as_tensor(cluster_ids, dtype=torch.long, device=self.device).reshape(count)
 
-        # 기본 confidence는 certain=1, uncertain=0.25로 둔다.
+        # 湲곕낯 confidence??certain=1, uncertain=0.25濡??붾떎.
         if confidence is None:
             confidence = torch.where(
                 uncertain_mask[:, None],
@@ -176,7 +176,7 @@ class TorchGaussianModel:
 
         rest_dim = (self.max_sh_degree + 1) ** 2 - 1
 
-        # 학습 안정성을 위해 실제 constrained 값 대신 unconstrained raw parameter를 둔다.
+        # ?숈뒿 ?덉젙?깆쓣 ?꾪빐 ?ㅼ젣 constrained 媛????unconstrained raw parameter瑜??붾떎.
         self._xyz = torch.nn.Parameter(positions.requires_grad_(True))
         self._features_dc = torch.nn.Parameter(rgb_to_sh_dc(colors).reshape(count, 1, 3).requires_grad_(True))
         self._features_rest = torch.nn.Parameter(torch.zeros((count, rest_dim, 3), device=self.device).requires_grad_(True))
@@ -189,7 +189,7 @@ class TorchGaussianModel:
         self.cluster_ids = cluster_ids
 
     def training_setup(self, groups: GaussianParameterGroups) -> None:
-        """Parameter group별 learning rate로 Adam optimizer를 만든다."""
+        """Parameter group蹂?learning rate濡?Adam optimizer瑜?留뚮뱺??"""
 
         torch = self.torch
         params = [
@@ -204,10 +204,10 @@ class TorchGaussianModel:
         self.optimizer = torch.optim.Adam(params, lr=0.0, eps=1e-15)
 
     def append_uncertain(self, positions: Any, colors: Any, surface_uv: Any, cluster_ids: Any, opacity: float, scale: float) -> None:
-        """기존 model 뒤에 uncertain Gaussian을 추가한다.
+        """湲곗〈 model ?ㅼ뿉 uncertain Gaussian??異붽??쒕떎.
 
-        현재 pipeline은 rebuild 시 initialize를 주로 쓰지만, 나중에 online surface
-        sampling이나 ADC 기반 uncertain densification을 넣을 때 이 함수가 사용된다.
+        ?꾩옱 pipeline? rebuild ??initialize瑜?二쇰줈 ?곗?留? ?섏쨷??online surface
+        sampling?대굹 ADC 湲곕컲 uncertain densification???ｌ쓣 ?????⑥닔媛 ?ъ슜?쒕떎.
         """
 
         torch = self.torch
@@ -218,7 +218,7 @@ class TorchGaussianModel:
         count = positions.shape[0]
         if count == 0:
             return
-        # shape이 바뀌므로 단순하게 전체 tensor를 재초기화한다.
+        # shape??諛붾뚮?濡??⑥닚?섍쾶 ?꾩껜 tensor瑜??ъ큹湲고솕?쒕떎.
         self.initialize(
             positions=torch.cat([self._xyz.detach(), positions], dim=0),
             colors=torch.cat([self.rgb.detach(), colors], dim=0),
@@ -237,7 +237,7 @@ class TorchGaussianModel:
         )
 
     def prune(self, keep_mask: Any) -> None:
-        """keep_mask가 False인 Gaussian을 제거한다."""
+        """keep_mask媛 False??Gaussian???쒓굅?쒕떎."""
 
         torch = self.torch
         keep_mask = torch.as_tensor(keep_mask, dtype=torch.bool, device=self.device)
@@ -253,31 +253,43 @@ class TorchGaussianModel:
         )
 
     def save_ply(self, path: str | Path) -> None:
-        """현재 Gaussian들을 ASCII PLY로 저장한다.
+        """Save Gaussians as a Graphdeco-style PLY for external renderers.
 
-        표준 3DGS PLY 전체 속성을 모두 쓰지는 않지만, x/y/z, RGB, opacity,
-        scale, uncertain flag를 저장해 시각화와 디버깅에는 충분하게 둔다.
+        The WebRenderer PLY loader requires `x`, `y`, `z`, `f_dc_0..2`, and
+        raw `opacity`. It also understands raw log-scale `scale_0..2` and
+        quaternion `rot_0..3`, so OSN-GS writes those names directly instead
+        of the earlier debug-only RGB/scale_x fields.
         """
 
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         xyz = self._xyz.detach().cpu()
-        colors = (self.rgb.detach().cpu().clamp(0.0, 1.0) * 255.0).to(self.torch.uint8)
-        opacity = self.get_opacity.detach().cpu()
-        scales = self.get_scaling.detach().cpu()
+        features_dc = self._features_dc.detach().cpu()[:, 0, :]
+        opacity = self._opacity.detach().cpu()
+        scales = self._scaling.detach().cpu()
+        rotation = self.get_rotation.detach().cpu()
+        confidence = self.get_confidence.detach().cpu()
         uncertain = self.is_uncertain.detach().cpu().to(self.torch.int32)
         with path.open("w", encoding="utf-8") as handle:
             handle.write("ply\nformat ascii 1.0\n")
             handle.write(f"element vertex {len(self)}\n")
             handle.write("property float x\nproperty float y\nproperty float z\n")
-            handle.write("property uchar red\nproperty uchar green\nproperty uchar blue\n")
+            handle.write("property float f_dc_0\nproperty float f_dc_1\nproperty float f_dc_2\n")
             handle.write("property float opacity\n")
-            handle.write("property float scale_x\nproperty float scale_y\nproperty float scale_z\n")
-            handle.write("property int uncertain\nend_header\n")
+            handle.write("property float scale_0\nproperty float scale_1\nproperty float scale_2\n")
+            handle.write("property float rot_0\nproperty float rot_1\nproperty float rot_2\nproperty float rot_3\n")
+            handle.write("property int uncertain\n")
+            handle.write("property float confidence\n")
+            handle.write("end_header\n")
             for idx in range(len(self)):
                 x, y, z = xyz[idx].tolist()
-                r, g, b = colors[idx].tolist()
+                f0, f1, f2 = features_dc[idx].tolist()
                 op = float(opacity[idx, 0])
-                sx, sy, sz = scales[idx].tolist()
+                s0, s1, s2 = scales[idx].tolist()
+                r0, r1, r2, r3 = rotation[idx].tolist()
                 flag = int(uncertain[idx])
-                handle.write(f"{x} {y} {z} {r} {g} {b} {op} {sx} {sy} {sz} {flag}\n")
+                conf = float(confidence[idx, 0])
+                handle.write(
+                    f"{x} {y} {z} {f0} {f1} {f2} {op} "
+                    f"{s0} {s1} {s2} {r0} {r1} {r2} {r3} {flag} {conf}\n"
+                )

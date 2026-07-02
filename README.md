@@ -8,6 +8,7 @@ The active training implementation is the Torch path:
 
 ```bash
 python scripts/train_osn_gs_torch.py \
+  -s /path/to/scene_root \
   --device cuda \
   --iterations 30000 \
   --output outputs/osn_gs_run
@@ -16,7 +17,7 @@ python scripts/train_osn_gs_torch.py \
 The project also exposes a notebook-compatible wrapper:
 
 ```bash
-python train.py -m outputs/osn_gs_run --iterations 30000
+python train.py -s /path/to/scene_root -m outputs/osn_gs_run --iterations 30000
 ```
 
 To train from a COLMAP/Graphdeco-style dataset:
@@ -41,12 +42,6 @@ FRAMEWORK_MODE = 'osn_gs'
 
 The notebook will discover an uploaded `OSN-GS` project zip by its top-level `train.py`, discover/upload a COLMAP-style dataset, and pass that dataset to OSN-GS through `train.py -s DATA_ROOT`.
 
-For a quick synthetic smoke run, set:
-
-```python
-OSN_USE_SYNTHETIC = True
-```
-
 ## Inputs
 
 OSN-GS now supports a COLMAP/Graphdeco-style scene directly:
@@ -68,28 +63,6 @@ scene_root/
   sparse/0/images.txt
   sparse/0/points3D.txt
 ```
-
-The script can run a synthetic smoke scene:
-
-```bash
-python scripts/train_osn_gs_torch.py --device cuda
-```
-
-It can also read an NPZ scene:
-
-```bash
-python scripts/train_osn_gs_torch.py \
-  --scene_npz data/scene.npz \
-  --device cuda \
-  --output outputs/custom_scene
-```
-
-The NPZ file should contain:
-
-- `points`: `(N, 3)` initial Gaussian centers
-- `colors`: `(N, 3)` RGB values in `[0, 1]`
-- `images`: `(V, 3, H, W)` or `(V, H, W, 3)` target images
-- `extent`: optional scalar scene extent
 
 ## Outputs
 
@@ -118,3 +91,13 @@ For full 3DGS-quality training, install the standard 3DGS CUDA submodules in the
 - `simple_knn`
 
 The workspace already contains a reference `gaussian-splatting` checkout, so those submodules can be installed from there on the target Linux/CUDA machine.
+
+## Ongoing Context Log
+
+- 2026-07-01: User requested that whenever the environment, project situation, or task direction changes, the relevant `.md` files should be updated with that context instead of relying only on chat history.
+- 2026-07-01: NURBS is an intermediate representation, not a replacement final output. Training should keep Gaussian primitives as the main output while preserving visible NURBS reconstruction data for later visualization tools.
+- 2026-07-01: The Colab training notebook should pass NURBS-related configuration alongside OSN-GS training/Gaussian primitive output handling so downstream visualization can consume both Gaussian and NURBS artifacts.
+
+- 2026-07-01: WebRenderer PLY compatibility request. Renderer requires Graphdeco-style Gaussian fields `x`, `y`, `z`, `f_dc_0..2`, raw `opacity`, optional raw log `scale_0..2`, and `rot_0..3`. OSN-GS has corresponding primitives in `TorchGaussianModel`, so `save_ply` should emit those names instead of debug-only RGB/`scale_x` fields.
+- 2026-07-01: Notebook output packaging now includes NURBS visualization data. OSN-GS output inspection creates `visualization_manifest.json` under `MODEL_ROOT`, pairing each `point_cloud.ply` with its sibling `nurbs_surface.json` so external tools can load Gaussian primitives and the visible NURBS intermediate together.
+- 2026-07-02: Added `visible_surface_resolution_scale` so Stage 1 visible NURBS control-grid density can be increased from the notebook Train cell without changing the base U/V parameters. Final resolution is computed from `visible_surface_resolution_u/v * scale`.

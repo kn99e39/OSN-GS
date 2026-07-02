@@ -6,3 +6,16 @@ __pycache__/
 .venv/
 outputs/
 checkpoints/
+
+# Local datasets, reference projects, renderer workspace, and generated outputs
+DATASET/
+gaussian-splatting/
+WebRenderer/
+output/
+outputs/
+*.zip
+*.7z
+*.rar
+*.tar
+*.tar.gz
+*.tgz

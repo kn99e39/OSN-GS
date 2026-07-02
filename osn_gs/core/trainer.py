@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from dataclasses import dataclass, field
 
@@ -11,7 +11,7 @@ from osn_gs.losses.nurbs_regularization import surface_smoothness_loss
 from osn_gs.losses.uncertainty import residual_weighted_uncertainty_loss
 from osn_gs.optim.curve_update import decide_curve_update
 from osn_gs.optim.schedulers import UpdateSchedule
-from osn_gs.render.rasterizer_adapter import RasterizerAdapter
+from osn_gs.render.prototype_renderer import OSNPrototypeRenderer
 
 
 @dataclass
@@ -27,18 +27,18 @@ class OSNGSTrainer:
     def __init__(
         self,
         pipeline: OSNGSPipeline,
-        rasterizer: RasterizerAdapter | None = None,
+        renderer: OSNPrototypeRenderer | None = None,
         config: TrainingConfig | None = None,
     ) -> None:
         self.pipeline = pipeline
-        self.rasterizer = rasterizer or RasterizerAdapter()
+        self.renderer = renderer or OSNPrototypeRenderer()
         self.config = config or TrainingConfig()
 
     def train(self, scene: Scene) -> OSNGSState:
         state = self.pipeline.initialize(scene.initial_gaussians.clone())
         for iteration in range(1, self.config.iterations + 1):
             batch = scene.sample_views(self.config.batch_size)
-            rendered = self.rasterizer.render(
+            rendered = self.renderer.render(
                 state.certain_gaussians,
                 state.uncertain_gaussians,
                 batch.cameras,
@@ -58,3 +58,4 @@ class OSNGSTrainer:
             if self.config.schedule.should_update_curves(iteration) or decision.should_rebuild_surface:
                 self.pipeline.rebuild_surface(state)
         return state
+

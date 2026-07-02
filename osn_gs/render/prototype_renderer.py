@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Lightweight renderer for the numpy prototype training path."""
+
 import numpy as np
 
 from osn_gs.data.cameras import Camera
@@ -7,7 +9,9 @@ from osn_gs.gaussian.certain_gaussians import CertainGaussianSet
 from osn_gs.gaussian.uncertain_gaussians import UncertainGaussianSet
 
 
-class RasterizerAdapter:
+class OSNPrototypeRenderer:
+    """Render prototype Gaussian sets as simple mean-color frames."""
+
     def render(
         self,
         certain_gaussians: CertainGaussianSet,
