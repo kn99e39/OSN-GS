@@ -15,7 +15,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from osn_gs.core.torch_pipeline import TorchPipelineConfig
 from osn_gs.core.torch_trainer import TorchOSNGSTrainer, TorchTrainingConfig
 from osn_gs.data.colmap_scene import load_colmap_scene
-from osn_gs.interop.colab_args import build_osn_gs_train_parser, output_dir_from_args, save_interval_from_args
+from osn_gs.gaussian.torch_density_control import TorchDensityControlConfig
+from osn_gs.interop.colab_args import (
+    build_osn_gs_train_parser,
+    output_dir_from_args,
+    save_interval_from_args,
+    save_iterations_from_args,
+)
 from osn_gs.render.gaussian_rasterizer import GaussianRasterizerConfig
 from osn_gs.utils.torch_ops import default_device
 
@@ -23,11 +29,14 @@ from osn_gs.utils.torch_ops import default_device
 def main() -> None:
     args = build_osn_gs_train_parser().parse_args()
     device = args.device or default_device(prefer_cuda=True)
-    image_device = args.image_device or ("cpu" if device == "cuda" else device)
+    image_device = args.image_device or ("auto" if device == "cuda" else device)
     if args.low_vram and not args.image_device:
         image_device = "cpu"
     output_dir = output_dir_from_args(args)
+    print(f"OSN-GS device: train={device}, images={image_device}", flush=True)
     save_interval = save_interval_from_args(args)
+    save_iterations = save_iterations_from_args(args)
+    stream_iterations = tuple(sorted({int(value) for value in args.stream_iterations if int(value) > 0}))
     train_resolution_scale = max(1, int(args.train_resolution_scale))
     uncertain_samples_u = args.uncertain_samples_u
     uncertain_samples_v = args.uncertain_samples_v
@@ -39,11 +48,28 @@ def main() -> None:
         if max_uncertain_gaussians == 0:
             max_uncertain_gaussians = 128
 
+    densify_grad_threshold = float(args.densify_grad_threshold)
+    if densify_grad_threshold <= 0.0:
+        densify_grad_threshold = TorchDensityControlConfig().densify_grad_threshold
+    density_control_config = TorchDensityControlConfig(
+        densify_until_iter=max(0, int(args.densify_until_iter)),
+        densification_interval=max(0, int(args.densification_interval)),
+        densify_grad_threshold=densify_grad_threshold,
+        max_gaussians=max(0, int(getattr(args, "adc_max_gaussians", 0))),
+    )
+
     pipeline_config = TorchPipelineConfig(
         base_curve_count=args.base_curve_count,
         visible_surface_resolution_u=args.visible_surface_resolution_u,
         visible_surface_resolution_v=args.visible_surface_resolution_v,
         visible_surface_resolution_scale=args.visible_surface_resolution_scale,
+        covariance_init=args.covariance_init,
+        covariance_knn_chunk_size=args.covariance_knn_chunk_size,
+        covariance_min_scale=args.covariance_min_scale,
+        covariance_max_scale_ratio=args.covariance_max_scale_ratio,
+        covariance_scale_multiplier=args.covariance_scale_multiplier,
+        visible_surface_fit_device=args.visible_surface_fit_device,
+        visible_surface_fit_chunk_size=args.visible_surface_fit_chunk_size,
         uncertain_samples_u=uncertain_samples_u,
         uncertain_samples_v=uncertain_samples_v,
         max_uncertain_gaussians=max_uncertain_gaussians,
@@ -53,8 +79,18 @@ def main() -> None:
         surface_rebuild_interval=args.surface_rebuild_interval,
         density_control_interval=args.density_control_interval,
         save_interval=save_interval,
+        save_iterations=save_iterations,
+        progress_log_interval=args.progress_log_interval,
+        timing_log_interval=args.timing_log_interval,
+        stream_url=args.stream_url,
+        stream_every=max(0, int(args.stream_every)),
+        stream_iterations=stream_iterations,
+        stream_max_gaussians=max(0, int(args.stream_max_gaussians)),
+        stream_nurbs=not args.disable_stream_nurbs,
+        write_output_files=not args.disable_output_files,
         prefer_cuda=device == "cuda",
         train_resolution_scale=train_resolution_scale,
+        density_control=density_control_config,
     )
     rasterizer_config = GaussianRasterizerConfig(prefer_cuda=not args.disable_cuda_rasterizer)
     trainer = TorchOSNGSTrainer(

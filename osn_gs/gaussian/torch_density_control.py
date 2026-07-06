@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-"""Uncertain Gaussian density control.
+"""Adaptive density control for the OSN-GS torch Gaussian model.
 
-기존 3DGS의 ADC는 gradient/radius/opacity를 기준으로 split/clone/prune을 수행한다.
-OSN-GS에서는 uncertain Gaussian이 NURBS surface hypothesis에서 온 점이라는 차이가
-있으므로, 우선 confidence 기반 pruning/promotion policy를 별도로 둔다.
+This module separates two policies:
+- 3DGS-style ADC for observed/certain Gaussians: gradient accumulation,
+  clone, split, and opacity/size pruning.
+- Uncertain Gaussian cleanup: pruning only. Uncertain-to-certain promotion is
+  intentionally forbidden until a later policy is specified.
 """
 
 from dataclasses import dataclass
@@ -15,61 +17,222 @@ from osn_gs.utils.torch_ops import require_torch
 
 @dataclass
 class TorchDensityControlConfig:
-    """uncertain pruning과 promotion threshold."""
+    """Controls 3DGS-style adaptive density control."""
 
-    # opacity가 너무 낮으면 렌더링에 의미 있게 기여하지 않는 Gaussian으로 본다.
+    densify_until_iter: int = 0
+    densification_interval: int = 0
+    densify_grad_threshold: float = 0.0002
     prune_opacity_threshold: float = 0.005
-    # uncertain confidence가 너무 낮으면 surface hypothesis가 틀렸다고 보고 제거한다.
+    percent_dense: float = 0.01
+    split_samples: int = 2
+    max_screen_size: float = 20.0
+    max_scale_ratio: float = 0.1
+    max_gaussians: int = 0
     prune_uncertain_confidence_threshold: float = 0.05
-    # confidence가 충분히 높아진 uncertain은 certain으로 승격한다.
-    promote_uncertain_confidence_threshold: float = 0.85
-    # scale이 너무 커지는 Gaussian은 surface/detail 표현보다 artifact일 가능성이 크다.
-    max_scale: float = 0.35
 
 
 @dataclass
 class TorchDensityControlReport:
-    """density control 결과를 로깅/디버깅하기 위한 요약."""
+    """Summary of a density-control pass."""
 
+    cloned: int = 0
+    split: int = 0
     pruned: int = 0
-    promoted: int = 0
+    uncertain_pruned: int = 0
+
+    @property
+    def changed(self) -> bool:
+        return (self.cloned + self.split + self.pruned + self.uncertain_pruned) > 0
+
+
+def add_densification_stats(model: TorchGaussianModel, viewspace_points, visibility_filter) -> None:
+    """Accumulate screen-space gradient norms for visible Gaussians."""
+
+    torch = require_torch()
+    if len(model) == 0:
+        return
+    if visibility_filter is None or len(visibility_filter) == 0:
+        return
+    visibility_filter = torch.as_tensor(visibility_filter, dtype=torch.long, device=model.device).reshape(-1)
+    valid = visibility_filter[(visibility_filter >= 0) & (visibility_filter < len(model))]
+    if valid.numel() == 0:
+        return
+
+    grad = None
+    if viewspace_points is not None and viewspace_points.grad is not None:
+        candidate = viewspace_points.grad.detach()
+        if candidate.ndim == 2 and candidate.shape[0] >= len(model):
+            grad = candidate[:, :2]
+
+    if grad is None or not torch.isfinite(grad[valid]).any() or torch.count_nonzero(grad[valid]).item() == 0:
+        xyz_grad = getattr(model._xyz, "grad", None)
+        if xyz_grad is None:
+            return
+        candidate = xyz_grad.detach()
+        if candidate.ndim != 2 or candidate.shape[0] < len(model):
+            return
+        grad = candidate[:, :2]
+
+    grad_xy = torch.nan_to_num(grad[valid], nan=0.0, posinf=0.0, neginf=0.0)
+    model.xyz_gradient_accum[valid] += torch.norm(grad_xy, dim=-1, keepdim=True)
+    model.denom[valid] += 1.0
+
+
+def update_max_radii(model: TorchGaussianModel, radii, visibility_filter) -> None:
+    """Track the largest observed screen-space radius for pruning."""
+
+    torch = require_torch()
+    if len(model) == 0 or radii is None or visibility_filter is None or len(visibility_filter) == 0:
+        return
+    visibility_filter = torch.as_tensor(visibility_filter, dtype=torch.long, device=model.device).reshape(-1)
+    valid = visibility_filter[(visibility_filter >= 0) & (visibility_filter < len(model))]
+    if valid.numel() == 0:
+        return
+    radii = torch.as_tensor(radii, dtype=torch.float32, device=model.device).reshape(-1)
+    if radii.numel() < len(model):
+        return
+    model.max_radii2D[valid] = torch.maximum(model.max_radii2D[valid], radii[valid])
+
+
+def should_run_adc(iteration: int, config: TorchDensityControlConfig) -> bool:
+    """Return True when a 3DGS-style ADC pass should run."""
+
+    if config.densify_until_iter <= 0 or config.densification_interval <= 0:
+        return False
+    return iteration <= config.densify_until_iter and iteration % config.densification_interval == 0
+
+
+def apply_adaptive_density_control(
+    model: TorchGaussianModel,
+    config: TorchDensityControlConfig,
+    scene_extent: float,
+) -> TorchDensityControlReport:
+    """Apply basic 3DGS clone/split/prune to certain Gaussians."""
+
+    torch = require_torch()
+    if len(model) == 0:
+        return TorchDensityControlReport()
+
+    denom = torch.clamp(model.denom, min=1.0)
+    grads = model.xyz_gradient_accum / denom
+    grads = torch.nan_to_num(grads, nan=0.0, posinf=0.0, neginf=0.0).reshape(-1)
+    certain = ~model.is_uncertain
+    high_grad = grads >= float(config.densify_grad_threshold)
+    if not (high_grad & certain).any() and grads.numel() > 0 and torch.isfinite(grads).any() and float(grads.max().detach().cpu()) > 0.0:
+        certain_grads = grads[certain]
+        if certain_grads.numel() > 0:
+            fallback_threshold = torch.quantile(certain_grads, 0.90)
+            high_grad = grads >= fallback_threshold
+    scale_max = model.get_scaling.detach().max(dim=1).values
+    dense_extent = max(float(config.percent_dense) * float(scene_extent), 1e-6)
+
+    clone_mask = certain & high_grad & (scale_max <= dense_extent)
+    split_mask = certain & high_grad & (scale_max > dense_extent)
+
+    available = None
+    if config.max_gaussians > 0:
+        available = max(0, int(config.max_gaussians) - len(model))
+        if available == 0:
+            clone_mask = torch.zeros_like(clone_mask)
+            split_mask = torch.zeros_like(split_mask)
+
+    cloned = _clone_selected(model, clone_mask, available)
+    if available is not None:
+        available = max(0, available - cloned)
+    split = _split_selected(model, split_mask, max(1, int(config.split_samples)), available)
+
+    current_certain = ~model.is_uncertain
+    current_scale_max = model.get_scaling.detach().max(dim=1).values
+    opacity = model.get_opacity.detach().reshape(-1)
+    prune_mask = current_certain & (opacity < float(config.prune_opacity_threshold))
+    if config.max_screen_size and config.max_screen_size > 0:
+        prune_mask = prune_mask | (current_certain & (model.max_radii2D > float(config.max_screen_size)))
+    if config.max_scale_ratio and config.max_scale_ratio > 0:
+        prune_mask = prune_mask | (current_certain & (current_scale_max > float(config.max_scale_ratio) * float(scene_extent)))
+
+    pruned = _prune_mask(model, prune_mask)
+    if pruned == 0:
+        model._reset_density_stats(len(model))
+    return TorchDensityControlReport(cloned=cloned, split=split, pruned=pruned)
 
 
 def apply_uncertain_density_control(
     model: TorchGaussianModel,
     config: TorchDensityControlConfig,
 ) -> TorchDensityControlReport:
-    """uncertain Gaussian을 pruning하거나 certain으로 승격한다."""
+    """Prune invalid uncertain Gaussians. Promotion is intentionally disabled."""
 
-    torch = require_torch()
-    if len(model) == 0:
+    if len(model) == 0 or not model.is_uncertain.any():
         return TorchDensityControlReport()
-
-    # 정책 판단에는 detach된 현재 값을 사용한다.
-    opacity = model.get_opacity[:, 0].detach()
     confidence = model.get_confidence[:, 0].detach()
-    max_scale = model.get_scaling.detach().max(dim=1).values
+    prune_mask = model.is_uncertain & (confidence < config.prune_uncertain_confidence_threshold)
+    pruned = _prune_mask(model, prune_mask)
+    return TorchDensityControlReport(uncertain_pruned=pruned)
 
-    # uncertain만 confidence pruning 대상이지만, opacity/scale pruning은 전체 Gaussian에 적용한다.
-    low_uncertain = model.is_uncertain & (confidence < config.prune_uncertain_confidence_threshold)
-    low_opacity = opacity < config.prune_opacity_threshold
-    too_large = max_scale > config.max_scale
-    keep = ~(low_uncertain | low_opacity | too_large)
-    pruned = int((~keep).sum().item())
 
-    # promotion은 아직 uncertain이면서 confidence가 높은 Gaussian만 대상이다.
-    promoted_mask = model.is_uncertain & (confidence >= config.promote_uncertain_confidence_threshold) & keep
-    promoted = int(promoted_mask.sum().item())
-    if pruned > 0:
-        # prune 후 mask index가 바뀌므로 promoted_mask도 keep된 좌표계로 줄인다.
-        promoted_mask = promoted_mask[keep]
-        model.prune(keep)
-    if promoted > 0:
-        with torch.no_grad():
-            # certain으로 승격되면 surface anchor와 cluster prior에서 독립시킨다.
-            model.is_uncertain[promoted_mask] = False
-            model.surface_uv[promoted_mask] = 0.0
-            model.cluster_ids[promoted_mask] = -1
-            # confidence logit을 큰 값으로 고정해 high-confidence 상태로 둔다.
-            model._confidence[promoted_mask] = 12.0
-    return TorchDensityControlReport(pruned=pruned, promoted=promoted)
+def _clone_selected(model: TorchGaussianModel, mask, available: int | None = None) -> int:
+    if available is not None and available <= 0:
+        return 0
+    idx = _limited_indices(mask, available)
+    if idx.numel() == 0:
+        return 0
+    model.append_gaussians_raw(
+        xyz=model._xyz.detach()[idx],
+        features_dc=model._features_dc.detach()[idx],
+        features_rest=model._features_rest.detach()[idx],
+        opacity=model._opacity.detach()[idx],
+        scaling=model._scaling.detach()[idx],
+        rotation=model._rotation.detach()[idx],
+        confidence=model._confidence.detach()[idx],
+    )
+    return int(idx.numel())
+
+
+def _split_selected(model: TorchGaussianModel, mask, samples: int, available: int | None = None) -> int:
+    torch = require_torch()
+    if available is not None and available <= 0:
+        return 0
+    parent_limit = None if available is None else max(0, available // samples)
+    idx = _limited_indices(mask, parent_limit)
+    if idx.numel() == 0:
+        return 0
+
+    parent_scale = model.get_scaling.detach()[idx]
+    repeated_scale = parent_scale.repeat_interleave(samples, dim=0)
+    offsets = torch.randn_like(repeated_scale) * repeated_scale
+    new_xyz = model._xyz.detach()[idx].repeat_interleave(samples, dim=0) + offsets
+    new_scaling = torch.log(torch.clamp(repeated_scale / (0.8 * samples), min=1e-6))
+    model.append_gaussians_raw(
+        xyz=new_xyz,
+        features_dc=model._features_dc.detach()[idx].repeat_interleave(samples, dim=0),
+        features_rest=model._features_rest.detach()[idx].repeat_interleave(samples, dim=0),
+        opacity=model._opacity.detach()[idx].repeat_interleave(samples, dim=0),
+        scaling=new_scaling,
+        rotation=model._rotation.detach()[idx].repeat_interleave(samples, dim=0),
+        confidence=model._confidence.detach()[idx].repeat_interleave(samples, dim=0),
+    )
+
+    prune_original = torch.zeros((len(model),), dtype=torch.bool, device=model.device)
+    prune_original[idx] = True
+    _prune_mask(model, prune_original)
+    return int(idx.numel() * samples)
+
+
+def _prune_mask(model: TorchGaussianModel, prune_mask) -> int:
+    torch = require_torch()
+    prune_mask = torch.as_tensor(prune_mask, dtype=torch.bool, device=model.device).reshape(-1)
+    if prune_mask.numel() != len(model) or not prune_mask.any():
+        model._reset_density_stats(len(model))
+        return 0
+    keep = ~prune_mask
+    pruned = int(prune_mask.sum().item())
+    model.prune(keep)
+    return pruned
+
+
+def _limited_indices(mask, limit: int | None = None):
+    torch = require_torch()
+    idx = torch.nonzero(mask, as_tuple=False).reshape(-1)
+    if limit is not None and idx.numel() > limit:
+        idx = idx[: max(0, int(limit))]
+    return idx

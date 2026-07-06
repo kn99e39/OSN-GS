@@ -28,6 +28,13 @@ class TorchPipelineConfig:
     visible_surface_resolution_u: int = 8
     visible_surface_resolution_v: int = 4
     visible_surface_resolution_scale: float = 1.0
+    visible_surface_fit_device: str = "cpu"
+    visible_surface_fit_chunk_size: int = 0
+    covariance_init: str = "knn"
+    covariance_knn_chunk_size: int = 0
+    covariance_min_scale: float = 1e-4
+    covariance_max_scale_ratio: float = 0.05
+    covariance_scale_multiplier: float = 1.0
     # Stage 2 legacy knobs. They are kept in the config for CLI compatibility,
     # but Stage 1 does not use them to create occluded geometry.
     occlusion_offset_scale: float = 0.25
@@ -74,18 +81,22 @@ class TorchOSNGSPipeline:
         base_curves = fit_torch_base_curves(points, self.config.base_curve_count)
         occlusion_curves = self._empty_occlusion_curves(points)
         resolution_u, resolution_v = self._visible_surface_resolution()
+        surface_points = self._surface_fit_points(points)
+        fit_chunk_size = self._resolve_visible_surface_fit_chunk_size(surface_points)
         surface = fit_torch_visible_surface(
-            points,
+            surface_points,
             resolution_u=resolution_u,
             resolution_v=resolution_v,
+            chunk_size=fit_chunk_size,
         )
+        surface = self._move_surface(surface, self.device)
 
         count = points.shape[0]
         uncertain_mask = torch.zeros((count,), dtype=torch.bool, device=self.device)
         surface_uv = torch.zeros((count, 2), dtype=torch.float32, device=self.device)
         cluster_ids = torch.full((count,), -1, dtype=torch.long, device=self.device)
         opacities = torch.full((count, 1), 0.12, dtype=torch.float32, device=self.device)
-        scales = torch.full((count, 3), 0.025, dtype=torch.float32, device=self.device)
+        scales = self._initial_covariance_scales(points)
         confidence = torch.ones((count, 1), dtype=torch.float32, device=self.device)
 
         model = TorchGaussianModel(sh_degree=self.config.sh_degree, device=self.device)
@@ -123,6 +134,138 @@ class TorchOSNGSPipeline:
         resolution_v = max(2, int(round(self.config.visible_surface_resolution_v * scale)))
         return resolution_u, resolution_v
 
+    def _initial_covariance_scales(self, points: Any) -> Any:
+        """Initialize trainable Gaussian scale from local point spacing.
+
+        Original 3DGS initializes log-scale from sqrt(nearest-neighbor distance
+        squared). OSN-GS keeps the same scale+rotation covariance convention but
+        uses a chunked torch KNN path instead of the optional simple-knn module.
+        """
+
+        torch = require_torch()
+        count = int(points.shape[0])
+        if count == 0:
+            return torch.empty((0, 3), dtype=torch.float32, device=self.device)
+        if count == 1 or str(self.config.covariance_init).lower() == "constant":
+            base = self._scene_scale(points) * 0.001
+            value = max(float(self.config.covariance_min_scale), float(base))
+            return torch.full((count, 3), value, dtype=torch.float32, device=self.device)
+
+        nearest_dist2 = self._nearest_neighbor_dist2(points.detach())
+        scales = torch.sqrt(torch.clamp(nearest_dist2, min=float(self.config.covariance_min_scale) ** 2))
+        scales = scales * float(self.config.covariance_scale_multiplier)
+        max_scale = max(float(self.config.covariance_min_scale), self._scene_scale(points) * float(self.config.covariance_max_scale_ratio))
+        scales = torch.clamp(scales, min=float(self.config.covariance_min_scale), max=max_scale)
+        return scales[:, None].repeat(1, 3)
+
+    def _nearest_neighbor_dist2(self, points: Any) -> Any:
+        """Return squared distance to the nearest other point for every point."""
+
+        torch = require_torch()
+        count = int(points.shape[0])
+        chunk_size = self._resolve_covariance_knn_chunk_size(points)
+        nearest = torch.full((count,), float("inf"), dtype=torch.float32, device=points.device)
+        all_indices = torch.arange(count, device=points.device)
+        for start in range(0, count, chunk_size):
+            end = min(start + chunk_size, count)
+            chunk = points[start:end]
+            distances = torch.cdist(chunk, points).square()
+            local = all_indices[start:end]
+            distances[torch.arange(end - start, device=points.device), local] = float("inf")
+            nearest[start:end] = distances.min(dim=1).values
+        finite = torch.isfinite(nearest)
+        if not bool(finite.any()):
+            fallback = self._scene_scale(points) * 0.001
+            nearest.fill_(max(float(self.config.covariance_min_scale) ** 2, float(fallback) ** 2))
+        else:
+            fill = nearest[finite].median()
+            nearest = torch.where(finite, nearest, fill)
+        return nearest
+
+    def _resolve_covariance_knn_chunk_size(self, points: Any) -> int:
+        configured = int(self.config.covariance_knn_chunk_size)
+        if configured > 0:
+            return configured
+        torch = require_torch()
+        count = max(1, int(points.shape[0]))
+        if points.device.type == "cuda" and torch.cuda.is_available():
+            free_bytes, total_bytes = torch.cuda.mem_get_info(points.device)
+            workspace_bytes = max(64 * 1024 * 1024, int(free_bytes * 0.10))
+            bytes_per_query = count * 4 * 2
+            chunk_size = max(16, min(4096, int(workspace_bytes // max(bytes_per_query, 1))))
+            self.config.covariance_knn_chunk_size = chunk_size
+            print(
+                "OSN-GS covariance KNN chunk: "
+                f"auto={chunk_size} free_vram={free_bytes / (1024 ** 3):.2f}GB "
+                f"total_vram={total_bytes / (1024 ** 3):.2f}GB points={count}",
+                flush=True,
+            )
+            return chunk_size
+        chunk_size = min(1024, count)
+        self.config.covariance_knn_chunk_size = chunk_size
+        print(f"OSN-GS covariance KNN chunk: auto={chunk_size} device={points.device}", flush=True)
+        return chunk_size
+
+    def _scene_scale(self, points: Any) -> float:
+        torch = require_torch()
+        if points.numel() == 0:
+            return 1.0
+        span = points.max(dim=0).values - points.min(dim=0).values
+        return max(float(torch.linalg.norm(span).detach().cpu()), 1e-6)
+
+    def _surface_fit_points(self, points: Any) -> Any:
+        """Move visible-surface fitting inputs to the configured workspace device."""
+
+        fit_device = str(self.config.visible_surface_fit_device or self.device).lower()
+        if fit_device == "auto":
+            fit_device = "cpu"
+        if fit_device not in {"cpu", "cuda"}:
+            fit_device = self.device
+        return points.detach().to(fit_device)
+
+    def _resolve_visible_surface_fit_chunk_size(self, points: Any) -> int:
+        """Choose the visible-surface fit chunk once from runtime memory state."""
+
+        configured = int(self.config.visible_surface_fit_chunk_size)
+        if configured > 0:
+            return configured
+
+        torch = require_torch()
+        point_count = max(1, int(points.shape[0]))
+        device = getattr(points, "device", None)
+        if device is not None and device.type == "cuda" and torch.cuda.is_available():
+            free_bytes, total_bytes = torch.cuda.mem_get_info(device)
+            # cdist materializes chunk x point_count distances. Keep a modest
+            # slice of currently free VRAM for this transient workspace because
+            # training tensors, images, and the rasterizer share the same GPU.
+            workspace_bytes = max(64 * 1024 * 1024, int(free_bytes * 0.12))
+            bytes_per_grid_sample = max(1, point_count) * 4 * 4
+            chunk_size = workspace_bytes // bytes_per_grid_sample
+            chunk_size = max(64, min(8192, int(chunk_size)))
+            self.config.visible_surface_fit_chunk_size = chunk_size
+            print(
+                "OSN-GS NURBS fit chunk: "
+                f"auto={chunk_size} free_vram={free_bytes / (1024 ** 3):.2f}GB "
+                f"total_vram={total_bytes / (1024 ** 3):.2f}GB points={point_count}",
+                flush=True,
+            )
+            return chunk_size
+
+        chunk_size = 4096
+        self.config.visible_surface_fit_chunk_size = chunk_size
+        print(f"OSN-GS NURBS fit chunk: auto={chunk_size} device={device}", flush=True)
+        return chunk_size
+
+    def _move_surface(self, surface: TorchNURBSSurface, device: str) -> TorchNURBSSurface:
+        """Return a surface whose persistent tensors live on the training device."""
+
+        return TorchNURBSSurface(
+            control_grid=surface.control_grid.to(device),
+            weights=surface.weights.to(device),
+            degree_u=surface.degree_u,
+            degree_v=surface.degree_v,
+            observed_v_max=surface.observed_v_max,
+        )
     def _empty_occlusion_curves(self, points: Any) -> TorchCurveSet:
         """Return an explicit empty Stage 2 placeholder."""
 

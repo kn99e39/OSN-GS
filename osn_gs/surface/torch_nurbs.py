@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 """Torch 기반 NURBS-like surface utilities.
 
@@ -121,7 +121,12 @@ def fit_torch_base_curves(points: Any, curve_count: int = 4) -> TorchCurveSet:
     )
 
 
-def fit_torch_visible_surface(points: Any, resolution_u: int = 8, resolution_v: int = 4) -> TorchNURBSSurface:
+def fit_torch_visible_surface(
+    points: Any,
+    resolution_u: int = 8,
+    resolution_v: int = 4,
+    chunk_size: int = 4096,
+) -> TorchNURBSSurface:
     """관측 Gaussian center만 사용해 visible surface parameter grid를 만든다.
 
     Stage 1은 occluded surface를 만들지 않는다. 대신 point cloud를 PCA 기반
@@ -161,15 +166,19 @@ def fit_torch_visible_surface(points: Any, resolution_u: int = 8, resolution_v: 
     uu, vv = torch.meshgrid(u, v, indexing="ij")
     grid_uv = torch.stack([uu.reshape(-1), vv.reshape(-1)], dim=-1)
 
-    distances = torch.cdist(grid_uv, uv_points)
     neighbor_count = min(points.shape[0], max(4, min(16, points.shape[0])))
-    nearest_dist, nearest_idx = torch.topk(distances, k=neighbor_count, largest=False, dim=1)
-    neighbor_points = points[nearest_idx]
-    # Inverse-distance weights keep the control grid on the visible point cloud
-    # while still smoothing sparse COLMAP samples.
-    blend_weights = 1.0 / torch.clamp(nearest_dist, min=1e-4)
-    blend_weights = blend_weights / blend_weights.sum(dim=1, keepdim=True)
-    control = (neighbor_points * blend_weights[..., None]).sum(dim=1)
+    chunk_size = max(1, int(chunk_size))
+    controls = []
+    for uv_chunk in torch.split(grid_uv, chunk_size, dim=0):
+        distances = torch.cdist(uv_chunk, uv_points)
+        nearest_dist, nearest_idx = torch.topk(distances, k=neighbor_count, largest=False, dim=1)
+        neighbor_points = points[nearest_idx]
+        # Inverse-distance weights keep the control grid on the visible point cloud
+        # while still smoothing sparse COLMAP samples.
+        blend_weights = 1.0 / torch.clamp(nearest_dist, min=1e-4)
+        blend_weights = blend_weights / blend_weights.sum(dim=1, keepdim=True)
+        controls.append((neighbor_points * blend_weights[..., None]).sum(dim=1))
+    control = torch.cat(controls, dim=0)
     control_grid = control.reshape(resolution_u, resolution_v, 3)
     weights = torch.ones((resolution_u, resolution_v), dtype=dtype, device=device)
     return TorchNURBSSurface(control_grid=control_grid, weights=weights, observed_v_max=1.0)

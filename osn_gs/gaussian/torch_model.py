@@ -61,6 +61,9 @@ class TorchGaussianModel:
         self.surface_uv = torch.empty((0, 2), dtype=torch.float32, device=device)
         self.cluster_ids = torch.empty((0,), dtype=torch.long, device=device)
         self.optimizer: Any | None = None
+        self.xyz_gradient_accum = torch.empty((0, 1), dtype=torch.float32, device=device)
+        self.denom = torch.empty((0, 1), dtype=torch.float32, device=device)
+        self.max_radii2D = torch.empty((0,), dtype=torch.float32, device=device)
 
     @property
     def get_xyz(self) -> Any:
@@ -132,19 +135,19 @@ class TorchGaussianModel:
 
         torch = self.torch
         # 紐⑤뱺 ?낅젰? device-local float tensor濡??듭씪?쒕떎.
-        positions = torch.as_tensor(positions, dtype=torch.float32, device=self.device)
-        colors = torch.as_tensor(colors, dtype=torch.float32, device=self.device)
+        positions = torch.as_tensor(positions, dtype=self.torch.float32, device=self.device)
+        colors = torch.as_tensor(colors, dtype=self.torch.float32, device=self.device)
         count = positions.shape[0]
 
         # opacity/scale???놁쑝硫?3DGS 珥덇린媛믪뿉 媛源뚯슫 ?묒? Gaussian?쇰줈 ?쒖옉?쒕떎.
         if opacities is None:
-            opacities = torch.full((count, 1), 0.1, dtype=torch.float32, device=self.device)
+            opacities = torch.full((count, 1), 0.1, dtype=self.torch.float32, device=self.device)
         else:
-            opacities = torch.as_tensor(opacities, dtype=torch.float32, device=self.device).reshape(count, 1)
+            opacities = torch.as_tensor(opacities, dtype=self.torch.float32, device=self.device).reshape(count, 1)
         if scales is None:
-            scales = torch.full((count, 3), 0.02, dtype=torch.float32, device=self.device)
+            scales = torch.full((count, 3), 0.02, dtype=self.torch.float32, device=self.device)
         else:
-            scales = torch.as_tensor(scales, dtype=torch.float32, device=self.device).reshape(count, 3)
+            scales = torch.as_tensor(scales, dtype=self.torch.float32, device=self.device).reshape(count, 3)
 
         # uncertain_mask??certain/uncertain??loss? density policy?먯꽌 遺꾧린?섎뒗 ?듭떖 flag??
         if uncertain_mask is None:
@@ -154,9 +157,9 @@ class TorchGaussianModel:
 
         # surface_uv??uncertain Gaussian??NURBS surface???대뒓 parameter??臾띠??붿? ??ν븳??
         if surface_uv is None:
-            surface_uv = torch.zeros((count, 2), dtype=torch.float32, device=self.device)
+            surface_uv = torch.zeros((count, 2), dtype=self.torch.float32, device=self.device)
         else:
-            surface_uv = torch.as_tensor(surface_uv, dtype=torch.float32, device=self.device).reshape(count, 2)
+            surface_uv = torch.as_tensor(surface_uv, dtype=self.torch.float32, device=self.device).reshape(count, 2)
 
         # cluster_ids??color prior/ADC pattern transfer瑜??꾪븳 hook?대떎.
         if cluster_ids is None:
@@ -168,11 +171,11 @@ class TorchGaussianModel:
         if confidence is None:
             confidence = torch.where(
                 uncertain_mask[:, None],
-                torch.full((count, 1), 0.25, dtype=torch.float32, device=self.device),
-                torch.ones((count, 1), dtype=torch.float32, device=self.device),
+                torch.full((count, 1), 0.25, dtype=self.torch.float32, device=self.device),
+                torch.ones((count, 1), dtype=self.torch.float32, device=self.device),
             )
         else:
-            confidence = torch.as_tensor(confidence, dtype=torch.float32, device=self.device).reshape(count, 1)
+            confidence = torch.as_tensor(confidence, dtype=self.torch.float32, device=self.device).reshape(count, 1)
 
         rest_dim = (self.max_sh_degree + 1) ** 2 - 1
 
@@ -187,6 +190,89 @@ class TorchGaussianModel:
         self.is_uncertain = uncertain_mask
         self.surface_uv = surface_uv
         self.cluster_ids = cluster_ids
+        self._reset_density_stats(count)
+
+    def _reset_density_stats(self, count: int | None = None) -> None:
+        """Reset ADC accumulators after shape-changing Gaussian edits."""
+
+        if count is None:
+            count = len(self)
+        self.xyz_gradient_accum = self.torch.zeros((count, 1), dtype=self.torch.float32, device=self.device)
+        self.denom = self.torch.zeros((count, 1), dtype=self.torch.float32, device=self.device)
+        self.max_radii2D = self.torch.zeros((count,), dtype=self.torch.float32, device=self.device)
+
+    def replace_tensors(
+        self,
+        xyz: Any,
+        features_dc: Any,
+        features_rest: Any,
+        opacity: Any,
+        scaling: Any,
+        rotation: Any,
+        confidence: Any,
+        uncertain_mask: Any,
+        surface_uv: Any,
+        cluster_ids: Any,
+    ) -> None:
+        """Replace all Gaussian tensors while preserving raw parameter values."""
+
+        torch = self.torch
+        xyz = torch.as_tensor(xyz, dtype=self.torch.float32, device=self.device)
+        count = int(xyz.shape[0])
+        rest_dim = (self.max_sh_degree + 1) ** 2 - 1
+        self._xyz = torch.nn.Parameter(xyz.detach().clone().requires_grad_(True))
+        self._features_dc = torch.nn.Parameter(torch.as_tensor(features_dc, dtype=self.torch.float32, device=self.device).reshape(count, 1, 3).detach().clone().requires_grad_(True))
+        self._features_rest = torch.nn.Parameter(torch.as_tensor(features_rest, dtype=self.torch.float32, device=self.device).reshape(count, rest_dim, 3).detach().clone().requires_grad_(True))
+        self._opacity = torch.nn.Parameter(torch.as_tensor(opacity, dtype=self.torch.float32, device=self.device).reshape(count, 1).detach().clone().requires_grad_(True))
+        self._scaling = torch.nn.Parameter(torch.as_tensor(scaling, dtype=self.torch.float32, device=self.device).reshape(count, 3).detach().clone().requires_grad_(True))
+        self._rotation = torch.nn.Parameter(torch.as_tensor(rotation, dtype=self.torch.float32, device=self.device).reshape(count, 4).detach().clone().requires_grad_(True))
+        self._confidence = torch.nn.Parameter(torch.as_tensor(confidence, dtype=self.torch.float32, device=self.device).reshape(count, 1).detach().clone().requires_grad_(True))
+        self.is_uncertain = torch.as_tensor(uncertain_mask, dtype=torch.bool, device=self.device).reshape(count)
+        self.surface_uv = torch.as_tensor(surface_uv, dtype=self.torch.float32, device=self.device).reshape(count, 2)
+        self.cluster_ids = torch.as_tensor(cluster_ids, dtype=torch.long, device=self.device).reshape(count)
+        self.optimizer = None
+        self._reset_density_stats(count)
+
+    def append_gaussians_raw(
+        self,
+        xyz: Any,
+        features_dc: Any,
+        features_rest: Any,
+        opacity: Any,
+        scaling: Any,
+        rotation: Any,
+        confidence: Any | None = None,
+        uncertain_mask: Any | None = None,
+        surface_uv: Any | None = None,
+        cluster_ids: Any | None = None,
+    ) -> None:
+        """Append raw Gaussian parameters, used by ADC clone/split."""
+
+        torch = self.torch
+        xyz = torch.as_tensor(xyz, dtype=self.torch.float32, device=self.device)
+        count = int(xyz.shape[0])
+        if count == 0:
+            return
+        if confidence is None:
+            confidence = torch.full((count, 1), 12.0, dtype=self.torch.float32, device=self.device)
+        if uncertain_mask is None:
+            uncertain_mask = torch.zeros((count,), dtype=torch.bool, device=self.device)
+        if surface_uv is None:
+            surface_uv = torch.zeros((count, 2), dtype=self.torch.float32, device=self.device)
+        if cluster_ids is None:
+            cluster_ids = torch.full((count,), -1, dtype=torch.long, device=self.device)
+        self.replace_tensors(
+            xyz=torch.cat([self._xyz.detach(), xyz.detach()], dim=0),
+            features_dc=torch.cat([self._features_dc.detach(), torch.as_tensor(features_dc, dtype=self.torch.float32, device=self.device).reshape(count, 1, 3).detach()], dim=0),
+            features_rest=torch.cat([self._features_rest.detach(), torch.as_tensor(features_rest, dtype=self.torch.float32, device=self.device).reshape(count, (self.max_sh_degree + 1) ** 2 - 1, 3).detach()], dim=0),
+            opacity=torch.cat([self._opacity.detach(), torch.as_tensor(opacity, dtype=self.torch.float32, device=self.device).reshape(count, 1).detach()], dim=0),
+            scaling=torch.cat([self._scaling.detach(), torch.as_tensor(scaling, dtype=self.torch.float32, device=self.device).reshape(count, 3).detach()], dim=0),
+            rotation=torch.cat([self._rotation.detach(), torch.as_tensor(rotation, dtype=self.torch.float32, device=self.device).reshape(count, 4).detach()], dim=0),
+            confidence=torch.cat([self._confidence.detach(), torch.as_tensor(confidence, dtype=self.torch.float32, device=self.device).reshape(count, 1).detach()], dim=0),
+            uncertain_mask=torch.cat([self.is_uncertain, torch.as_tensor(uncertain_mask, dtype=torch.bool, device=self.device).reshape(count)], dim=0),
+            surface_uv=torch.cat([self.surface_uv, torch.as_tensor(surface_uv, dtype=self.torch.float32, device=self.device).reshape(count, 2)], dim=0),
+            cluster_ids=torch.cat([self.cluster_ids, torch.as_tensor(cluster_ids, dtype=torch.long, device=self.device).reshape(count)], dim=0),
+        )
 
     def training_setup(self, groups: GaussianParameterGroups) -> None:
         """Parameter group蹂?learning rate濡?Adam optimizer瑜?留뚮뱺??"""
@@ -211,9 +297,9 @@ class TorchGaussianModel:
         """
 
         torch = self.torch
-        positions = torch.as_tensor(positions, dtype=torch.float32, device=self.device)
-        colors = torch.as_tensor(colors, dtype=torch.float32, device=self.device)
-        surface_uv = torch.as_tensor(surface_uv, dtype=torch.float32, device=self.device)
+        positions = torch.as_tensor(positions, dtype=self.torch.float32, device=self.device)
+        colors = torch.as_tensor(colors, dtype=self.torch.float32, device=self.device)
+        surface_uv = torch.as_tensor(surface_uv, dtype=self.torch.float32, device=self.device)
         cluster_ids = torch.as_tensor(cluster_ids, dtype=torch.long, device=self.device)
         count = positions.shape[0]
         if count == 0:
@@ -237,19 +323,21 @@ class TorchGaussianModel:
         )
 
     def prune(self, keep_mask: Any) -> None:
-        """keep_mask媛 False??Gaussian???쒓굅?쒕떎."""
+        """Remove Gaussians where keep_mask is False."""
 
         torch = self.torch
         keep_mask = torch.as_tensor(keep_mask, dtype=torch.bool, device=self.device)
-        self.initialize(
-            positions=self._xyz.detach()[keep_mask],
-            colors=self.rgb.detach()[keep_mask],
-            opacities=self.get_opacity.detach()[keep_mask],
-            scales=self.get_scaling.detach()[keep_mask],
+        self.replace_tensors(
+            xyz=self._xyz.detach()[keep_mask],
+            features_dc=self._features_dc.detach()[keep_mask],
+            features_rest=self._features_rest.detach()[keep_mask],
+            opacity=self._opacity.detach()[keep_mask],
+            scaling=self._scaling.detach()[keep_mask],
+            rotation=self._rotation.detach()[keep_mask],
+            confidence=self._confidence.detach()[keep_mask],
             uncertain_mask=self.is_uncertain[keep_mask],
             surface_uv=self.surface_uv[keep_mask],
             cluster_ids=self.cluster_ids[keep_mask],
-            confidence=self.get_confidence.detach()[keep_mask],
         )
 
     def save_ply(self, path: str | Path) -> None:

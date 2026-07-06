@@ -1,206 +1,254 @@
 ﻿# OSN-GS Architecture
 
-OSN-GS??愿痢〓맂 ?쒕㈃ ?꾩뿉 ?ъ궗??Gaussian?ㅼ쓣 ?댁슜??NURBS 湲곕컲??parametric surface瑜?援ъ꽦?섍퀬, 洹?援ъ“???뱀꽦??諛뷀깢?쇰줈 媛?ㅼ쭊 ?쒕㈃??Gaussian??諛곗튂?섎뒗 3D Gaussian Splatting ?꾨젅?꾩썙?ъ씠??
+OSN-GS는 3D Gaussian Splatting을 표면 중심(surface-centric) 구조로 확장하는 프레임워크이다. 기존 3DGS가 Gaussian primitive 자체를 장면 표현의 중심으로 최적화한다면, OSN-GS는 NURBS 기반 parametric surface를 장면의 canonical geometry로 두고 Gaussian을 그 표면에서 파생된 렌더링 샘플로 취급한다.
 
-?듭떖 紐⑺몴??湲곗〈 3DGS媛 ?쏀븳 鍮꾧?痢??곸뿭???쒕㈃ 援ъ“瑜??⑥닚 visibility, MVS, pseudo-view 蹂닿컯???꾨땲??愿痢??쒕㈃?먯꽌 異붿텧??援ъ“??prior濡??덉륫?섎뒗 寃껋씠??
+핵심 목표는 단순히 누락된 Gaussian을 추가하는 것이 아니라, 관측 표면에서 추출한 구조적 prior를 이용해 비관측 영역까지 이어지는 연속적인 표면 가설을 만들고, 그 표면 위에서 Gaussian 분포를 생성, 검증, 갱신하는 것이다.
 
-## Core Idea
+```text
+Scene
+  -> NURBS Surface (Canonical Geometry)
+  -> Certain / Uncertain Gaussian Distribution
+  -> Differentiable Rendering
+  -> Residual Analysis
+  -> Surface Update
+```
 
-1. 湲곗〈 3DGS? 媛숈씠 珥덇린 Gaussian???앹꽦?섍퀬 ?숈뒿???쒖옉?쒕떎.
-2. 珥덇린 Gaussian?ㅼ쓣 point cloud濡?媛꾩＜??愿痢〓맂 ?쒕㈃ ?꾩쓽 base curve瑜?異붿젙?쒕떎.
-3. base curve?ㅼ쓽 援ъ“???곗냽?? 怨〓쪧, 諛⑺뼢?? 諛섎났 ?⑦꽩???댁슜??occluded space????묐릺??curve瑜??앹꽦?쒕떎.
-4. 愿痢?curve? 異붿젙 curve瑜??④퍡 ?ъ슜??NURBS surface瑜?援ъ꽦?쒕떎.
-5. NURBS surface ?꾩쓽 鍮꾧?痢??곸뿭??uncertain Gaussian???섑뵆留곹븳??
-6. ?대?吏 湲곕컲 ?숈뒿??諛섎났?섎㈃??certain Gaussian? ?쇰컲 3DGS 諛⑹떇?쇰줈 理쒖쟻?뷀븯怨? uncertain Gaussian? ?뚮뜑留?loss? surface consistency瑜??댁슜???꾩튂? surface basis瑜?媛깆떊?쒕떎.
+## Core Principles
+
+### Surface-Centric Representation
+
+NURBS surface는 OSN-GS의 단일한 geometric source of truth이다. Gaussian은 독립적인 geometry가 아니라 표면에서 평가된 위치와 방향을 가진 렌더링 instance로 해석한다.
+
+이 관점에서 다음 원칙을 따른다.
+
+- surface 수정은 Gaussian 위치와 normal을 갱신한다.
+- ADC는 geometry 자체를 바꾸는 과정이 아니라 surface 위 sampling density를 조절하는 과정이다.
+- rendering residual은 개별 Gaussian 오류에 머무르지 않고, 해당 Gaussian이 속한 surface patch와 control point를 검증하는 신호로 사용한다.
+
+### Persistent Gaussian-Surface Binding
+
+모든 Gaussian은 자신이 어떤 surface patch와 parameter 위치에서 파생되었는지 저장한다.
+
+각 Gaussian이 보관해야 하는 surface 관련 정보:
+
+- patch id
+- `(u, v)` surface parameter
+- surface normal
+- observed / occluded flag
+- confidence
+- optional basis-function weights
+- ADC history
+
+따라서 렌더링 결과의 오류는 다음 경로로 역추적할 수 있다.
+
+```text
+Pixel
+  -> Gaussian
+  -> Patch
+  -> (u, v)
+  -> Surface Control Points
+```
+
+이 binding은 OSN-GS가 단순 Gaussian cloud가 아니라 surface hypothesis를 검증하는 구조가 되기 위한 핵심이다.
 
 ## Motivation
 
 ### Why 3DGS
 
-鍮꾧?痢??쒕㈃???덉륫?섎젮硫?愿痢??쒕㈃?쇰줈遺??紐낆떆?곸씤 援ъ“ representation???살쓣 ???덉뼱???쒕떎. NeRF??NeuS 怨꾩뿴? scene??implicit field濡??쒗쁽?섎?濡? 愿痢〓맂 ?쒕㈃ ?꾩쓽 援ъ“???⑦꽩??吏곸젒 異붿텧???덈줈??Gaussian 諛곗튂濡??곌껐?섍린 ?대졄??
+비관측 표면을 예측하려면 관측 표면으로부터 명시적인 geometry sample을 얻을 수 있어야 한다. NeRF나 NeuS 계열은 scene을 implicit field로 표현하므로 관측된 표면 위의 구조적 패턴을 직접 추출해 새로운 Gaussian 배치로 연결하기 어렵다.
 
-3DGS??Gaussian???꾩튂, covariance, opacity, color媛 紐낆떆?곸쑝濡?議댁옱?섎?濡??ㅼ쓬 ?묒뾽???곹빀?섎떎.
+3DGS는 Gaussian의 위치, covariance, opacity, color가 명시적으로 존재하므로 다음 작업에 적합하다.
 
-- 愿痢??쒕㈃ point cloud 異붿텧
+- observed surface point cloud 추출
+- local geometry와 visibility 기반 filtering
 - surface curve fitting
-- 鍮꾧?痢??곸뿭 ?꾨낫 ?꾩튂 ?섑뵆留?
-- certain/uncertain Gaussian 遺꾨━ ?숈뒿
-- density control ?⑦꽩 遺꾩꽍
+- surface parameter domain 위 Gaussian sampling
+- certain / uncertain Gaussian 분리 학습
+- ADC 패턴과 rendering residual 분석
 
 ### Why NURBS
 
-鍮꾧?痢??쒕㈃??Gaussian??諛곗튂?섎젮硫??꾩껜 ?쒕㈃ 援ъ“瑜??쒗쁽?섎뒗 以묎컙 representation???꾩슂?섎떎.
+비관측 표면에 Gaussian을 배치하려면 전체 표면 구조를 표현하는 중간 representation이 필요하다. Mesh는 vertex 배치에 대한 별도 prior가 필요하고, 관측된 vertex 간의 구조적 관계를 안정적으로 외삽하기 어렵다. SDF는 관측 이미지에서 표면을 찾는 데 강점이 있으나, 관측되지 않은 표면을 구조적으로 연장하는 직접 제약은 부족하다.
 
-Mesh??vertex 諛곗튂?????蹂꾨룄 prior媛 ?꾩슂?섍퀬, 愿痢〓맂 vertex 媛꾩쓽 援ъ“??愿怨꾨? ?덉젙?곸쑝濡?異붿텧?섍린 ?대졄?? SDF??愿痢??대?吏?먯꽌 ?쒕㈃??李얜뒗 ??媛뺤젏???덉쑝?? 愿痢〓릺吏 ?딆? ?쒕㈃??援ъ“?곸쑝濡??몄궫?섎뒗 ?곗뿉??吏곸젒?곸씤 ?쒖빟??遺議깊븯??
+NURBS는 control point, knot vector, degree, weight를 통해 연속적인 parametric surface를 표현할 수 있으므로 다음 장점이 있다.
 
-NURBS??control point, knot, degree, weight瑜??듯빐 ?곗냽?곸씤 parametric surface瑜??쒗쁽?????덉쑝誘濡??ㅼ쓬 ?μ젏???덈떎.
+- 관측 curve에서 비관측 curve로 구조를 확장하기 쉽다.
+- smoothness, curvature, continuity를 명시적으로 제어할 수 있다.
+- surface parameter domain 위에서 Gaussian을 안정적으로 샘플링할 수 있다.
+- Gaussian residual을 surface patch와 control point 갱신으로 되돌리기 쉽다.
 
-- 愿痢?curve?먯꽌 鍮꾧?痢?curve濡?援ъ“瑜??뺤옣?섍린 ?쎈떎.
-- smoothness, curvature, continuity瑜?紐낆떆?곸쑝濡??쒖뼱?????덈떎.
-- surface parameter domain ?꾩뿉??Gaussian???덉젙?곸쑝濡??섑뵆留곹븷 ???덈떎.
-- base curve ?ш퀎?곗쓣 ?듯빐 uncertain Gaussian???꾩튂 蹂댁젙怨??곌껐?섍린 ?쎈떎.
-
-## Current Stage Boundary
-
-현재 구현의 우선순위는 전체 3DGS 확장 루프가 아니라 **Stage 1: Visible NURBS Reconstruction**이다.
-
-Stage 1 입력은 COLMAP/초기 Gaussian에서 얻은 관측 Gaussian center와 color이며, 출력은 visible surface만 설명하는 NURBS-like parametric representation이다.
-
-Stage 1에서 수행하는 작업:
-
-- 관측 Gaussian center를 visible surface point cloud로 사용한다.
-- visible point cloud에서 base curve set을 추정한다.
-- PCA 기반 2D parameter domain 위에 visible surface control grid를 fitting한다.
-- `(u, v) -> xyz` surface evaluator와 smoothness regularization을 제공한다.
-
-Stage 1에서 의도적으로 제외하는 작업:
-
-- occlusion curve prediction
-- occluded surface extrapolation
-- uncertain Gaussian sampling
-- uncertain/certain joint optimization
-- uncertain confidence 기반 pruning/promotion
-
-이 제외 항목들은 Stage 2 이후에 별도 파이프라인으로 다시 연결한다.
 ## High-Level Pipeline
 
 ```text
 Scene Loader
-    -> Initial 3DGS Gaussians
-    -> Observed Surface Point Cloud
-    -> Base Curve Fitting
-    -> Occlusion Curve Prediction
-    -> NURBS Surface Construction
-    -> Uncertain Gaussian Sampling
-    -> Joint Optimization
-    -> Curve and Surface Update
+  -> Initial 3DGS Gaussians
+  -> Observed Gaussian Filtering
+  -> Observed Surface Point Cloud
+  -> Base Curve Extraction
+  -> Structural Prior Analysis
+  -> Occlusion Curve Prediction
+  -> NURBS Surface Construction
+  -> Uncertain Gaussian Sampling
+  -> Joint Rendering
+  -> Residual Analysis
+  -> Surface Update
+  -> Surface-aware ADC
 ```
 
-## Gaussian Types
+현재 구현의 우선순위는 visible surface reconstruction과 Gaussian-surface binding을 안정화하는 것이다. Occluded surface generation, uncertain-to-certain promotion, full surface update policy는 별도 단계로 분리한다.
+
+## Surface Reconstruction
+
+### Observed Surface Point Cloud
+
+초기 Gaussian center를 observed surface point cloud로 사용한다. 필요하다면 opacity, scale, visibility score, normal confidence를 기준으로 신뢰 가능한 Gaussian만 필터링한다.
+
+### Base Curve Extraction
+
+관측 point cloud에서 base curve를 추출한다. curve extraction은 다음 신호를 함께 고려한다.
+
+- local geometry grouping
+- principal direction estimation
+- normal consistency
+- visibility confidence
+- color or appearance consistency
+- structural continuity
+
+### Structural Prior Analysis
+
+관측 curve를 비관측 영역으로 연장하기 위해 다음 prior를 분석한다.
+
+- tangent continuity
+- curvature continuity
+- directional consistency
+- local repetition
+- shape regularity
+- neighboring patch relation
+
+이 prior는 정답 표면을 직접 보장하지 않고, occluded curve와 surface patch 후보를 만드는 structural hypothesis로 취급한다.
+
+### Algebraic Extension
+
+관측 curve는 비관측 영역으로 algebraic하게 확장된다. exact extension operator는 OSN-GS의 주요 연구 문제로 남긴다. 초기 구현에서는 tangent, curvature, repetition prior를 이용한 보수적 curve continuation을 우선한다.
+
+### NURBS Surface Construction
+
+관측 curve와 예측 curve는 함께 NURBS surface patch를 정의한다. 각 patch는 다음 정보를 가진다.
+
+- control points
+- knot vectors
+- degree
+- weights
+- parameter domain
+- observed / occluded region mask
+- neighbor relations
+- structural prior metadata
+- associated Gaussian references
+
+## Gaussian Representation
 
 ### Certain Gaussian
 
-Certain Gaussian? 湲곗〈 3DGS ?숈뒿 怨쇱젙?먯꽌 ?앹꽦?섍굅?? 異⑸텇??愿痢?洹쇨굅媛 ?덈뒗 Gaussian?대떎.
+Certain Gaussian은 충분한 관측 근거가 있는 Gaussian이다. 기존 3DGS 학습 과정에서 생성되거나 COLMAP/초기 3DGS로부터 안정적으로 추출된 관측 표면 sample로 해석한다.
 
-二쇱슂 ?숈뒿 ?좏샇:
+주요 학습 신호:
 
 - image similarity loss
 - opacity and scale regularization
 - standard 3DGS adaptive density control
 - color and spherical harmonics optimization
 
-?대떦 紐⑤뱢:
-
-- `osn_gs/gaussian/certain_gaussians.py`
-- `osn_gs/gaussian/projection.py`
-- `osn_gs/losses/image_similarity.py`
-
 ### Uncertain Gaussian
 
-Uncertain Gaussian? NURBS surface??鍮꾧?痢??곸뿭 ?꾩뿉 諛곗튂?섎뒗 Gaussian?대떎. ??Gaussian? 吏곸젒 愿痢〓맂 ?쒕㈃?먯꽌 ??寃껋씠 ?꾨땲誘濡? 珥덇린?먮뒗 援ъ“??異붿젙??湲곕컲???꾨낫濡?痍④툒?쒕떎.
+Uncertain Gaussian은 NURBS parameter domain에서 직접 생성되는 Gaussian이다.
 
-以묒슂???댁꽍:
+```text
+(u, v)
+  -> Surface Evaluation
+  -> 3D Position / Normal
+  -> Gaussian Attributes
+```
 
-Uncertain Gaussian??image similarity loss瑜??ш쾶 諛쒖깮?쒗궓?ㅻ㈃, ?대뒗 ?대떦 Gaussian???섎せ???꾩튂 ?먮뒗 ?섎せ??surface ?꾩뿉 諛곗튂?섏뿀??媛?μ꽦???섎??쒕떎. ?곕씪???⑥닚??Gaussian parameter留?理쒖쟻?뷀븯??寃껋씠 ?꾨땲?? NURBS base curve? surface ?먯껜瑜??ш퀎?고븯???좏샇濡??ъ슜?쒕떎.
+Uncertain Gaussian의 역할은 단순히 빈 공간의 density를 채우는 것이 아니라, supporting surface hypothesis가 rendering 관점에서 일관적인지 검증하는 것이다.
 
-二쇱슂 ?숈뒿 ?좏샇:
+Uncertain Gaussian이 지속적인 image residual을 발생시키면, 이는 다음 중 하나를 의미할 수 있다.
 
-- image similarity residual
-- NURBS surface consistency
-- neighboring certain Gaussian cluster prior
-- curve smoothness and continuity prior
+- Gaussian appearance 초기화 오류
+- Gaussian covariance 또는 opacity 오류
+- surface parameter 위치 오류
+- supporting NURBS patch 또는 control point 오류
+- occluded curve hypothesis 오류
 
-?대떦 紐⑤뱢:
+따라서 uncertain residual은 Gaussian parameter만 직접 수정하는 신호가 아니라 surface backtracking과 surface update 후보로 전달되어야 한다.
 
-- `osn_gs/gaussian/uncertain_gaussians.py`
-- `osn_gs/surface/sampling.py`
-- `osn_gs/optim/curve_update.py`
-- `osn_gs/losses/uncertainty.py`
+## Visibility-Driven Validation
 
-## Surface Reconstruction
+OSN-GS는 uncertain Gaussian을 geometric probe로 사용한다. 렌더링 residual은 Gaussian-surface binding을 통해 surface hypothesis로 되돌아간다.
 
-### Observed Point Cloud
+```text
+Rendered Pixel
+  -> Residual
+  -> Uncertain Gaussian
+  -> Patch ID
+  -> (u, v)
+  -> Basis Weights
+  -> Surface Control Points
+```
 
-珥덇린 Gaussian??center瑜?point cloud濡??ъ슜?쒕떎. ?꾩슂?섎떎硫?opacity, scale, normal confidence, visibility score瑜?湲곗??쇰줈 愿痢??쒕㈃???대떦?섎뒗 Gaussian留??꾪꽣留곹븳??
+이 구조 덕분에 image-space residual을 직접 surface geometry에 연결할 수 있다. surface correction은 개별 pixel에서 바로 geometry를 추정하는 방식이 아니라, Gaussian이 가진 patch association과 parameter coordinate를 통해 수행한다.
 
-?대떦 紐⑤뱢:
+## Surface-Aware Adaptive Density Control
 
-- `osn_gs/surface/point_cloud.py`
+기존 3DGS의 ADC는 Gaussian primitive의 clone, split, prune으로 density를 조절한다. OSN-GS에서는 ADC를 surface 위 adaptive sampling으로 재해석한다.
 
-### Base Curve Fitting
+```text
+Surface
+  -> Sampling
+  -> Gaussian
+  -> ADC Signal
+  -> Higher or Lower Surface Sampling Density
+```
 
-愿痢??쒕㈃ point cloud?먯꽌 base curve瑜??앹꽦?쒕떎. 珥덇린 援ы쁽?먯꽌???ㅼ쓬 湲곗???怨좊젮?쒕떎.
+원칙:
 
-- local geometry grouping
-- normal consistency
-- principal direction estimation
-- color cluster consistency
-- camera visibility confidence
+- Certain Gaussian은 기존 3DGS ADC 정책을 따른다.
+- Surface-bound Gaussian의 child는 parent의 patch id, `(u, v)` neighborhood, normal, confidence metadata를 상속한다.
+- Uncertain Gaussian은 독립적으로 geometry를 바꾸기보다 surface parameter domain의 sampling density를 조절한다.
+- 지속적인 high residual은 단순 densification이 아니라 surface update 후보로 전달한다.
+- uncertain-to-certain promotion은 현재 구현에서 금지한다. promotion 정책은 추후 별도 stage에서 정의한다.
 
-?대떦 紐⑤뱢:
+## Internal Data Model
 
-- `osn_gs/surface/base_curves.py`
-- `osn_gs/surface/structural_prior.py`
+### Gaussian Record
 
-### Occlusion Curve Prediction
+각 Gaussian은 다음 정보를 포함한다.
 
-base curve??諛⑺뼢?? 怨〓쪧, 媛꾧꺽, 諛섎났?깆쓣 ?댁슜??occluded space ?덉쓽 curve瑜?異붿젙?쒕떎. ???④퀎??OSN-GS???듭떖 李⑤퀎?먯씠??
+- xyz position
+- covariance scale and rotation
+- opacity
+- color or spherical harmonics attributes
+- patch id
+- surface parameter `(u, v)`
+- surface normal
+- observed / occluded flag
+- confidence
+- ADC history
+- optional basis-function weights
 
-異붿젙??curve??吏곸젒 ?뺣떟???꾨땲??NURBS surface瑜??앹꽦?섍린 ?꾪븳 structural hypothesis濡?痍④툒?쒕떎.
+### Surface Patch Record
 
-?대떦 紐⑤뱢:
-
-- `osn_gs/surface/occlusion_curves.py`
-- `osn_gs/surface/structural_prior.py`
-
-### NURBS Surface Construction
-
-愿痢?base curve? 異붿젙 occlusion curve瑜??④퍡 ?ъ슜??NURBS surface瑜?留뚮뱺??
-
-NURBS surface???ㅼ쓬 ?뺣낫瑜?媛吏꾨떎.
+각 NURBS surface patch는 다음 정보를 포함한다.
 
 - control points
-- degree
 - knot vectors
+- degree
 - weights
 - parameter domain
-- observed/occluded region mask
-
-?대떦 紐⑤뱢:
-
-- `osn_gs/surface/nurbs_surface.py`
-
-## Color Assignment
-
-Uncertain Gaussian???됱긽? 吏곸젒 愿痢〓맂 ?됱긽???놁쑝誘濡?certain Gaussian???됱긽 遺꾪룷瑜?湲곕컲?쇰줈 珥덇린?뷀븳??
-
-珥덇린 ?꾨왂:
-
-1. Certain Gaussian???됱긽 ?먮뒗 spherical harmonics coefficient 湲곗??쇰줈 clustering?쒕떎.
-2. 媛?uncertain Gaussian??媛??媛源뚯슫 surface region ?먮뒗 curve neighborhood??cluster???좊떦?쒕떎.
-3. ?좊떦??cluster??color prior瑜?uncertain Gaussian??怨듭쑀?쒕떎.
-4. ?숈뒿 以?image residual????븘吏??諛⑺뼢?쇰줈 color parameter瑜??쒗븳?곸쑝濡??낅뜲?댄듃?쒕떎.
-
-?대떦 紐⑤뱢:
-
-- `osn_gs/gaussian/color_clusters.py`
-
-## Adaptive Density Control
-
-Certain Gaussian? 湲곗〈 3DGS??adaptive density control???곕Ⅸ??
-
-Uncertain Gaussian? ?낅┰?곸쑝濡?densify/prune?섍린蹂대떎, 媛숈? color/geometry cluster???랁븳 certain Gaussian??ADC ?⑦꽩??紐⑤갑?쒕떎.
-
-珥덇린 ?꾨왂:
-
-- 媛숈? cluster??certain Gaussian split/clone/prune ?듦퀎瑜?湲곕줉?쒕떎.
-- surface parameter domain ?꾩뿉??uncertain Gaussian??density瑜?蹂댁젙?쒕떎.
-- image residual??吏?띿쟻?쇰줈 ??uncertain Gaussian? ?꾩튂 ?대룞 ?먮뒗 curve update ?꾨낫濡??섍릿??
-- confidence媛 異⑸텇???믪븘吏?uncertain Gaussian? certain Gaussian?쇰줈 ?밴꺽?????덈떎.
-
-?대떦 紐⑤뱢:
-
-- `osn_gs/gaussian/density_control.py`
+- observed / occluded mask
+- neighbor patch relations
+- structural prior
+- Gaussian references
+- residual statistics
 
 ## Training Loop
 
@@ -214,160 +262,151 @@ for iteration in training_iterations:
         cameras=batch.cameras,
     )
 
-    certain_loss = image_similarity(rendered, batch.images)
-    uncertain_loss = uncertainty_loss(rendered, batch.images, nurbs_surface)
+    image_loss = image_similarity(rendered, batch.images)
     surface_loss = nurbs_regularization(nurbs_surface)
+    uncertainty_loss = residual_to_surface_loss(rendered, batch.images, bindings)
 
-    total_loss = certain_loss + uncertain_loss + surface_loss
+    total_loss = image_loss + surface_loss + uncertainty_loss
     total_loss.backward()
 
-    update_certain_gaussians()
-    update_uncertain_gaussians()
+    update_gaussian_attributes()
+    update_surface_bound_gaussian_positions()
 
-    if should_update_curves(iteration):
+    if should_analyze_residuals(iteration):
+        backtrack_residuals_to_surface()
+        mark_surface_update_candidates()
+
+    if should_update_surface(iteration):
         update_base_curves()
         update_occlusion_curves()
         rebuild_nurbs_surface()
-        resample_uncertain_gaussians()
+        refresh_surface_bound_gaussians()
 
     if should_run_density_control(iteration):
         run_certain_adc()
-        run_uncertain_adc_from_cluster_patterns()
+        run_surface_aware_adc()
 ```
-
-?대떦 紐⑤뱢:
-
-- `osn_gs/core/trainer.py`
-- `osn_gs/core/pipeline.py`
-- `osn_gs/core/state.py`
-- `osn_gs/render/rasterizer_adapter.py`
 
 ## Module Responsibilities
 
+현재 코드베이스의 구현은 Torch path를 중심으로 진행한다. 아래 모듈 경계는 목표 구조이며, 실제 파일명은 구현 단계에 따라 `torch_*` 계열로 존재할 수 있다.
+
 ### `osn_gs/core`
 
-?꾩껜 ?꾨젅?꾩썙?ъ쓽 ?ㅽ뻾 ?먮쫫??愿由ы븳??
+전체 실행 흐름, pipeline, trainer, state를 관리한다.
 
-- `framework.py`: OSN-GS ?곸쐞 API
-- `pipeline.py`: surface construction怨?Gaussian update ?④퀎 ?곌껐
-- `trainer.py`: ?숈뒿 猷⑦봽
-- `state.py`: Gaussian, NURBS, optimizer, iteration state 蹂닿?
+- training loop
+- Gaussian/NURBS lifecycle
+- streaming and output coordination
+- surface update scheduling
 
 ### `osn_gs/gaussian`
 
-Certain/uncertain Gaussian???앹꽦, ?낅뜲?댄듃, ?됱긽, density control???대떦?쒕떎.
+Gaussian model, covariance, opacity, color, ADC, surface binding metadata를 관리한다.
 
-- `certain_gaussians.py`: 愿痢?湲곕컲 Gaussian container? update
-- `uncertain_gaussians.py`: NURBS 湲곕컲 Gaussian container? confidence 愿由?
-- `projection.py`: Gaussian projection 諛?observed surface point 異붿텧
-- `color_clusters.py`: ?됱긽 湲곕컲 cluster prior
-- `density_control.py`: certain ADC? uncertain ADC 紐⑤갑 ?뺤콉
+- certain / uncertain Gaussian distinction
+- Graphdeco-style primitive export
+- covariance initialization and optimization
+- surface-aware density control
 
 ### `osn_gs/surface`
 
-Point cloud?먯꽌 curve, NURBS surface, Gaussian sampling ?꾩튂瑜??앹꽦?쒕떎.
+Observed point cloud, curve extraction, NURBS construction, sampling, structural prior를 관리한다.
 
-- `point_cloud.py`: Gaussian center 湲곕컲 point cloud 蹂?섍낵 ?꾪꽣留?
-- `base_curves.py`: 愿痢??쒕㈃ base curve fitting
-- `occlusion_curves.py`: 鍮꾧?痢??곸뿭 curve prediction
-- `nurbs_surface.py`: NURBS surface representation
-- `sampling.py`: NURBS surface ??Gaussian sampling
-- `structural_prior.py`: curve continuity, curvature, repetition prior
-
-### `osn_gs/losses`
-
-?대?吏 湲곕컲 loss? surface 愿??regularization???뺤쓽?쒕떎.
-
-- `image_similarity.py`: L1, SSIM, perceptual ?뺥깭??image loss
-- `nurbs_regularization.py`: smoothness, curvature, continuity regularization
-- `uncertainty.py`: uncertain Gaussian confidence? position correction loss
+- visible surface reconstruction
+- NURBS intermediate representation
+- surface parameter sampling
+- residual-to-surface metadata
 
 ### `osn_gs/render`
 
-湲곗〈 3DGS rasterizer瑜?OSN-GS ?숈뒿 猷⑦봽??留욊쾶 媛먯떬??
+3DGS rasterizer를 OSN-GS 학습 루프에 연결한다.
 
-- `rasterizer_adapter.py`: certain/uncertain Gaussian???④퍡 ?뚮뜑留곹븯??adapter
-
-### `osn_gs/optim`
-
-Curve? surface 媛깆떊 ?뺤콉, scheduler瑜??대떦?쒕떎.
-
-- `curve_update.py`: uncertain residual??湲곕컲?쇰줈 base curve? occlusion curve ?ш퀎??
-- `schedulers.py`: curve update, NURBS rebuild, ADC ?ㅽ뻾 二쇨린 愿由?
+- CUDA rasterizer bridge
+- Torch fallback renderer
+- packed Gaussian streaming for external visualization
 
 ### `osn_gs/data`
 
-Scene, camera, image batch瑜?濡쒕뱶?쒕떎.
+COLMAP/Graphdeco-style scene, camera, image batch를 로드한다.
 
-- `scene_loader.py`: dataset entry point
-- `cameras.py`: camera parameter wrapper
+- per-view image staging
+- camera transforms
+- training view sampling
+
+## Current Implementation Boundary
+
+현재 구현은 다음 범위를 우선한다.
+
+- COLMAP/초기 Gaussian에서 visible surface NURBS intermediate 생성
+- NURBS를 최종 출력이 아니라 메모리 및 출력 manifest의 중간 산출물로 유지
+- Gaussian primitive와 NURBS visualization payload를 외부 렌더러로 streaming
+- covariance scale을 original 3DGS 방식에 가깝게 nearest-neighbor spacing에서 초기화
+- ADC를 basic 3DGS style로 연결하되, uncertain-to-certain promotion은 금지
+- output iteration folder는 숫자 이름을 사용
+
+아직 별도 stage로 남겨둔 범위:
+
+- full occluded surface generation
+- algebraic extension operator 확정
+- residual 기반 NURBS control point update
+- promotion policy
+- surface-aware ADC의 완전한 sampling-density formulation
 
 ## Key Research Questions
 
-1. 愿痢?Gaussian?먯꽌 ?덉젙?곸씤 base curve瑜??대뼸寃?異붿텧??寃껋씤媛?
-2. Occluded curve prediction?먯꽌 ?대뼡 structural prior媛 媛???④낵?곸씤媛?
-3. Uncertain Gaussian??image loss瑜??꾩튂 ?ㅻ쪟, ?됱긽 ?ㅻ쪟, ?쒕㈃ ?ㅻ쪟 以?臾댁뾿?쇰줈 ?댁꽍??寃껋씤媛?
-4. ?몄젣 uncertain Gaussian??certain Gaussian?쇰줈 ?밴꺽??寃껋씤媛?
-5. Certain Gaussian??ADC ?⑦꽩??uncertain Gaussian???대뒓 ?뺣룄源뚯? 紐⑤갑?쒗궗 寃껋씤媛?
-6. NURBS surface update媛 ?덈Т ??쓣 ???숈뒿 ?덉젙?깆씠 源⑥?吏 ?딅룄濡??대뼡 scheduler瑜???寃껋씤媛?
+1. 관측 Gaussian에서 안정적인 base curve를 어떻게 추출할 것인가?
+2. Algebraic extension operator를 어떤 형태로 정의할 것인가?
+3. 어떤 structural prior가 occluded curve prediction에 가장 효과적인가?
+4. Uncertain residual을 appearance 오류, covariance 오류, surface 오류 중 어떻게 분해할 것인가?
+5. Visibility-driven validation을 surface control point update로 어떻게 안정적으로 연결할 것인가?
+6. Surface update가 너무 잦을 때 학습 안정성이 깨지지 않도록 어떤 scheduler를 둘 것인가?
+7. Surface-aware ADC를 clone/split/prune이 아니라 sampling density 조절로 어떻게 정식화할 것인가?
+8. Uncertain Gaussian의 color, covariance, opacity를 surface와 neighboring certain Gaussian에서 어떻게 초기화할 것인가?
+9. Uncertain-to-certain promotion을 허용한다면 어떤 조건과 검증 stage가 필요한가?
 
 ## Implementation Roadmap
 
-### Phase 1: Skeleton and Baseline Bridge
+### Phase 1: 3DGS Baseline Bridge
 
-- 湲곗〈 3DGS ?숈뒿 肄붾뱶? ?곌껐??rasterizer adapter ?묒꽦
-- Gaussian container ?명꽣?섏씠???뺤쓽
-- Scene loader? config 援ъ“ ?뺤쓽
-- 湲곕낯 train script ?묒꽦
+- Torch-based Gaussian model 구성
+- CUDA rasterizer 또는 Torch fallback renderer 연결
+- COLMAP/Graphdeco scene loader 연결
+- Graphdeco-style PLY export와 external renderer streaming 지원
 
-?꾩옱 援ы쁽 ?곹깭:
+### Phase 2: Visible NURBS Reconstruction
 
-- `TorchGaussianModel`? 3DGS??`GaussianModel` ?띿꽦 怨꾩빟怨??좎궗?섍쾶 `get_xyz`, `get_features`, `get_opacity`, `get_scaling`, `get_rotation`???쒓났?쒕떎.
-- `TorchRasterizerAdapter`??`diff_gaussian_rasterization`???ㅼ튂?섏뼱 ?덉쑝硫?CUDA rasterizer瑜??ъ슜?섍퀬, ?놁쑝硫?Torch fallback renderer瑜??ъ슜?쒕떎.
-- `TorchOSNGSTrainer`???숈뒿 寃곌낵濡?PLY, PPM preview, Torch checkpoint, metrics file????ν븳??
+- Gaussian center 기반 observed point cloud 생성
+- visible surface filtering
+- base curve extraction prototype
+- NURBS-like visible surface intermediate 생성
+- NURBS payload 저장 및 streaming
 
-### Phase 2: Observed Surface Curves
+### Phase 3: Persistent Surface Binding
 
-- Gaussian center瑜?point cloud濡?蹂??
-- 愿痢?confidence 湲곕컲 filtering
-- base curve fitting prototype ?묒꽦
-- curve visualization ?꾧뎄 ?묒꽦
+- Gaussian에 patch id, `(u, v)`, normal, confidence metadata 저장
+- NURBS surface patch가 Gaussian reference를 추적
+- renderer output residual을 Gaussian-surface binding으로 backtracking
 
-### Phase 3: NURBS Surface and Uncertain Gaussian
+### Phase 4: Surface-Derived Uncertain Gaussian
 
-- NURBS surface representation 援ы쁽
-- surface parameter domain sampling 援ы쁽
-- uncertain Gaussian container 援ы쁽
-- color cluster 湲곕컲 珥덇린 ?됱긽 ?좊떦
+- NURBS parameter domain sampling
+- uncertain Gaussian 초기 위치, normal, covariance, color prior 생성
+- visibility-driven validation loss 추가
+- surface consistency regularization 추가
 
-### Phase 4: Joint Optimization
+### Phase 5: Surface Update and Surface-Aware ADC
 
-- certain/uncertain Gaussian joint rendering
-- uncertainty loss 異붽?
-- curve update scheduler 異붽?
-- NURBS rebuild? uncertain resampling ?곌껐
-
-### Phase 5: ADC and Promotion Policy
-
-- certain cluster蹂?ADC ?⑦꽩 湲곕줉
-- uncertain Gaussian density control 援ы쁽
-- uncertain to certain promotion rule 援ы쁽
-- ablation ?ㅽ뿕 援ъ꽦
+- residual 기반 curve/surface update scheduler 구현
+- control point update 또는 patch rebuild policy 구현
+- ADC를 surface sampling density 조절로 재정의
+- promotion policy는 별도 실험 stage에서만 검토
 
 ## Expected Contributions
 
-- 愿痢??쒕㈃??援ъ“???뱀꽦???댁슜??鍮꾧?痢??쒕㈃??異붿젙?섎뒗 3DGS ?뺤옣 ?꾨젅?꾩썙??
-- NURBS 湲곕컲 parametric surface瑜?3DGS ?숈뒿 猷⑦봽??寃고빀?섎뒗 諛⑸쾿
-- Certain/uncertain Gaussian 遺꾨━? confidence 湲곕컲 媛깆떊 ?꾨왂
-- Color cluster? ADC pattern transfer瑜??댁슜??鍮꾧?痢?Gaussian 珥덇린??諛?density control
-
-
-## Ongoing Context Log
-
-- 2026-07-01: User requested that whenever the environment, project situation, or task direction changes, the relevant `.md` files should be updated with that context instead of relying only on chat history.
-- 2026-07-01: NURBS is an intermediate representation, not a replacement final output. Training should keep Gaussian primitives as the main output while preserving visible NURBS reconstruction data for later visualization tools.
-- 2026-07-01: The Colab training notebook should pass NURBS-related configuration alongside OSN-GS training/Gaussian primitive output handling so downstream visualization can consume both Gaussian and NURBS artifacts.
-
-- 2026-07-01: WebRenderer PLY compatibility request. Renderer requires Graphdeco-style Gaussian fields `x`, `y`, `z`, `f_dc_0..2`, raw `opacity`, optional raw log `scale_0..2`, and `rot_0..3`. OSN-GS has corresponding primitives in `TorchGaussianModel`, so `save_ply` should emit those names instead of debug-only RGB/`scale_x` fields.
-- 2026-07-01: Notebook output packaging now includes NURBS visualization data. OSN-GS output inspection creates `visualization_manifest.json` under `MODEL_ROOT`, pairing each `point_cloud.ply` with its sibling `nurbs_surface.json` so external tools can load Gaussian primitives and the visible NURBS intermediate together.
-- 2026-07-02: Added `visible_surface_resolution_scale` so Stage 1 visible NURBS control-grid density can be increased from the notebook Train cell without changing the base U/V parameters. Final resolution is computed from `visible_surface_resolution_u/v * scale`.
+- Surface-centric 3D Gaussian representation
+- Explicit NURBS reconstruction for visible and eventually occluded geometry
+- Persistent Gaussian-surface association
+- Visibility-driven surface validation
+- Surface-aware adaptive density control
+- NURBS 기반 parametric surface와 3DGS 학습 루프의 결합 방식

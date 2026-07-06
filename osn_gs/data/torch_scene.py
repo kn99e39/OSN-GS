@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 """Torch training scene helpers."""
 
@@ -36,8 +36,12 @@ class TorchScene:
         if count == 0:
             raise ValueError("TorchScene requires at least one camera.")
         indices = [(iteration + offset) % count for offset in range(batch_size)]
-        image_indices = torch.as_tensor(indices, dtype=torch.long, device=self.images.device)
-        images = self.images[image_indices]
+        if isinstance(self.images, (list, tuple)):
+            selected = [self.images[idx] for idx in indices]
+            images = torch.stack(selected, dim=0)
+        else:
+            image_indices = torch.as_tensor(indices, dtype=torch.long, device=self.images.device)
+            images = self.images[image_indices]
         if images.device.type != self.device:
-            images = images.to(device=self.device, dtype=torch.float32, non_blocking=self.images.device.type == "cpu")
+            images = images.to(device=self.device, dtype=torch.float32, non_blocking=images.device.type == "cpu")
         return TorchImageBatch(cameras=[self.cameras[idx] for idx in indices], images=images)

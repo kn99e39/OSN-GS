@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 """COLMAP and Graphdeco-style dataset loader for OSN-GS.
 
@@ -79,7 +79,8 @@ def load_colmap_scene(
     torch = require_torch()
     scene_root = Path(scene_root)
     if image_device is None:
-        image_device = device
+        image_device = "auto"
+    image_device = str(image_device).lower()
     image_root = scene_root / image_dir_name
     sparse_root = scene_root / sparse_dir_name
     if not image_root.exists():
@@ -103,7 +104,7 @@ def load_colmap_scene(
     for image in ordered_images:
         colmap_camera = cameras[image.camera_id]
         image_path = resolve_image_path(image_root, image.name)
-        image_tensor, height, width = load_image_tensor(image_path, device=image_device, downscale=image_downscale)
+        image_tensor, height, width = load_image_tensor(image_path, device="cpu", downscale=image_downscale)
         fovx, fovy = camera_fovs(colmap_camera, width=width, height=height, downscale=image_downscale)
         world_view, full_proj, center = camera_matrices(image.qvec, image.tvec, fovx, fovy, device=device)
         torch_cameras.append(
@@ -125,12 +126,19 @@ def load_colmap_scene(
 
     points = torch.as_tensor(point_cloud.xyz, dtype=torch.float32, device=device)
     colors = torch.as_tensor(point_cloud.rgb, dtype=torch.float32, device=device)
+    image_bytes = sum(int(image.numel() * image.element_size()) for image in image_tensors)
+    print(
+        "OSN-GS image storage: cpu-staged "
+        f"images={image_bytes / (1024 ** 3):.2f}GB "
+        "transfer=per-view",
+        flush=True,
+    )
     extent = estimate_scene_extent(point_cloud.xyz)
     return TorchScene(
         initial_points=points,
         initial_colors=colors,
         cameras=torch_cameras,
-        images=torch.stack(image_tensors, dim=0),
+        images=image_tensors,
         device=device,
         extent=extent,
     )

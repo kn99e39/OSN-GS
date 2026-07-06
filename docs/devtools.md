@@ -1,89 +1,9 @@
-﻿# Agent Notes
+Maintenance and editor-integration scripts that are not part of the OSN-GS runtime live here.
 
-This project is being edited through Codex on Windows. Keep the workflow simple
-and avoid spending time fighting the shell.
-
-## File Reading
-
-- Prefer `cmd` commands for quick reads:
-  - `type path\to\file.py`
-  - `dir /b path\to\folder`
-  - `findstr /s /n /i "pattern" path\*.py`
-- If `powershell` exits immediately or returns `-1073741502`, switch to `cmd`.
-- If inline Python or quoting breaks, write a temporary script under `C:\tmp`
-  and run it with `.venv\Scripts\python.exe`.
-- Do not assume a failed shell command means the code is broken. Separate tool
-  failure from project failure.
-
-
-## Windows Remote-SSH Sandbox Limits
-
-On this Windows Remote-SSH machine, the restricted sandbox cannot reliably launch PowerShell, Git, or Python modules that load native DLLs such as `ctypes`, `torch`, and CUDA/build tooling. These failures often appear as exit code `-1073741502`, which corresponds to Windows `0xC0000142` / DLL initialization failure.
-
-Use the restricted sandbox only for reading files and simple `cmd` built-in commands, such as `type`, `dir`, and basic text inspection.
-
-Run with `require_escalated` whenever a command needs any of the following:
-
-- PowerShell
-- Git
-- Python native extensions or DLL-backed imports, including `ctypes`, `torch`, CUDA, and build tooling
-- DLL-backed Windows executables such as `where.exe`, `tasklist.exe`, compiler probes, or similar process/environment inspection commands
-- Any command that previously failed with `-1073741502`
-
-Do not spend time retrying those commands inside the restricted sandbox. Treat the failure as an environment limitation and either rerun once with `require_escalated` or use a smaller static/file-based check.
-## Korean Markdown Encoding Rules
-
-- 한글이 포함된 `.md` 파일은 반드시 UTF-8 또는 UTF-8 with BOM을 보존해서 다룬다.
-- 기존 `.md` 파일을 수정할 때는 `read_text(..., errors="ignore")`를 절대 사용하지 않는다. 디코딩 실패 바이트가 조용히 삭제되어 원문 복원이 불가능해질 수 있다.
-- Windows 콘솔 출력은 `cp949`일 수 있으므로, 한글 파일 내용을 검증 목적으로 그대로 `print()`하지 않는다. 필요한 경우 `unicode_escape` preview, byte length, 한글 문자 수 같은 간접 검증을 사용한다.
-- 문서에 로그를 덧붙일 때도 파일 전체를 임의 인코딩으로 다시 쓰지 않는다. 먼저 기존 인코딩을 판별하고, 가능하면 `apply_patch`로 필요한 부분만 수정한다.
-- Git에 남아 있는 원문을 확인할 때는 `git show <rev>:path`의 바이트를 기준으로 비교한다. 깨진 현재 HEAD를 원본으로 착각하지 않는다.
-- 이번 `docs/architecture.md` 손상 원인은 깨진 인코딩 상태의 문서를 UTF-8 텍스트로 다시 저장하고, 일부 문자가 `?` 또는 잘못된 CJK 문자로 굳어진 것이다. 정상 원문은 `7a96999:docs/architecture.md`에서 복원했다.
-## Editing
-
-- Prefer `apply_patch` for edits.
-- If `apply_patch` is blocked by the Windows sandbox wrapper, use a direct
-  workspace write command with escalation and keep the change tightly scoped.
-- Avoid editing external reference projects. If code is needed from an external
-  project, vendor it into OSN-GS and make runtime paths point only to OSN-GS.
-
-## Verification
-
-- Use `python -B` or import-check scripts when `py_compile` fails because it
-  cannot write `__pycache__`.
-- Useful checks:
-
-```powershell
-.venv\Scripts\python.exe train.py --help
-```
-
-```powershell
-.venv\Scripts\python.exe -B C:\tmp\osn_gs_import_check.py
-```
-
-- For notebook edits, validate JSON after modification:
-
-```powershell
-.venv\Scripts\python.exe C:\tmp\check_notebook_json.py
-```
-
-## Current Rendering Structure
-
-- First-class torch renderer:
-  - `osn_gs/render/gaussian_rasterizer.py`
-- Prototype numpy renderer:
-  - `osn_gs/render/prototype_renderer.py`
-- Vendored CUDA rasterizer source:
-  - `osn_gs/render/vendor/diff_gaussian_rasterization`
-- Avoid reintroducing `adapter`-style render APIs unless there is a clear
-  compatibility reason.
-
-## Communication
-
-- If a command fails for environment reasons, say that clearly and move to a
-  smaller verification step.
-- When the user provides a traceback or notebook output, treat it as the source
-  of truth. Do not infer a different cell or command without checking.
+- `update_kernel_settings.py`: sync notebook metadata and local VS Code interpreter settings.
+- `patch_notebook_local_root.py`: patch the Colab notebook so local Jupyter uses the notebook folder as the project root.
+- `tmp_check_torch.py`: quick Torch/CUDA environment check.
+- `tmp_check_ctypes.py`: quick stdlib `ctypes` import check.
 
 ## Ongoing Context Log
 
@@ -91,13 +11,10 @@ Do not spend time retrying those commands inside the restricted sandbox. Treat t
 - 2026-07-01: NURBS is an intermediate representation, not a replacement final output. Training should keep Gaussian primitives as the main output while preserving visible NURBS reconstruction data for later visualization tools.
 - 2026-07-01: The Colab training notebook should pass NURBS-related configuration alongside OSN-GS training/Gaussian primitive output handling so downstream visualization can consume both Gaussian and NURBS artifacts.
 
-
 - 2026-07-01: WebRenderer PLY compatibility request. Renderer requires Graphdeco-style Gaussian fields `x`, `y`, `z`, `f_dc_0..2`, raw `opacity`, optional raw log `scale_0..2`, and `rot_0..3`. OSN-GS has corresponding primitives in `TorchGaussianModel`, so `save_ply` should emit those names instead of debug-only RGB/`scale_x` fields.
-- 2026-07-01: `colab_train_3dgs.ipynb` output download cell must remain Colab/local compatible. Use `google.colab.files.download` only when `IS_COLAB` is true; local notebook runs should create the output zip in the project root (`GS_ROOT` or `NOTEBOOK_ROOT`) and show/print that path.
 - 2026-07-01: Notebook output packaging now includes NURBS visualization data. OSN-GS output inspection creates `visualization_manifest.json` under `MODEL_ROOT`, pairing each `point_cloud.ply` with its sibling `nurbs_surface.json` so external tools can load Gaussian primitives and the visible NURBS intermediate together.
 - 2026-07-02: Added `visible_surface_resolution_scale` so Stage 1 visible NURBS control-grid density can be increased from the notebook Train cell without changing the base U/V parameters. Final resolution is computed from `visible_surface_resolution_u/v * scale`.
 - 2026-07-02: High `visible_surface_resolution_scale` can increase NURBS fitting memory. Added `visible_surface_fit_device` and `visible_surface_fit_chunk_size` so fitting can run on CPU and process the uv grid in chunks while keeping the final NURBS intermediate available for visualization.
-- 2026-07-02: Notebook Train cell should show live RAM/VRAM usage, current training iteration, and a bounded train.py output tail so long runs do not leave the user waiting without feedback.
 - 2026-07-02: Implemented basic 3DGS-style Adaptive Density Control for OSN-GS. ADC now accumulates viewspace gradients/radii, clones or splits certain Gaussians, prunes low-opacity/oversized certain Gaussians, and is wired to `densify_until_iter`, `densification_interval`, and `densify_grad_threshold`. Uncertain-to-certain promotion is explicitly disabled; uncertain cleanup may prune only.
 - 2026-07-02: OSN-GS saved iteration output folders now use plain numeric names such as `1000` and `10000` instead of `iteration_001000`. Notebook output inspection sorts numeric iteration folders and still treats `final` as the latest consolidated output.
 
@@ -137,5 +54,4 @@ Do not spend time retrying those commands inside the restricted sandbox. Treat t
 
 - OSN-GS now initializes Gaussian covariance scale from chunked nearest-neighbor point spacing, following the original 3DGS scale+rotation covariance convention without requiring `simple-knn`.
 - Notebook and CLI controls expose covariance initialization mode, KNN chunk sizing, min scale, max scene-scale ratio, and scale multiplier.
-
 
