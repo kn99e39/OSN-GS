@@ -91,6 +91,7 @@ def main() -> None:
         stream_every=max(0, int(args.stream_every)),
         stream_iterations=stream_iterations,
         stream_max_gaussians=max(0, int(args.stream_max_gaussians)),
+        stream_cache_dir=args.stream_cache_dir,
         stream_nurbs=not args.disable_stream_nurbs,
         write_output_files=not args.disable_output_files,
         prefer_cuda=device == "cuda",

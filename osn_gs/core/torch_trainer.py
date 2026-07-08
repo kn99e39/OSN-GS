@@ -54,6 +54,7 @@ class TorchTrainingConfig:
     stream_iterations: tuple[int, ...] = ()
     stream_max_gaussians: int = 0
     stream_nurbs: bool = True
+    stream_cache_dir: str = ""
     write_output_files: bool = True
     prefer_cuda: bool = True
     parameter_groups: GaussianParameterGroups = field(default_factory=GaussianParameterGroups)
@@ -207,10 +208,13 @@ class TorchOSNGSTrainer:
     def _should_save_iteration(self, iteration: int) -> bool:
         if self.training_config.save_iterations:
             return iteration in set(int(value) for value in self.training_config.save_iterations)
-        return self.training_config.save_interval > 0 and iteration % self.training_config.save_interval == 0
+        interval = int(self.training_config.save_interval)
+        if interval <= 1:
+            return False
+        return iteration % interval == 0
 
     def _should_stream_iteration(self, iteration: int) -> bool:
-        if not self.training_config.stream_url:
+        if not self.training_config.stream_url and not self.training_config.stream_cache_dir:
             return False
         if iteration in set(int(value) for value in self.training_config.stream_iterations):
             return True
@@ -257,6 +261,9 @@ class TorchOSNGSTrainer:
             return
         try:
             payload = self._stream_payload(state, include_nurbs=include_nurbs)
+            self._cache_stream_snapshot(state, payload)
+            if not self.training_config.stream_url:
+                return
             self._get_stream_socket().send(json.dumps(payload, separators=(",", ":")))
             capped = " capped" if payload["metadata"]["capped"] else ""
             nurbs = " + nurbs" if include_nurbs and "nurbs_surface" in payload else ""
@@ -268,9 +275,21 @@ class TorchOSNGSTrainer:
         except Exception as exc:
             now = time.time()
             if now - self._stream_last_error_at > 10:
-                print(f"[WS] stream failed at iteration {state.iteration}: {exc}", flush=True)
+                print(f"[WS] stream/cache failed at iteration {state.iteration}: {exc}", flush=True)
                 self._stream_last_error_at = now
             self._close_stream_socket()
+
+    def _cache_stream_snapshot(self, state: TorchPipelineState, payload: dict[str, Any]) -> None:
+        """Persist stream payloads so a later notebook cell can bulk-send them."""
+
+        cache_dir = str(self.training_config.stream_cache_dir or "").strip()
+        if not cache_dir:
+            return
+        path = Path(cache_dir)
+        path.mkdir(parents=True, exist_ok=True)
+        iteration = int(payload.get("iteration", state.iteration))
+        target = path / f"{iteration:08d}.json"
+        target.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
 
     def _stream_payload(self, state: TorchPipelineState, include_nurbs: bool = False) -> dict[str, Any]:
         torch = self.torch

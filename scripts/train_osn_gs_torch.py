@@ -73,7 +73,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--progress_log_interval", type=int, default=100, help="Print training progress every N iterations. 0 disables periodic progress logs.")
     parser.add_argument("--timing_log_interval", type=int, default=100, help="Print per-stage training timing every N iterations. 0 disables periodic timing logs.")
     parser.add_argument("--disable_cuda_rasterizer", action="store_true")
-    parser.add_argument("--low_vram", action="store_true", help="Apply a conservative 16GB VRAM preset.")
+    parser.add_argument("--stream_cache_dir", type=str, default="", help="Directory for cached stream snapshot JSON files.")
     return parser
 
 
@@ -134,6 +134,7 @@ def main() -> None:
         save_iterations=(),
         progress_log_interval=args.progress_log_interval,
         timing_log_interval=args.timing_log_interval,
+        stream_cache_dir=args.stream_cache_dir,
         prefer_cuda=device == "cuda",
         train_resolution_scale=train_resolution_scale,
         density_control=density_control_config,
