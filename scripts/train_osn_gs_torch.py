@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 """OSN-GS Torch training CLI."""
 
@@ -55,6 +55,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=0,
         help="NURBS grid samples per fitting chunk. 0 auto-selects once from available VRAM at startup.",
     )
+    parser.add_argument("--disable_voxel_surface_regions", action="store_true", help="Bypass pre-NURBS voxel surface-region placement.")
+    parser.add_argument("--voxel_grid_resolution", type=int, default=32, help="Voxel grid resolution per axis before NURBS fitting.")
+    parser.add_argument("--voxel_normal_knn", type=int, default=16, help="Neighbor count for local PCA normal estimation.")
+    parser.add_argument("--voxel_boundary_angle_degrees", type=float, default=35.0, help="Normal-angle change used to mark voxel boundaries.")
+    parser.add_argument("--voxel_min_points_per_region", type=int, default=1, help="Minimum Gaussians required to keep a voxel region.")
     parser.add_argument("--uncertain_samples_u", type=int, default=16)
     parser.add_argument("--uncertain_samples_v", type=int, default=3)
     parser.add_argument("--max_uncertain_gaussians", type=int, default=0, help="Cap the number of uncertain Gaussians.")
@@ -112,6 +117,11 @@ def main() -> None:
         covariance_scale_multiplier=args.covariance_scale_multiplier,
         visible_surface_fit_device=args.visible_surface_fit_device,
         visible_surface_fit_chunk_size=args.visible_surface_fit_chunk_size,
+        use_voxel_surface_regions=not args.disable_voxel_surface_regions,
+        voxel_grid_resolution=args.voxel_grid_resolution,
+        voxel_normal_knn=args.voxel_normal_knn,
+        voxel_boundary_angle_degrees=args.voxel_boundary_angle_degrees,
+        voxel_min_points_per_region=args.voxel_min_points_per_region,
         uncertain_samples_u=uncertain_samples_u,
         uncertain_samples_v=uncertain_samples_v,
         max_uncertain_gaussians=max_uncertain_gaussians,
@@ -164,5 +174,7 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
 
 

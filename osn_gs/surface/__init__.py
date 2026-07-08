@@ -11,6 +11,7 @@ from osn_gs.surface.torch_nurbs import (
     predict_torch_occlusion_curves,
     sample_torch_occluded_surface,
 )
+from osn_gs.surface.torch_voxel_regions import TorchVoxelSurfaceRegions, build_torch_voxel_surface_regions
 
 __all__ = [
     "Curve",
@@ -18,8 +19,10 @@ __all__ = [
     "ObservedPointCloud",
     "TorchCurveSet",
     "TorchNURBSSurface",
+    "TorchVoxelSurfaceRegions",
     "build_surface_from_curves",
     "build_torch_surface",
+    "build_torch_voxel_surface_regions",
     "fit_base_curves",
     "fit_torch_base_curves",
     "fit_torch_visible_surface",
@@ -27,4 +30,5 @@ __all__ = [
     "predict_torch_occlusion_curves",
     "sample_torch_occluded_surface",
 ]
+
 

@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 """Notebook-compatible OSN-GS training entrypoint.
 
@@ -70,6 +70,11 @@ def main() -> None:
         covariance_scale_multiplier=args.covariance_scale_multiplier,
         visible_surface_fit_device=args.visible_surface_fit_device,
         visible_surface_fit_chunk_size=args.visible_surface_fit_chunk_size,
+        use_voxel_surface_regions=not args.disable_voxel_surface_regions,
+        voxel_grid_resolution=args.voxel_grid_resolution,
+        voxel_normal_knn=args.voxel_normal_knn,
+        voxel_boundary_angle_degrees=args.voxel_boundary_angle_degrees,
+        voxel_min_points_per_region=args.voxel_min_points_per_region,
         uncertain_samples_u=uncertain_samples_u,
         uncertain_samples_v=uncertain_samples_v,
         max_uncertain_gaussians=max_uncertain_gaussians,
@@ -127,5 +132,6 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
 
 

@@ -1,4 +1,4 @@
-﻿# OSN-GS Architecture
+# OSN-GS Architecture
 
 OSN-GS는 3D Gaussian Splatting을 표면 중심(surface-centric) 구조로 확장하는 프레임워크이다. 기존 3DGS가 Gaussian primitive 자체를 장면 표현의 중심으로 최적화한다면, OSN-GS는 NURBS 기반 parametric surface를 장면의 canonical geometry로 두고 Gaussian을 그 표면에서 파생된 렌더링 샘플로 취급한다.
 
@@ -84,6 +84,7 @@ Scene Loader
   -> Initial 3DGS Gaussians
   -> Observed Gaussian Filtering
   -> Observed Surface Point Cloud
+  -> Voxel Surface Regioning
   -> Base Curve Extraction
   -> Structural Prior Analysis
   -> Occlusion Curve Prediction
@@ -103,9 +104,15 @@ Scene Loader
 
 초기 Gaussian center를 observed surface point cloud로 사용한다. 필요하다면 opacity, scale, visibility score, normal confidence를 기준으로 신뢰 가능한 Gaussian만 필터링한다.
 
+### Voxel Surface Regioning
+
+NURBS 생성 이전에 관측 Gaussian point cloud를 전체 scene voxel grid로 나눈다. 각 occupied voxel은 내부 Gaussian들의 평균 위치로 surface에 대략 정렬되며, local PCA normal을 이용해 voxel 영역의 지향 방향을 추정한다. 인접 voxel 사이의 normal 변화가 큰 지점은 boundary로 표시하고, 각 voxel region center를 curve placement area의 대표점으로 사용한다.
+
+이 단계는 초기 Gaussian 투사 이후, base curve extraction과 visible NURBS fitting 이전에 수행된다.
+
 ### Base Curve Extraction
 
-관측 point cloud에서 base curve를 추출한다. curve extraction은 다음 신호를 함께 고려한다.
+관측 point cloud 또는 voxel surface-region center에서 base curve를 추출한다. curve extraction은 다음 신호를 함께 고려한다.
 
 - local geometry grouping
 - principal direction estimation
@@ -339,6 +346,7 @@ COLMAP/Graphdeco-style scene, camera, image batch를 로드한다.
 현재 구현은 다음 범위를 우선한다.
 
 - COLMAP/초기 Gaussian에서 visible surface NURBS intermediate 생성
+- NURBS 생성 전 voxel surface-region을 만들고, normal 변화가 큰 인접 voxel을 boundary로 사용
 - NURBS를 최종 출력이 아니라 메모리 및 출력 manifest의 중간 산출물로 유지
 - Gaussian primitive와 NURBS visualization payload를 외부 렌더러로 streaming
 - covariance scale을 original 3DGS 방식에 가깝게 nearest-neighbor spacing에서 초기화
@@ -378,6 +386,7 @@ COLMAP/Graphdeco-style scene, camera, image batch를 로드한다.
 
 - Gaussian center 기반 observed point cloud 생성
 - visible surface filtering
+- voxel surface-region partitioning before NURBS construction
 - base curve extraction prototype
 - NURBS-like visible surface intermediate 생성
 - NURBS payload 저장 및 streaming
@@ -410,3 +419,5 @@ COLMAP/Graphdeco-style scene, camera, image batch를 로드한다.
 - Visibility-driven surface validation
 - Surface-aware adaptive density control
 - NURBS 기반 parametric surface와 3DGS 학습 루프의 결합 방식
+
+

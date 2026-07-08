@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 """Argument helpers for Colab/notebook entrypoints.
 
@@ -64,6 +64,11 @@ def build_osn_gs_train_parser() -> argparse.ArgumentParser:
         default=0,
         help="NURBS grid samples per fitting chunk. 0 auto-selects once from available VRAM at startup.",
     )
+    parser.add_argument("--disable_voxel_surface_regions", action="store_true", help="Bypass pre-NURBS voxel surface-region placement.")
+    parser.add_argument("--voxel_grid_resolution", type=int, default=32, help="Voxel grid resolution per axis before NURBS fitting.")
+    parser.add_argument("--voxel_normal_knn", type=int, default=16, help="Neighbor count for local PCA normal estimation.")
+    parser.add_argument("--voxel_boundary_angle_degrees", type=float, default=35.0, help="Normal-angle change used to mark voxel boundaries.")
+    parser.add_argument("--voxel_min_points_per_region", type=int, default=1, help="Minimum Gaussians required to keep a voxel region.")
     parser.add_argument("--uncertain_samples_u", type=int, default=16)
     parser.add_argument("--uncertain_samples_v", type=int, default=3)
     parser.add_argument(
@@ -104,4 +109,5 @@ def save_interval_from_args(args: argparse.Namespace) -> int:
 
 def output_dir_from_args(args: argparse.Namespace) -> Path:
     return Path(args.model_path)
+
 

@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 """Torch-based OSN-GS training loop."""
 
@@ -323,7 +323,7 @@ class TorchOSNGSTrainer:
             tuple(int(value) for value in surface.control_grid.shape),
         )
         weights = surface.weights.detach().cpu()
-        return {
+        payload = {
             "type": "visible_nurbs_intermediate",
             "iteration": int(state.iteration),
             "parameter_domain": {"u": [0.0, 1.0], "v": [0.0, 1.0]},
@@ -340,6 +340,30 @@ class TorchOSNGSTrainer:
                 "flattened": True,
             },
         }
+        voxel_payload = self._voxel_regions_payload(state, flatten=True)
+        if voxel_payload is not None:
+            payload["voxel_regions"] = voxel_payload
+        return payload
+
+    def _voxel_regions_payload(self, state: TorchPipelineState, flatten: bool = False) -> dict[str, Any] | None:
+        regions = state.voxel_regions
+        if regions is None:
+            return None
+        centers = regions.region_centers.detach().cpu()
+        normals = regions.region_normals.detach().cpu()
+        boundary = regions.boundary_mask.detach().cpu()
+        voxel_indices = regions.voxel_indices.detach().cpu()
+        payload: dict[str, Any] = {
+            "type": "voxel_surface_regions",
+            "count": int(centers.shape[0]),
+            "boundary_count": int(boundary.sum().item()),
+            "centers": centers.reshape(-1).tolist() if flatten else centers.tolist(),
+            "normals": normals.reshape(-1).tolist() if flatten else normals.tolist(),
+            "boundary_mask": boundary.tolist(),
+            "voxel_indices": voxel_indices.reshape(-1).tolist() if flatten else voxel_indices.tolist(),
+            "flattened": bool(flatten),
+        }
+        return payload
 
     def _accumulate_density_stats(self, state: TorchPipelineState, render_packages) -> None:
         """Collect ADC visibility, radius, and screen-space gradient stats."""
@@ -516,6 +540,9 @@ class TorchOSNGSTrainer:
                 "final_output_remains_gaussian": True,
             },
         }
+        voxel_payload = self._voxel_regions_payload(state, flatten=False)
+        if voxel_payload is not None:
+            payload["voxel_regions"] = voxel_payload
         path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
     def _save_training_state(self, path: Path, state: TorchPipelineState) -> None:
@@ -529,3 +556,4 @@ class TorchOSNGSTrainer:
             handle.write(f"uncertain={int(state.model.is_uncertain.sum().item())}\n")
             handle.write(f"cuda_rasterizer={self.rasterizer.has_cuda_backend}\n")
             handle.write("nurbs_intermediate=nurbs_surface.json\n")
+

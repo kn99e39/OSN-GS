@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 """Torch-based OSN-GS visible surface reconstruction pipeline."""
 
@@ -12,6 +12,7 @@ from osn_gs.surface.torch_nurbs import (
     fit_torch_base_curves,
     fit_torch_visible_surface,
 )
+from osn_gs.surface.torch_voxel_regions import TorchVoxelSurfaceRegions, build_torch_voxel_surface_regions
 from osn_gs.utils.torch_ops import require_torch
 
 
@@ -30,6 +31,11 @@ class TorchPipelineConfig:
     visible_surface_resolution_scale: float = 1.0
     visible_surface_fit_device: str = "cpu"
     visible_surface_fit_chunk_size: int = 0
+    use_voxel_surface_regions: bool = True
+    voxel_grid_resolution: int = 32
+    voxel_normal_knn: int = 16
+    voxel_boundary_angle_degrees: float = 35.0
+    voxel_min_points_per_region: int = 1
     covariance_init: str = "knn"
     covariance_knn_chunk_size: int = 0
     covariance_min_scale: float = 1e-4
@@ -54,6 +60,7 @@ class TorchPipelineState:
     base_curves: TorchCurveSet
     occlusion_curves: TorchCurveSet
     surface: TorchNURBSSurface
+    voxel_regions: TorchVoxelSurfaceRegions | None = None
     iteration: int = 0
     last_loss: float = 0.0
     last_psnr: float = 0.0
@@ -78,10 +85,13 @@ class TorchOSNGSPipeline:
         points = torch.as_tensor(points, dtype=torch.float32, device=self.device)
         colors = torch.as_tensor(colors, dtype=torch.float32, device=self.device)
 
-        base_curves = fit_torch_base_curves(points, self.config.base_curve_count)
+        voxel_regions = self._build_voxel_regions(points)
+        curve_points = self._curve_placement_points(points, voxel_regions)
+
+        base_curves = fit_torch_base_curves(curve_points, self.config.base_curve_count)
         occlusion_curves = self._empty_occlusion_curves(points)
         resolution_u, resolution_v = self._visible_surface_resolution()
-        surface_points = self._surface_fit_points(points)
+        surface_points = self._surface_fit_points(curve_points)
         fit_chunk_size = self._resolve_visible_surface_fit_chunk_size(surface_points)
         surface = fit_torch_visible_surface(
             surface_points,
@@ -110,7 +120,13 @@ class TorchOSNGSPipeline:
             cluster_ids=cluster_ids,
             confidence=confidence,
         )
-        return TorchPipelineState(model=model, base_curves=base_curves, occlusion_curves=occlusion_curves, surface=surface)
+        return TorchPipelineState(
+            model=model,
+            base_curves=base_curves,
+            occlusion_curves=occlusion_curves,
+            surface=surface,
+            voxel_regions=voxel_regions,
+        )
 
     def rebuild_surface_from_certain(self, state: TorchPipelineState) -> None:
         """Rebuild the visible surface hypothesis from certain Gaussians only."""
@@ -123,8 +139,39 @@ class TorchOSNGSPipeline:
         state.base_curves = rebuilt.base_curves
         state.occlusion_curves = rebuilt.occlusion_curves
         state.surface = rebuilt.surface
+        state.voxel_regions = rebuilt.voxel_regions
         state.model = rebuilt.model
 
+
+    def _build_voxel_regions(self, points: Any) -> TorchVoxelSurfaceRegions | None:
+        """Build voxel curve-placement regions before NURBS fitting."""
+
+        if not bool(self.config.use_voxel_surface_regions):
+            return None
+        regions = build_torch_voxel_surface_regions(
+            points.detach(),
+            grid_resolution=int(self.config.voxel_grid_resolution),
+            normal_knn=int(self.config.voxel_normal_knn),
+            boundary_angle_degrees=float(self.config.voxel_boundary_angle_degrees),
+            min_points_per_voxel=int(self.config.voxel_min_points_per_region),
+        )
+        region_count = int(regions.region_centers.shape[0])
+        boundary_count = int(regions.boundary_mask.sum().detach().cpu()) if region_count else 0
+        print(
+            "OSN-GS voxel regions: "
+            f"regions={region_count} boundary={boundary_count} "
+            f"grid={int(self.config.voxel_grid_resolution)} "
+            f"boundary_angle={float(self.config.voxel_boundary_angle_degrees):.1f}",
+            flush=True,
+        )
+        return regions
+
+    def _curve_placement_points(self, points: Any, voxel_regions: TorchVoxelSurfaceRegions | None) -> Any:
+        """Use voxel surface areas as the pre-NURBS curve placement domain."""
+
+        if voxel_regions is None or int(voxel_regions.curve_points.shape[0]) < 2:
+            return points
+        return voxel_regions.curve_points
 
     def _visible_surface_resolution(self) -> tuple[int, int]:
         """Return the scaled visible NURBS control-grid resolution."""
@@ -303,3 +350,4 @@ class TorchOSNGSPipeline:
             device=uncertain_points.device,
         ).round().long()
         return uncertain_points[indices], uv[indices]
+
