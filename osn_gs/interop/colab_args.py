@@ -80,6 +80,7 @@ def build_osn_gs_train_parser() -> argparse.ArgumentParser:
     parser.add_argument("--stream_every", type=int, default=0, help="Stream every N iterations. 0 disables interval streaming.")
     parser.add_argument("--stream_iterations", nargs="*", type=int, default=[], help="Exact iterations to stream.")
     parser.add_argument("--stream_max_gaussians", type=int, default=0, help="Cap streamed Gaussians. 0 streams all Gaussians.")
+    parser.add_argument("--stream_cache_dir", type=str, default="", help="Directory for cached stream snapshot JSON files.")
     parser.add_argument("--disable_stream_nurbs", action="store_true", help="Do not include NURBS payloads in streamed snapshots.")
     parser.add_argument("--disable_output_files", action="store_true", help="Skip PLY/NURBS/checkpoint file output; useful when streaming.")
     parser.add_argument("--disable_cuda_rasterizer", action="store_true")
@@ -96,9 +97,8 @@ def save_iterations_from_args(args: argparse.Namespace) -> tuple[int, ...]:
 
 
 def save_interval_from_args(args: argparse.Namespace) -> int:
-    save_iterations = sorted({int(value) for value in args.save_iterations if int(value) > 0})
-    if save_iterations:
-        return max(1, save_iterations[0])
+    if sorted({int(value) for value in args.save_iterations if int(value) > 0}):
+        return 0
     return max(1, int(args.iterations))
 
 
