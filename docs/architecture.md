@@ -96,7 +96,7 @@ Scene Loader
   -> Surface-aware ADC
 ```
 
-현재 구현의 우선순위는 visible surface reconstruction과 Gaussian-surface binding을 안정화하는 것이다. Occluded surface generation, uncertain-to-certain promotion, full surface update policy는 별도 단계로 분리한다.
+현재 구현의 우선순위는 visible surface reconstruction과 Gaussian-surface binding을 안정화하는 것이다. 초기 voxel bootstrap 이후 NURBS control point는 지속적으로 최적화하며, 전체 topology rebuild 대신 residual 기반 local correction만 허용한다. Occluded surface generation과 uncertain-to-certain promotion은 별도 단계로 분리한다.
 
 ## Surface Reconstruction
 
@@ -357,7 +357,7 @@ COLMAP/Graphdeco-style scene, camera, image batch를 로드한다.
 
 - full occluded surface generation
 - algebraic extension operator 확정
-- residual 기반 NURBS control point update
+- image/surface loss 기반 NURBS control point 지속 업데이트 구현됨; pixel residual의 정교한 patch backtracking은 후속 범위
 - promotion policy
 - surface-aware ADC의 완전한 sampling-density formulation
 
@@ -421,3 +421,51 @@ COLMAP/Graphdeco-style scene, camera, image batch를 로드한다.
 - NURBS 기반 parametric surface와 3DGS 학습 루프의 결합 방식
 
 
+
+## 2026-07-10 Design Update: Integrated Surface Learning Path
+
+- NURBS and voxel surface regioning are not temporary visualization-only features. They are intended to remain strongly integrated with the OSN-GS learning framework.
+- Throughput optimization should therefore avoid simply disabling NURBS or voxel processing. Prefer reducing blocking I/O, asynchronous streaming/cache writes, preserving optimizer state during ADC, and improving GPU/CPU workload placement.
+- Current Stage 1 remains visible-surface focused. Occluded surface generation and uncertain-to-certain promotion remain separate future stages unless the user defines a new policy.
+- Adaptive Density Control should stay close to original 3DGS behavior for observed/certain Gaussians while preserving OSN-GS metadata and avoiding uncertain-to-certain promotion.
+- Streaming is a transport/export layer. Live WebSocket transmission may be disabled while still caching snapshots for later manual bulk transmission.
+
+## 2026-07-10 Implementation Update: Persistent Multi-Patch Stage 1
+
+The active Torch path now treats visible NURBS as a trainable intermediate rather than export-only metadata.
+
+- Normal-consistent 6-connected voxel components define visible surface patch IDs.
+- Each patch owns a local base-curve fit, a local NURBS chart, and Gaussian references through patch ID plus `(u, v)`.
+- Gaussian image optimization and NURBS fitting run jointly. Surface rebuild replaces structural patch tensors only and never replaces the learned Gaussian model.
+- A global control-point budget bounds total multi-patch memory while preserving the notebook scale control.
+- Certain Gaussian ADC follows the original 3DGS schedule and inherits surface binding metadata through clone/split.
+- Checkpoint v2 persists Gaussian, optimizer, ADC, and multi-patch surface state.
+- Occluded surface construction and uncertain-to-certain promotion are still outside Stage 1.
+
+
+## 2026-07-10 Implementation Update: Density-Adaptive Voxel Domain
+
+Visible NURBS charts are now constructed inside density-adaptive voxel domains rather than a single uniform scene partition.
+
+- A coarse occupied grid is evaluated using weighted Gaussian density.
+- Dense cells are subdivided while sparse cells remain coarse; all cells use common finest-grid bounds for mixed-level face adjacency.
+- Large normal changes still cut adjacency and therefore define independent visible-surface patches.
+- During rebuild, density is `opacity * bounded inverse covariance volume`; the initial COLMAP projection uses count density.
+- Patch density and normal-boundary complexity allocate the bounded NURBS control-point budget.
+- Adaptive topology is recomputed at the existing surface rebuild interval, not every training iteration.
+- Patch-ID persistence across topology changes and visibility-aware density remain future stabilization work.
+
+## 2026-07-10 Implementation Update: One-Time Voxel Bootstrap
+
+Voxel과 NURBS의 lifecycle을 분리했다.
+
+Initial Gaussians -> one-time density-adaptive voxel bootstrap -> initial patch IDs and UV bindings -> persistent NURBS optimization -> periodic quality inspection -> sustained failure only: local patch voxel correction
+
+- state.voxel_regions는 초기 surface partition snapshot이며 일반 학습 중 교체하지 않는다.
+- surface_rebuild_interval의 내부 호환 필드는 더 이상 global rebuild를 뜻하지 않는다. CLI와 notebook에서는 surface_update_interval로 노출하며 patch quality inspection 주기를 뜻한다.
+- Patch quality는 certain Gaussian과 해당 patch/UV NURBS anchor 사이 평균 거리의 scene-extent 정규화 비율로 측정한다.
+- 임계값 초과가 surface_residual_patience회 연속되고 충분한 Gaussian이 있는 patch만 local voxelization 대상이 된다.
+- Local correction은 기존 patch를 제거하거나 다시 맞추지 않고, 유의미한 분리 component에 새 NURBS patch를 추가한다.
+- 기존 control-point tensor와 Adam state는 유지하고 새 patch parameter만 optimizer에 등록한다.
+- ADC child는 부모 binding을 계속 상속한다. Initial voxel snapshot과 local correction topology를 동일한 전역 voxel graph로 혼합하지 않는다.
+- Occluded surface 생성과 uncertain-to-certain promotion은 여전히 수행하지 않는다.

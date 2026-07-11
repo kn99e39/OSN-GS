@@ -71,8 +71,6 @@ Do not spend time retrying those commands inside the restricted sandbox. Treat t
 
 - First-class torch renderer:
   - `osn_gs/render/gaussian_rasterizer.py`
-- Prototype numpy renderer:
-  - `osn_gs/render/prototype_renderer.py`
 - Vendored CUDA rasterizer source:
   - `osn_gs/render/vendor/diff_gaussian_rasterization`
 - Avoid reintroducing `adapter`-style render APIs unless there is a clear
@@ -138,4 +136,25 @@ Do not spend time retrying those commands inside the restricted sandbox. Treat t
 - OSN-GS now initializes Gaussian covariance scale from chunked nearest-neighbor point spacing, following the original 3DGS scale+rotation covariance convention without requiring `simple-knn`.
 - Notebook and CLI controls expose covariance initialization mode, KNN chunk sizing, min scale, max scene-scale ratio, and scale multiplier.
 
+
+
+## Multi-Agent Handoff Rules
+
+- The user is working with multiple agents, including Codex and Claude. Keep `docs/README.md` updated as the primary follow-up/worklog file whenever implementation direction, important defaults, or known risks change.
+- Keep `docs/architecture.md` focused on framework-level design decisions. Keep `Agent.md` focused on environment, workflow, and agent-operation rules.
+- When changing notebook training behavior, record the user-visible knobs and their intended semantics in `docs/README.md`.
+- Do not rely on chat-only memory for decisions such as "NURBS/Voxel must stay strongly integrated" or "uncertain-to-certain promotion is forbidden".
+
+## 2026-07-10 Legacy Prototype Framework Removed
+
+- The original numpy-only prototype framework (`osn_gs/core/{framework,pipeline,state,trainer}.py`, non-`torch_*` files under `osn_gs/gaussian`, `osn_gs/surface`, `osn_gs/losses`, `osn_gs/optim`, `osn_gs/data/{cameras,scene_loader}.py`, `osn_gs/render/prototype_renderer.py`, and `osn_gs/utils/{checkpoint,geometry,logging,typing}.py`) has been deleted. It was self-documented as a smoke-test/algorithm-sketch scaffold, had zero dependents in the active torch training path, and its only consumers (`scripts/train_osn_gs.py`, `tests/test_framework_smoke.py`) were already broken.
+- Every `osn_gs/**/__init__.py` now exports only the real `torch_*` symbols. If you need something from the deleted prototype, look at the equivalent `torch_*` module instead of restoring the old file.
+- Two already-executed one-off migration scripts were also removed: `scripts/devtools/finalize_dataset_cleanup.py` and `scripts/devtools/patch_dataset_and_remove_synthetic.py`.
+- `osn_gs/gaussian/torch_model.py` had mojibake-corrupted Korean comments (pre-existing since the file's first commit, not recoverable from git history); they were rewritten in clean English.
+
+## Incremental Worklog Rule
+
+- For substantial multi-part work, create `docs/worklogs/` if needed.
+- After each completed implementation area, add a short Markdown report containing: work performed, result, evaluation, and remaining risks.
+- Keep these reports concise and link the final status from `docs/README.md` so Codex and Claude can continue from the same evidence.
 

@@ -1,0 +1,211 @@
+from __future__ import annotations
+
+"""NURBS parametric-representation tests: derivatives, normals, foot-point projection."""
+
+import unittest
+
+import torch
+
+from osn_gs.core.torch_pipeline import TorchOSNGSPipeline, TorchPipelineConfig
+from osn_gs.surface.torch_nurbs import (
+    TorchNURBSSurface,
+    fit_torch_visible_surface,
+    fit_torch_visible_surface_lsq,
+    project_torch_points_to_nurbs,
+)
+
+
+def _random_surface(
+    n_u: int = 6,
+    n_v: int = 5,
+    degree_u: int = 2,
+    degree_v: int = 2,
+    dtype=torch.float64,
+    seed: int = 3,
+) -> TorchNURBSSurface:
+    torch.manual_seed(seed)
+    base_u = torch.linspace(0.0, 1.0, n_u, dtype=dtype)
+    base_v = torch.linspace(0.0, 1.0, n_v, dtype=dtype)
+    grid = torch.stack(
+        [
+            base_u[:, None].expand(n_u, n_v),
+            base_v[None, :].expand(n_u, n_v),
+            0.3 * torch.sin(base_u[:, None] * 4.0) * torch.cos(base_v[None, :] * 3.0),
+        ],
+        dim=-1,
+    )
+    grid = grid + 0.02 * torch.randn(n_u, n_v, 3, dtype=dtype)
+    weights = 0.5 + torch.rand(n_u, n_v, dtype=dtype)
+    return TorchNURBSSurface(
+        control_grid=grid, weights=weights, degree_u=degree_u, degree_v=degree_v
+    )
+
+
+class NURBSDerivativeTest(unittest.TestCase):
+    def test_analytic_derivatives_match_finite_differences(self):
+        surface = _random_surface()
+        torch.manual_seed(11)
+        uv = 0.05 + 0.9 * torch.rand(64, 2, dtype=torch.float64)
+        point, deriv_u, deriv_v = surface.evaluate_with_derivatives(uv)
+        self.assertTrue(torch.allclose(point, surface.evaluate(uv)))
+
+        step = 1e-6
+        offset_u = torch.tensor([step, 0.0], dtype=torch.float64)
+        offset_v = torch.tensor([0.0, step], dtype=torch.float64)
+        fd_u = (surface.evaluate(uv + offset_u) - surface.evaluate(uv - offset_u)) / (2 * step)
+        fd_v = (surface.evaluate(uv + offset_v) - surface.evaluate(uv - offset_v)) / (2 * step)
+        self.assertTrue(torch.allclose(deriv_u, fd_u, atol=1e-4, rtol=1e-4))
+        self.assertTrue(torch.allclose(deriv_v, fd_v, atol=1e-4, rtol=1e-4))
+
+    def test_degree_zero_axis_returns_zero_derivative(self):
+        grid = torch.rand(4, 1, 3, dtype=torch.float64)
+        surface = TorchNURBSSurface(
+            control_grid=grid, weights=torch.ones(4, 1, dtype=torch.float64)
+        )
+        uv = torch.rand(8, 2, dtype=torch.float64)
+        _, deriv_u, deriv_v = surface.evaluate_with_derivatives(uv)
+        self.assertTrue(torch.isfinite(deriv_u).all())
+        self.assertTrue(torch.equal(deriv_v, torch.zeros_like(deriv_v)))
+
+    def test_planar_surface_normals_are_z_aligned(self):
+        base_u = torch.linspace(0.0, 1.0, 5, dtype=torch.float64)
+        base_v = torch.linspace(0.0, 1.0, 4, dtype=torch.float64)
+        grid = torch.stack(
+            [
+                base_u[:, None].expand(5, 4),
+                base_v[None, :].expand(5, 4),
+                torch.zeros(5, 4, dtype=torch.float64),
+            ],
+            dim=-1,
+        )
+        surface = TorchNURBSSurface(
+            control_grid=grid,
+            weights=torch.ones(5, 4, dtype=torch.float64),
+            degree_u=2,
+            degree_v=2,
+        )
+        normals = surface.normals(torch.rand(16, 2, dtype=torch.float64))
+        self.assertTrue(torch.allclose(normals.abs()[:, 2], torch.ones(16, dtype=torch.float64), atol=1e-6))
+        self.assertTrue(torch.allclose(normals[:, :2], torch.zeros(16, 2, dtype=torch.float64), atol=1e-6))
+
+
+class FootPointProjectionTest(unittest.TestCase):
+    def test_on_surface_points_project_back_onto_surface(self):
+        surface = _random_surface()
+        torch.manual_seed(5)
+        uv_true = 0.05 + 0.9 * torch.rand(128, 2, dtype=torch.float64)
+        points = surface.evaluate(uv_true)
+        uv = project_torch_points_to_nurbs(points, surface, iterations=6)
+        distance = (surface.evaluate(uv) - points).norm(dim=1)
+        self.assertLess(float(distance.max()), 1e-5)
+
+    def test_gauss_newton_never_regresses_from_grid_seed(self):
+        surface = _random_surface(seed=9)
+        torch.manual_seed(21)
+        points = surface.evaluate(torch.rand(64, 2, dtype=torch.float64))
+        points = points + 0.05 * torch.randn(64, 3, dtype=torch.float64)
+        uv_seed = project_torch_points_to_nurbs(points, surface, iterations=0)
+        uv_refined = project_torch_points_to_nurbs(points, surface, iterations=6)
+        dist_seed = (surface.evaluate(uv_seed) - points).norm(dim=1)
+        dist_refined = (surface.evaluate(uv_refined) - points).norm(dim=1)
+        self.assertTrue(bool((dist_refined <= dist_seed + 1e-12).all()))
+        self.assertLess(float(dist_refined.mean()), float(dist_seed.mean()))
+
+
+def _sine_sheet(count: int = 1200, seed: int = 2):
+    """Scattered samples of an analytic smooth sheet z = f(x, y)."""
+
+    torch.manual_seed(seed)
+    xy = torch.rand(count, 2) * 2.0 - 1.0
+    z = 0.25 * torch.sin(xy[:, 0] * 3.0) * torch.cos(xy[:, 1] * 2.0)
+    return torch.cat([xy, z.unsqueeze(1)], dim=1)
+
+
+def _rms_surface_distance(points, surface) -> float:
+    uv = project_torch_points_to_nurbs(points, surface, iterations=6)
+    return float((surface.evaluate(uv) - points).norm(dim=1).square().mean().sqrt())
+
+
+class LeastSquaresFitTest(unittest.TestCase):
+    def test_lsq_fit_beats_idw_seed_on_analytic_sheet(self):
+        points = _sine_sheet()
+        idw = fit_torch_visible_surface(points, resolution_u=10, resolution_v=8)
+        lsq, _ = fit_torch_visible_surface_lsq(points, resolution_u=10, resolution_v=8)
+        extent = float((points.amax(dim=0) - points.amin(dim=0)).norm())
+        rms_idw = _rms_surface_distance(points, idw)
+        rms_lsq = _rms_surface_distance(points, lsq)
+        self.assertLess(rms_lsq, rms_idw)
+        self.assertLess(rms_lsq / extent, 0.005)
+
+    def test_lsq_returns_foot_point_uv_for_input_points(self):
+        points = _sine_sheet(count=600, seed=8)
+        surface, uv = fit_torch_visible_surface_lsq(points, resolution_u=8, resolution_v=6)
+        anchors = surface.evaluate(uv)
+        extent = float((points.amax(dim=0) - points.amin(dim=0)).norm())
+        mean_ratio = float((anchors - points).norm(dim=1).mean()) / extent
+        self.assertLess(mean_ratio, 0.01)
+
+    def test_lsq_handles_more_controls_than_points(self):
+        points = _sine_sheet(count=12, seed=4)
+        surface, uv = fit_torch_visible_surface_lsq(points, resolution_u=8, resolution_v=6)
+        self.assertTrue(torch.isfinite(surface.control_grid).all())
+        self.assertTrue(torch.isfinite(surface.evaluate(uv)).all())
+
+    def test_pipeline_config_controls_degrees_and_mode(self):
+        points = _sine_sheet(count=300, seed=6)
+        pipeline = TorchOSNGSPipeline(
+            TorchPipelineConfig(
+                voxel_grid_resolution=4,
+                visible_surface_resolution_u=6,
+                visible_surface_resolution_v=4,
+                surface_degree_u=3,
+                surface_degree_v=2,
+            ),
+            device="cpu",
+        )
+        state = pipeline.initialize(points, torch.rand(points.shape[0], 3))
+        for patch in state.surface_patches:
+            self.assertEqual(patch.degree_u, 3)
+            self.assertEqual(patch.degree_v, 2)
+
+
+class MaintenanceUVRefreshTest(unittest.TestCase):
+    def _state(self, count: int = 64):
+        torch.manual_seed(13)
+        xy = torch.rand(count, 2)
+        z = 0.2 * torch.sin(xy[:, 0] * 4.0)
+        points = torch.cat([xy, z.unsqueeze(1)], dim=1)
+        colors = torch.rand(count, 3)
+        pipeline = TorchOSNGSPipeline(
+            TorchPipelineConfig(
+                voxel_grid_resolution=4,
+                visible_surface_resolution_u=5,
+                visible_surface_resolution_v=4,
+            ),
+            device="cpu",
+        )
+        return pipeline, pipeline.initialize(points, colors)
+
+    def test_refresh_updates_bindings_and_tightens_residual(self):
+        pipeline, state = self._state()
+        torch.manual_seed(17)
+        state.model.surface_uv.copy_(torch.rand_like(state.model.surface_uv))
+        scrambled_uv = state.model.surface_uv.detach().clone()
+
+        stale = pipeline.maintain_surface_from_certain(
+            state, residual_patience=1000, refresh_uv=False, enable_local_correction=False
+        )
+        self.assertTrue(torch.equal(state.model.surface_uv, scrambled_uv))
+
+        refreshed = pipeline.maintain_surface_from_certain(
+            state, residual_patience=1000, refresh_uv=True, enable_local_correction=False
+        )
+        self.assertGreater(refreshed["uv_refreshed"], 0)
+        self.assertFalse(torch.equal(state.model.surface_uv, scrambled_uv))
+        self.assertLessEqual(
+            refreshed["max_residual_ratio"], stale["max_residual_ratio"] + 1e-9
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

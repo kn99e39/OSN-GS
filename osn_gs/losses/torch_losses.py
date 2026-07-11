@@ -28,9 +28,32 @@ def image_reconstruction_loss(
 
 
 def nurbs_surface_loss(state: TorchPipelineState, weight: float = 0.01) -> Any:
-    """NURBS-like control grid가 급격히 흔들리지 않게 하는 smoothness loss."""
+    """Fit certain Gaussians to parametric anchors and regularize curvature."""
 
-    return weight * state.surface.smoothness()
+    torch = require_torch()
+    certain = ~state.model.is_uncertain
+    if not bool(certain.any()):
+        return weight * state.surface.smoothness()
+    indices = torch.nonzero(certain, as_tuple=False).reshape(-1)
+    if int(indices.numel()) > 8192:
+        sample = torch.linspace(0, indices.numel() - 1, steps=8192, device=indices.device).long()
+        indices = indices[sample]
+    xyz = state.model.get_xyz[indices]
+    uv = state.model.surface_uv[indices]
+    patch_ids = state.model.surface_patch_ids[indices]
+    anchors = torch.empty_like(xyz)
+    patches = state.surface_patches or [state.surface]
+    for patch_id, patch in enumerate(patches):
+        mask = patch_ids == patch_id
+        if bool(mask.any()):
+            anchors[mask] = patch.evaluate(uv[mask])
+    invalid = (patch_ids < 0) | (patch_ids >= len(patches))
+    if bool(invalid.any()):
+        anchors[invalid] = state.surface.evaluate(uv[invalid])
+    scale = state.model.get_scaling[indices].detach().mean(dim=1).clamp_min(1e-4)
+    fit = (((xyz - anchors).square().sum(dim=1) / scale.square()).clamp_max(100.0)).mean()
+    smoothness = torch.stack([patch.smoothness() for patch in patches]).mean()
+    return weight * (fit + 0.1 * smoothness)
 
 
 def uncertain_anchor_loss(state: TorchPipelineState, weight: float = 0.01) -> Any:

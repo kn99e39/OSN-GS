@@ -1,9 +1,11 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 """Torch-based OSN-GS training loop."""
 
 from dataclasses import dataclass, field
 import json
+import queue
+import threading
 import time
 from typing import Any
 from pathlib import Path
@@ -26,7 +28,7 @@ from osn_gs.losses.torch_losses import (
     uncertain_confidence_loss,
 )
 from osn_gs.render.gaussian_rasterizer import GaussianRasterizerConfig, OSNGaussianRasterizer
-from osn_gs.utils.torch_checkpoint import save_torch_checkpoint
+from osn_gs.utils.torch_checkpoint import load_torch_checkpoint, save_torch_checkpoint
 from osn_gs.utils.torch_ops import default_device, psnr_from_mse, require_torch, sh_dc_to_rgb
 
 
@@ -42,8 +44,15 @@ class TorchTrainingConfig:
     lambda_surface: float = 0.01
     lambda_uncertainty: float = 0.05
     lambda_anchor: float = 0.01
+    surface_lr: float = 1.0e-4
     sh_increment_interval: int = 1000
+    # Compatibility name: this is now a quality-check interval, not a global rebuild.
     surface_rebuild_interval: int = 1000
+    surface_residual_ratio_threshold: float = 0.03
+    surface_residual_patience: int = 3
+    surface_local_min_gaussians: int = 64
+    surface_local_min_component: int = 16
+    enable_local_surface_correction: bool = True
     density_control_interval: int = 500
     save_interval: int = 1000
     save_iterations: tuple[int, ...] = ()
@@ -56,6 +65,7 @@ class TorchTrainingConfig:
     stream_nurbs: bool = True
     stream_cache_dir: str = ""
     write_output_files: bool = True
+    resume_checkpoint: str = ""
     prefer_cuda: bool = True
     parameter_groups: GaussianParameterGroups = field(default_factory=GaussianParameterGroups)
     density_control: TorchDensityControlConfig = field(default_factory=TorchDensityControlConfig)
@@ -87,6 +97,8 @@ class TorchOSNGSTrainer:
         self._stream_socket: Any | None = None
         self._stream_last_error_at = 0.0
         self._streamed_nurbs_signature: tuple[int, tuple[int, ...]] | None = None
+        self._stream_queue: queue.Queue[Any] | None = None
+        self._stream_thread: threading.Thread | None = None
         print(f"OSN-GS rasterizer backend: {self.rasterizer.backend_source}", flush=True)
 
     def train(self, scene: TorchScene, output_dir: str | Path) -> TorchTrainingResult:
@@ -97,11 +109,24 @@ class TorchOSNGSTrainer:
         output_dir.mkdir(parents=True, exist_ok=True)
 
         state = self.pipeline.initialize(scene.initial_points, scene.initial_colors)
-        state.model.training_setup(self.training_config.parameter_groups)
-        background = torch.zeros((3,), dtype=torch.float32, device=self.device)
         scene_extent = self._scene_extent(scene.initial_points)
+        state.model.spatial_lr_scale = scene_extent
+        state.model.training_setup(self.training_config.parameter_groups)
+        self._setup_surface_optimizer(state)
+        start_iteration = 1
+        if str(self.training_config.resume_checkpoint).strip():
+            restored = load_torch_checkpoint(
+                self.training_config.resume_checkpoint,
+                state,
+                self.training_config.parameter_groups,
+                self.training_config.surface_lr,
+            )
+            start_iteration = restored + 1
+            print(f"OSN-GS resumed: checkpoint={self.training_config.resume_checkpoint} iteration={restored}", flush=True)
+        background = torch.zeros((3,), dtype=torch.float32, device=self.device)
         train_wall_start = time.perf_counter()
-        for iteration in range(1, self.training_config.iterations + 1):
+        for iteration in range(start_iteration, self.training_config.iterations + 1):
+            state.model.update_learning_rate(iteration)
             timed = self._should_log_timing(iteration)
             iter_start = self._time_now(timed)
             phase_start = iter_start
@@ -142,13 +167,18 @@ class TorchOSNGSTrainer:
             total = total + self._surface_losses(state, mean_mse)
 
             state.model.optimizer.zero_grad(set_to_none=True)
+            if state.surface_optimizer is not None:
+                state.surface_optimizer.zero_grad(set_to_none=True)
             total.backward()
             self._accumulate_density_stats(state, render_packages)
             self._record_timing(timings, "backward", phase_start, timed)
             phase_start = self._time_now(timed)
-            state.model.optimizer.step()
+            if state.surface_optimizer is not None:
+                state.surface_optimizer.step()
+                with torch.no_grad():
+                    for patch in state.surface_patches:
+                        patch.weights.clamp_(min=1e-3, max=1e3)
 
-            self._clamp_uncertain_confidence(state)
             self._record_timing(timings, "optim", phase_start, timed)
             phase_start = self._time_now(timed)
             state.iteration = iteration
@@ -156,32 +186,61 @@ class TorchOSNGSTrainer:
             state.last_psnr = psnr_from_mse(image_loss_value / max(len(batch.cameras), 1))
 
             if self.training_config.surface_rebuild_interval > 0 and iteration % self.training_config.surface_rebuild_interval == 0:
-                self.pipeline.rebuild_surface_from_certain(state)
-                state.model.training_setup(self.training_config.parameter_groups)
+                report = self.pipeline.maintain_surface_from_certain(
+                    state,
+                    residual_ratio_threshold=self.training_config.surface_residual_ratio_threshold,
+                    residual_patience=self.training_config.surface_residual_patience,
+                    local_min_gaussians=self.training_config.surface_local_min_gaussians,
+                    local_min_component=self.training_config.surface_local_min_component,
+                    enable_local_correction=self.training_config.enable_local_surface_correction,
+                )
+                if report["topology_changed"]:
+                    self._sync_surface_optimizer(state)
+                print(
+                    "OSN-GS surface maintenance: "
+                    f"iteration={iteration} checked={report['checked']} "
+                    f"max_residual={report['max_residual_ratio']:.6g} "
+                    f"candidates={len(report['candidates'])} "
+                    f"corrected={len(report['corrected'])} "
+                    f"patches={report['patches']} "
+                    f"uv_refreshed={report.get('uv_refreshed', 0)}",
+                    flush=True,
+                )
 
             if should_run_adc(iteration, self.training_config.density_control):
                 adc_before = self._adc_stats(state)
-                report = apply_adaptive_density_control(state.model, self.training_config.density_control, scene_extent)
-                if report.changed:
-                    state.model.training_setup(self.training_config.parameter_groups)
+                report = apply_adaptive_density_control(
+                    state.model, self.training_config.density_control, scene_extent, iteration=iteration
+                )
                 print(
                     "OSN-GS ADC: "
                     f"iteration={iteration} cloned={report.cloned} split={report.split} "
-                    f"pruned={report.pruned} gaussians={len(state.model)} "
+                    f"pruned={report.pruned} opacity={report.pruned_opacity} "
+                    f"screen={report.pruned_screen} world={report.pruned_world} gaussians={len(state.model)} "
                     f"tracked={adc_before['tracked']} max_grad={adc_before['max_grad']:.6g} "
                     f"mean_grad={adc_before['mean_grad']:.6g} threshold={adc_before['threshold']:.6g}",
                     flush=True,
                 )
+            reset_interval = int(self.training_config.density_control.opacity_reset_interval)
+            densify_until = int(self.training_config.density_control.densify_until_iter)
+            if (
+                reset_interval > 0
+                and iteration < densify_until
+                and iteration % reset_interval == 0
+            ):
+                state.model.reset_opacity()
+                print(f"OSN-GS ADC: iteration={iteration} opacity_reset=0.01", flush=True)
 
             if self.training_config.density_control_interval > 0 and iteration % self.training_config.density_control_interval == 0:
                 report = apply_uncertain_density_control(state.model, self.training_config.density_control)
                 if report.changed:
-                    state.model.training_setup(self.training_config.parameter_groups)
                     print(
                         "OSN-GS uncertain cleanup: "
                         f"iteration={iteration} pruned={report.uncertain_pruned} gaussians={len(state.model)}",
                         flush=True,
                     )
+            state.model.optimizer.step()
+            self._clamp_uncertain_confidence(state)
             self._record_timing(timings, "density", phase_start, timed)
             phase_start = self._time_now(timed)
 
@@ -200,6 +259,7 @@ class TorchOSNGSTrainer:
                 self._log_timing(iteration, timings)
 
         self._stream_snapshot(state, include_nurbs=self._should_stream_nurbs(state, force=True))
+        self._finish_stream_worker()
         self._close_stream_socket()
         if self.training_config.write_output_files:
             self.save_outputs(state, output_dir / "final", scene.cameras[0])
@@ -256,30 +316,78 @@ class TorchOSNGSTrainer:
             pass
         self._stream_socket = None
 
+    def _ensure_stream_worker(self) -> None:
+        if self._stream_thread is not None:
+            return
+        self._stream_queue = queue.Queue(maxsize=8)
+        self._stream_thread = threading.Thread(target=self._stream_worker, name="osn-gs-stream", daemon=True)
+        self._stream_thread.start()
+
+    def _finish_stream_worker(self) -> None:
+        if self._stream_queue is None or self._stream_thread is None:
+            return
+        self._stream_queue.put(None)
+        self._stream_thread.join()
+        self._stream_queue = None
+        self._stream_thread = None
+
     def _stream_snapshot(self, state: TorchPipelineState, include_nurbs: bool = False) -> None:
         if not self._should_stream_iteration(state.iteration):
             return
         try:
             payload = self._stream_payload(state, include_nurbs=include_nurbs)
-            self._cache_stream_snapshot(state, payload)
-            if not self.training_config.stream_url:
-                return
-            self._get_stream_socket().send(json.dumps(payload, separators=(",", ":")))
-            capped = " capped" if payload["metadata"]["capped"] else ""
-            nurbs = " + nurbs" if include_nurbs and "nurbs_surface" in payload else ""
-            print(
-                f"[WS] sent iteration {state.iteration}: "
-                f"{payload['count']}/{payload['metadata']['totalCount']} gaussians{capped}{nurbs}",
-                flush=True,
-            )
+            self._ensure_stream_worker()
+            assert self._stream_queue is not None
+            try:
+                self._stream_queue.put_nowait((int(state.iteration), include_nurbs, payload))
+            except queue.Full:
+                print(f"[WS] stream queue full; skipped iteration {state.iteration}", flush=True)
         except Exception as exc:
             now = time.time()
             if now - self._stream_last_error_at > 10:
-                print(f"[WS] stream/cache failed at iteration {state.iteration}: {exc}", flush=True)
+                print(f"[WS] stream snapshot failed at iteration {state.iteration}: {exc}", flush=True)
                 self._stream_last_error_at = now
-            self._close_stream_socket()
 
-    def _cache_stream_snapshot(self, state: TorchPipelineState, payload: dict[str, Any]) -> None:
+    def _stream_worker(self) -> None:
+        assert self._stream_queue is not None
+        while True:
+            item = self._stream_queue.get()
+            try:
+                if item is None:
+                    return
+                iteration, include_nurbs, payload = item
+                payload = self._materialize_stream_payload(payload)
+                self._cache_stream_snapshot(iteration, payload)
+                if self.training_config.stream_url:
+                    self._get_stream_socket().send(json.dumps(payload, separators=(",", ":")))
+                    capped = " capped" if payload["metadata"]["capped"] else ""
+                    nurbs = " + nurbs" if include_nurbs and "nurbs_surface" in payload else ""
+                    print(
+                        f"[WS] sent iteration {iteration}: "
+                        f"{payload['count']}/{payload['metadata']['totalCount']} gaussians{capped}{nurbs}",
+                        flush=True,
+                    )
+            except Exception as exc:
+                now = time.time()
+                if now - self._stream_last_error_at > 10:
+                    print(f"[WS] stream/cache failed at iteration {item[0] if item else '?'}: {exc}", flush=True)
+                    self._stream_last_error_at = now
+                self._close_stream_socket()
+            finally:
+                self._stream_queue.task_done()
+
+    def _materialize_stream_payload(self, value: Any) -> Any:
+        """Convert CPU tensor snapshots to JSON-compatible values in the worker."""
+
+        if self.torch.is_tensor(value):
+            return value.tolist()
+        if isinstance(value, dict):
+            return {key: self._materialize_stream_payload(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [self._materialize_stream_payload(item) for item in value]
+        return value
+
+    def _cache_stream_snapshot(self, iteration: int, payload: dict[str, Any]) -> None:
         """Persist stream payloads so a later notebook cell can bulk-send them."""
 
         cache_dir = str(self.training_config.stream_cache_dir or "").strip()
@@ -287,8 +395,7 @@ class TorchOSNGSTrainer:
             return
         path = Path(cache_dir)
         path.mkdir(parents=True, exist_ok=True)
-        iteration = int(payload.get("iteration", state.iteration))
-        target = path / f"{iteration:08d}.json"
+        target = path / f"{int(iteration):08d}.json"
         target.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
 
     def _stream_payload(self, state: TorchPipelineState, include_nurbs: bool = False) -> dict[str, Any]:
@@ -310,11 +417,11 @@ class TorchOSNGSTrainer:
             "iteration": int(state.iteration),
             "parameterSpace": "render",
             "count": count,
-            "positions": xyz.reshape(-1).tolist(),
-            "scales": scaling.reshape(-1).tolist(),
-            "colors": color.reshape(-1).tolist(),
-            "opacities": opacity.reshape(-1).tolist(),
-            "rotations": rotation.reshape(-1).tolist(),
+            "positions": xyz.reshape(-1),
+            "scales": scaling.reshape(-1),
+            "colors": color.reshape(-1),
+            "opacities": opacity.reshape(-1),
+            "rotations": rotation.reshape(-1),
             "metadata": {
                 "source": "osn-gs-training-stream",
                 "totalCount": total_count,
@@ -350,12 +457,26 @@ class TorchOSNGSTrainer:
             "degree_v": int(surface.degree_v),
             "observed_v_max": float(surface.observed_v_max),
             "control_grid_shape": [int(value) for value in grid.shape],
-            "control_grid": grid.reshape(-1, 3).tolist(),
-            "weights": weights.reshape(-1).tolist(),
+            "control_grid": grid.reshape(-1, 3),
+            "weights": weights.reshape(-1),
+            "patches": [
+                {
+                    "patch_id": patch_id,
+                    "control_grid_shape": [int(value) for value in patch.control_grid.shape],
+                    "control_grid": patch.control_grid.detach().cpu().reshape(-1, 3),
+                    "weights": patch.weights.detach().cpu().reshape(-1),
+                    "degree_u": int(patch.degree_u),
+                    "degree_v": int(patch.degree_v),
+                }
+                for patch_id, patch in enumerate(state.surface_patches)
+            ],
             "metadata": {
                 "source": "osn_gs_stage1_visible_reconstruction_stream",
                 "gaussian_count": len(state.model),
                 "uncertain_count": int(state.model.is_uncertain.sum().item()),
+                "voxel_role": "initial_bootstrap",
+                "surface_topology_version": int(state.surface_topology_version),
+                "patch_residual_ratios": dict(state.surface_patch_residuals),
                 "flattened": True,
             },
         }
@@ -372,14 +493,21 @@ class TorchOSNGSTrainer:
         normals = regions.region_normals.detach().cpu()
         boundary = regions.boundary_mask.detach().cpu()
         voxel_indices = regions.voxel_indices.detach().cpu()
+        region_levels = regions.region_levels.detach().cpu()
+        region_density = regions.region_density.detach().cpu()
+        region_bounds = regions.region_bounds.detach().cpu()
         payload: dict[str, Any] = {
             "type": "voxel_surface_regions",
             "count": int(centers.shape[0]),
             "boundary_count": int(boundary.sum().item()),
-            "centers": centers.reshape(-1).tolist() if flatten else centers.tolist(),
-            "normals": normals.reshape(-1).tolist() if flatten else normals.tolist(),
-            "boundary_mask": boundary.tolist(),
-            "voxel_indices": voxel_indices.reshape(-1).tolist() if flatten else voxel_indices.tolist(),
+            "centers": centers.reshape(-1) if flatten else centers,
+            "normals": normals.reshape(-1) if flatten else normals,
+            "boundary_mask": boundary,
+            "voxel_indices": voxel_indices.reshape(-1) if flatten else voxel_indices,
+            "region_patch_ids": regions.region_patch_ids.detach().cpu(),
+            "region_levels": region_levels,
+            "region_density": region_density,
+            "region_bounds": region_bounds.reshape(-1) if flatten else region_bounds,
             "flattened": bool(flatten),
         }
         return payload
@@ -504,6 +632,44 @@ class TorchOSNGSTrainer:
         loss = loss + uncertain_confidence_loss(state, residual_mse, self.training_config.lambda_uncertainty)
         return loss
 
+    def _setup_surface_optimizer(self, state: TorchPipelineState) -> None:
+        """Make the initial visible NURBS patches part of the optimization graph."""
+
+        parameters = []
+        for patch in state.surface_patches or [state.surface]:
+            patch.control_grid = patch.control_grid.detach().requires_grad_(True)
+            patch.weights = patch.weights.detach().requires_grad_(True)
+            parameters.extend([patch.control_grid, patch.weights])
+        state.surface = state.surface_patches[0]
+        state.surface_optimizer = self.torch.optim.Adam(
+            parameters, lr=float(self.training_config.surface_lr), eps=1e-15
+        )
+
+    def _sync_surface_optimizer(self, state: TorchPipelineState) -> None:
+        """Register only new local-correction patches without resetting Adam state."""
+
+        if state.surface_optimizer is None:
+            self._setup_surface_optimizer(state)
+            return
+        known = {
+            id(parameter)
+            for group in state.surface_optimizer.param_groups
+            for parameter in group["params"]
+        }
+        new_parameters = []
+        for patch in state.surface_patches:
+            if not patch.control_grid.requires_grad:
+                patch.control_grid = patch.control_grid.detach().requires_grad_(True)
+            if not patch.weights.requires_grad:
+                patch.weights = patch.weights.detach().requires_grad_(True)
+            for parameter in (patch.control_grid, patch.weights):
+                if id(parameter) not in known:
+                    new_parameters.append(parameter)
+                    known.add(id(parameter))
+        if new_parameters:
+            # Keep a single parameter group so checkpoint restore retains the same
+            # optimizer group topology while Adam initializes new rows lazily.
+            state.surface_optimizer.param_groups[0]["params"].extend(new_parameters)
     def _clamp_uncertain_confidence(self, state: TorchPipelineState) -> None:
         """Keep observed Gaussians at high confidence."""
 
@@ -556,6 +722,9 @@ class TorchOSNGSTrainer:
                 "source": "osn_gs_stage1_visible_reconstruction",
                 "gaussian_count": len(state.model),
                 "uncertain_count": int(state.model.is_uncertain.sum().item()),
+                "voxel_role": "initial_bootstrap",
+                "surface_topology_version": int(state.surface_topology_version),
+                "patch_residual_ratios": dict(state.surface_patch_residuals),
                 "final_output_remains_gaussian": True,
             },
         }
