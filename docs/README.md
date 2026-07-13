@@ -238,3 +238,9 @@ The workspace already contains a reference `gaussian-splatting` checkout, so tho
 - On an analytic sheet, normalized RMS surface distance improved ~3x versus the IDW seed (0.0087 -> 0.0028); regression-tested with threshold 0.005.
 - Default NURBS degree is now (2, 2) — degree_v was previously 1 (piecewise linear). New knobs in config/CLI/notebook: `surface_fit_mode`, `surface_degree_u/v`, `surface_fit_smoothness` (default 1e-4), `surface_fit_tikhonov` (1e-4), `surface_fit_rounds` (2), `surface_projection_iterations` (4). Both `train.py` and `scripts/train_osn_gs_torch.py` share these via `osn_gs/interop/colab_args.py`; the notebook exposes them as `OSN_SURFACE_*`.
 - Remaining follow-ups: per-patch UV occupancy (trimming) mask, cross-patch UV reassignment, smoothness default revalidation on real COLMAP scenes. See docs/worklogs/09_nurbs_derivatives_footpoint.md and docs/worklogs/10_least_squares_nurbs_fit.md.
+
+## 2026-07-13 Synthetic NURBS Constructor Validation
+
+- Added the isolated root-level `nurbs_constructor_benchmark/` framework. It generates deterministic plane, sine-sheet, and sharp-crease Gaussian-center scenes, then calls the production `TorchOSNGSPipeline.initialize()` path directly; no NURBS constructor code is copied.
+- Each run records input-point foot-point RMS, analytic chart residual, normal error, patch/control-point counts, and finite-value status to `report.json`. Optional error thresholds make it usable as a regression gate.
+- Usage and extension instructions live in `nurbs_constructor_benchmark/README.md`. See `docs/worklogs/11_synthetic_nurbs_constructor_benchmark.md` for scope and verification status.
