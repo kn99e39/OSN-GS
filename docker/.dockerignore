@@ -1,0 +1,12 @@
+.git
+.venv
+__pycache__
+*.py[cod]
+.pytest_cache
+outputs
+output
+checkpoints
+DATASET
+gaussian-splatting
+WebRenderer
+nurbs_constructor_benchmark/results

@@ -1,0 +1,28 @@
+services:
+  osn-gs:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: osn-gs:cuda11.8
+    working_dir: /workspace
+    shm_size: 8gb
+    stdin_open: true
+    tty: true
+    environment:
+      CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-0}
+      TORCH_EXTENSIONS_DIR: /root/.cache/torch_extensions
+    volumes:
+      - ..:/workspace
+      - torch_extensions:/root/.cache/torch_extensions
+    ports:
+      - "127.0.0.1:${JUPYTER_PORT:-8888}:8888"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+volumes:
+  torch_extensions:

@@ -115,14 +115,18 @@ def _jit_build_extension(package_root: Path):
         str(package_root / "rasterize_points.cu"),
         str(package_root / "ext.cpp"),
     ]
+    extra_cflags: list[str] = []
+    extra_cuda_cflags = [f"-I{include_dir}"]
+    if os.name == "nt":
+        # These are MSVC options; passing them to nvcc on Linux prevents the
+        # vendored extension from compiling inside the CUDA container.
+        extra_cflags.append("/Zc:preprocessor")
+        extra_cuda_cflags.append("-Xcompiler=/Zc:preprocessor")
     return load(
         name="osn_gs_diff_gaussian_rasterization_c",
         sources=sources,
-        extra_cflags=["/Zc:preprocessor"],
-        extra_cuda_cflags=[
-            f"-I{include_dir}",
-            "-Xcompiler=/Zc:preprocessor",
-        ],
+        extra_cflags=extra_cflags,
+        extra_cuda_cflags=extra_cuda_cflags,
         build_directory=str(build_root),
         verbose=True,
         with_cuda=True,
@@ -170,4 +174,3 @@ def _safe_import(name: str):
 
 def _vendored_root() -> Path:
     return Path(__file__).resolve().parent / "vendor" / "diff_gaussian_rasterization"
-
