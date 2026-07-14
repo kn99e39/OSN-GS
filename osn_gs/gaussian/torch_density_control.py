@@ -19,6 +19,7 @@ from osn_gs.utils.torch_ops import require_torch
 class TorchDensityControlConfig:
     """Controls 3DGS-style adaptive density control."""
 
+    densify_from_iter: int = 500
     densify_until_iter: int = 0
     densification_interval: int = 0
     densify_grad_threshold: float = 0.0002
@@ -28,6 +29,8 @@ class TorchDensityControlConfig:
     max_screen_size: float = 20.0
     max_scale_ratio: float = 0.1
     max_gaussians: int = 0
+    opacity_reset_interval: int = 3000
+    screen_size_prune_from_iter: int = 3000
     prune_uncertain_confidence_threshold: float = 0.05
 
 
@@ -39,6 +42,9 @@ class TorchDensityControlReport:
     split: int = 0
     pruned: int = 0
     uncertain_pruned: int = 0
+    pruned_opacity: int = 0
+    pruned_screen: int = 0
+    pruned_world: int = 0
 
     @property
     def changed(self) -> bool:
@@ -99,13 +105,18 @@ def should_run_adc(iteration: int, config: TorchDensityControlConfig) -> bool:
 
     if config.densify_until_iter <= 0 or config.densification_interval <= 0:
         return False
-    return iteration <= config.densify_until_iter and iteration % config.densification_interval == 0
+    return (
+        iteration > max(0, int(config.densify_from_iter))
+        and iteration < config.densify_until_iter
+        and iteration % config.densification_interval == 0
+    )
 
 
 def apply_adaptive_density_control(
     model: TorchGaussianModel,
     config: TorchDensityControlConfig,
     scene_extent: float,
+    iteration: int = 0,
 ) -> TorchDensityControlReport:
     """Apply basic 3DGS clone/split/prune to certain Gaussians."""
 
@@ -117,12 +128,8 @@ def apply_adaptive_density_control(
     grads = model.xyz_gradient_accum / denom
     grads = torch.nan_to_num(grads, nan=0.0, posinf=0.0, neginf=0.0).reshape(-1)
     certain = ~model.is_uncertain
-    high_grad = grads >= float(config.densify_grad_threshold)
-    if not (high_grad & certain).any() and grads.numel() > 0 and torch.isfinite(grads).any() and float(grads.max().detach().cpu()) > 0.0:
-        certain_grads = grads[certain]
-        if certain_grads.numel() > 0:
-            fallback_threshold = torch.quantile(certain_grads, 0.90)
-            high_grad = grads >= fallback_threshold
+    tracked = model.denom.reshape(-1) > 0
+    high_grad = tracked & (grads >= float(config.densify_grad_threshold))
     scale_max = model.get_scaling.detach().max(dim=1).values
     dense_extent = max(float(config.percent_dense) * float(scene_extent), 1e-6)
 
@@ -144,16 +151,32 @@ def apply_adaptive_density_control(
     current_certain = ~model.is_uncertain
     current_scale_max = model.get_scaling.detach().max(dim=1).values
     opacity = model.get_opacity.detach().reshape(-1)
-    prune_mask = current_certain & (opacity < float(config.prune_opacity_threshold))
-    if config.max_screen_size and config.max_screen_size > 0:
-        prune_mask = prune_mask | (current_certain & (model.max_radii2D > float(config.max_screen_size)))
-    if config.max_scale_ratio and config.max_scale_ratio > 0:
-        prune_mask = prune_mask | (current_certain & (current_scale_max > float(config.max_scale_ratio) * float(scene_extent)))
+    opacity_mask = current_certain & (opacity < float(config.prune_opacity_threshold))
+    screen_mask = torch.zeros_like(opacity_mask)
+    world_mask = torch.zeros_like(opacity_mask)
+    size_pruning_active = iteration > int(config.screen_size_prune_from_iter)
+    if size_pruning_active and config.max_screen_size > 0:
+        screen_mask = current_certain & (model.max_radii2D > float(config.max_screen_size))
+        if config.max_scale_ratio > 0:
+            world_mask = current_certain & (
+                current_scale_max > float(config.max_scale_ratio) * float(scene_extent)
+            )
+    prune_mask = opacity_mask | screen_mask | world_mask
+    pruned_opacity = int(opacity_mask.sum().item())
+    pruned_screen = int((screen_mask & ~opacity_mask).sum().item())
+    pruned_world = int((world_mask & ~opacity_mask & ~screen_mask).sum().item())
 
     pruned = _prune_mask(model, prune_mask)
     if pruned == 0:
         model._reset_density_stats(len(model))
-    return TorchDensityControlReport(cloned=cloned, split=split, pruned=pruned)
+    return TorchDensityControlReport(
+        cloned=cloned,
+        split=split,
+        pruned=pruned,
+        pruned_opacity=pruned_opacity,
+        pruned_screen=pruned_screen,
+        pruned_world=pruned_world,
+    )
 
 
 def apply_uncertain_density_control(
@@ -184,6 +207,9 @@ def _clone_selected(model: TorchGaussianModel, mask, available: int | None = Non
         scaling=model._scaling.detach()[idx],
         rotation=model._rotation.detach()[idx],
         confidence=model._confidence.detach()[idx],
+        uncertain_mask=model.is_uncertain[idx],
+        surface_uv=model.surface_uv[idx],
+        cluster_ids=model.cluster_ids[idx],
     )
     return int(idx.numel())
 
@@ -200,6 +226,10 @@ def _split_selected(model: TorchGaussianModel, mask, samples: int, available: in
     parent_scale = model.get_scaling.detach()[idx]
     repeated_scale = parent_scale.repeat_interleave(samples, dim=0)
     offsets = torch.randn_like(repeated_scale) * repeated_scale
+    parent_rotation = model.get_rotation.detach()[idx].repeat_interleave(samples, dim=0)
+    vector = parent_rotation[:, 1:]
+    cross = 2.0 * torch.cross(vector, offsets, dim=1)
+    offsets = offsets + parent_rotation[:, :1] * cross + torch.cross(vector, cross, dim=1)
     new_xyz = model._xyz.detach()[idx].repeat_interleave(samples, dim=0) + offsets
     new_scaling = torch.log(torch.clamp(repeated_scale / (0.8 * samples), min=1e-6))
     model.append_gaussians_raw(
@@ -210,6 +240,9 @@ def _split_selected(model: TorchGaussianModel, mask, samples: int, available: in
         scaling=new_scaling,
         rotation=model._rotation.detach()[idx].repeat_interleave(samples, dim=0),
         confidence=model._confidence.detach()[idx].repeat_interleave(samples, dim=0),
+        uncertain_mask=model.is_uncertain[idx].repeat_interleave(samples, dim=0),
+        surface_uv=model.surface_uv[idx].repeat_interleave(samples, dim=0),
+        cluster_ids=model.cluster_ids[idx].repeat_interleave(samples, dim=0),
     )
 
     prune_original = torch.zeros((len(model),), dtype=torch.bool, device=model.device)

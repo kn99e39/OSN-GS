@@ -1,0 +1,65 @@
+OSN-GS Visible Surface Inspection - Command Reference
+=======================================================
+
+스크립트: scripts/devtools/inspect_visible_surface.py
+목적: 학습 없이 초기 Gaussian 배치 -> voxel bootstrap -> NURBS fitting까지만 실행해서
+      visible surface 품질을 빠르게 확인한다. 이미지/카메라는 로드하지 않는다
+      (sparse/0/points3D만 사용하므로 매우 빠르다).
+
+출력 (--output 폴더 아래):
+  stream_cache/00000000.json  -> 렌더러 bulk-stream 셀에 넣어서 눈으로 확인
+  surface_quality.json/.txt   -> patch별 정규화 잔차 수치 (렌더러 없이 판단 가능)
+
+
+1) 기본 실행 (DATASET, CPU, 기본 설정)
+---------------------------------------
+.venv\Scripts\python.exe scripts\devtools\inspect_visible_surface.py -s DATASET --output outputs\visible_surface_inspect
+
+GPU가 있으면:
+.venv\Scripts\python.exe scripts\devtools\inspect_visible_surface.py -s DATASET --output outputs\visible_surface_inspect --device cuda
+
+
+2) 결과 확인
+------------
+type outputs\visible_surface_inspect\surface_quality.txt
+
+max_residual_ratio 가 낮을수록(0에 가까울수록) 표면이 Gaussian에 더 잘 맞는다.
+per_patch 목록에서 값이 큰 patch가 표면이 덜 맞는 영역이다.
+
+
+3) 렌더러로 시각 확인 (선택)
+-----------------------------
+콜랩/로컬 노트북(colab_train_3dgs.ipynb)의 "Manual bulk streaming" 셀에서
+  BULK_STREAM_CACHE_DIR = outputs/visible_surface_inspect/stream_cache
+로 지정하고 셀을 실행하면 렌더러에 표면+Gaussian이 스트리밍된다.
+
+
+4) 설정을 바꿔가며 비교하기
+----------------------------
+NURBS fitting 방식 비교 (LSQ vs 기존 IDW):
+.venv\Scripts\python.exe scripts\devtools\inspect_visible_surface.py -s DATASET --output outputs\vsi_lsq --surface_fit_mode lsq
+.venv\Scripts\python.exe scripts\devtools\inspect_visible_surface.py -s DATASET --output outputs\vsi_idw --surface_fit_mode idw
+
+NURBS degree 비교:
+.venv\Scripts\python.exe scripts\devtools\inspect_visible_surface.py -s DATASET --output outputs\vsi_deg3 --surface_degree_u 3 --surface_degree_v 3
+
+Voxel grid 해상도 비교 (patch를 더 잘게/굵게):
+.venv\Scripts\python.exe scripts\devtools\inspect_visible_surface.py -s DATASET --output outputs\vsi_grid32 --voxel_grid_resolution 32
+
+NURBS control point 해상도 비교:
+.venv\Scripts\python.exe scripts\devtools\inspect_visible_surface.py -s DATASET --output outputs\vsi_res16 --visible_surface_resolution_u 16 --visible_surface_resolution_v 8
+
+정규화 강도 비교 (smoothness/tikhonov):
+.venv\Scripts\python.exe scripts\devtools\inspect_visible_surface.py -s DATASET --output outputs\vsi_smooth --surface_fit_smoothness 1e-5 --surface_fit_tikhonov 1e-5
+
+point 수를 줄여서 빠르게 반복 테스트:
+.venv\Scripts\python.exe scripts\devtools\inspect_visible_surface.py -s DATASET --output outputs\vsi_quick --max_points 20000
+
+
+5) 전체 옵션 확인
+------------------
+.venv\Scripts\python.exe scripts\devtools\inspect_visible_surface.py --help
+
+
+참고: --source_path(-s)는 sparse/<sparse_dir>/points3D.bin(또는 .txt)이 있는
+      데이터셋 루트를 가리킨다. 기본 --sparse_dir 값은 "sparse/0" 이다.
