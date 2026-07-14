@@ -244,3 +244,36 @@ The workspace already contains a reference `gaussian-splatting` checkout, so tho
 - Added the isolated root-level `nurbs_constructor_benchmark/` framework. It generates deterministic plane, sine-sheet, and sharp-crease Gaussian-center scenes, then calls the production `TorchOSNGSPipeline.initialize()` path directly; no NURBS constructor code is copied.
 - Each run records input-point foot-point RMS, analytic chart residual, normal error, patch/control-point counts, and finite-value status to `report.json`. Optional error thresholds make it usable as a regression gate.
 - Usage and extension instructions live in `nurbs_constructor_benchmark/README.md`. See `docs/worklogs/11_synthetic_nurbs_constructor_benchmark.md` for scope and verification status.
+
+## 2026-07-14 CUDA Build Preflight
+
+- CUDA rasterizer를 사용할 때 train.py와 scripts/train_osn_gs_torch.py는 scene loading 전에 MSVC, INCLUDE/LIB, CUDA nvcc, Ninja를 검사한다.
+- Windows에서는 preflight가 x64 MSVC environment를 현재 training process에 활성화한다. 따라서 cl.exe가 notebook kernel의 초기 PATH에 없더라도 JIT build 전에 복구된다.
+- Preflight then prepends the resolved compiler directory and requires PyTorch's exact where cl probe to succeed.
+- 준비가 안 된 경우 iteration 0 renderer error 대신 실행 가능한 원인을 포함한 preflight error로 즉시 종료한다.
+- --skip_cuda_build_preflight는 진단 우회용이며 기본값은 검증 실행이다.
+- See docs/worklogs/09_cuda_build_preflight.md.
+
+## 2026-07-14 Surface Loss Patch Minibatch
+
+- Notebook timing showed normal iterations were dominated by backward at about 0.30s while rasterization was about 0.005-0.007s.
+- The cause was full multi-patch NURBS loss evaluation: every patch performed a Python bool(mask.any()) GPU synchronization per iteration.
+- NURBS loss now uses a deterministic round-robin patch minibatch. Default surface_loss_patch_budget=16; 0 keeps the full-patch behavior.
+- Active patches still receive anchor fitting plus smoothness gradients, and all patches rotate through the loss schedule.
+- Timing now reports surface_loss separately from backward.
+- See docs/worklogs/10_surface_loss_patch_minibatch.md.
+
+## 2026-07-14 Surface Loss Runtime Audit
+
+- Stored notebook timing showed the old full-patch NURBS loss path: render forward was about 0.006s while the combined surface-loss/backward phase was about 0.30s.
+- The current trainer uses a round-robin surface patch budget of 16 by default; 0 explicitly restores full-patch evaluation.
+- Training startup now prints the effective patch budget, and timing separates surface_loss from backward for the next run.
+- See docs/worklogs/10_surface_loss_runtime_audit.md.
+
+
+## 2026-07-14 Training Bottleneck Audit
+
+- A completed notebook run with the current timing split reports steady NURBS surface loss at 0.056s and backward at 0.123s; renderer forward is 0.013s.
+- The recurring large cost is ADC: at approximately 190k Gaussians, the density stage measured 4.644s because clone/split/prune each rebuild Gaussian tensors and preserve Adam state.
+- Per-iteration CUDA-to-CPU metric extraction currently serializes the training stream. Full GPU-to-CPU streaming snapshots and periodic global surface maintenance are checkpoint-bound costs.
+- See docs/worklogs/11_training_bottleneck_audit.md.

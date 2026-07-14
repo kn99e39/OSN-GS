@@ -27,32 +27,78 @@ def image_reconstruction_loss(
     return lambda_l1 * l1 + lambda_mse * mse, mse
 
 
-def nurbs_surface_loss(state: TorchPipelineState, weight: float = 0.01) -> Any:
-    """Fit certain Gaussians to parametric anchors and regularize curvature."""
+def nurbs_surface_loss(
+    state: TorchPipelineState,
+    weight: float = 0.01,
+    max_patches: int = 0,
+) -> Any:
+    """Fit persistent NURBS patches with a round-robin patch minibatch.
+
+    A zero budget retains the full-patch loss. A positive budget evaluates a
+    deterministic rotating subset, so large multi-patch scenes stay surface-aware
+    without a Python GPU synchronization for every patch on every iteration.
+    """
 
     torch = require_torch()
+    patches = state.surface_patches or [state.surface]
+    patch_count = len(patches)
+    if patch_count == 0:
+        return torch.zeros((), dtype=torch.float32, device=state.model.device)
+
+    budget = max(0, int(max_patches))
+    if budget == 0 or budget >= patch_count:
+        active_patch_ids = list(range(patch_count))
+    else:
+        start_patch = (int(state.iteration) * budget) % patch_count
+        active_patch_ids = [
+            (start_patch + offset) % patch_count for offset in range(budget)
+        ]
+
     certain = ~state.model.is_uncertain
-    if not bool(certain.any()):
-        return weight * state.surface.smoothness()
     indices = torch.nonzero(certain, as_tuple=False).reshape(-1)
     if int(indices.numel()) > 8192:
-        sample = torch.linspace(0, indices.numel() - 1, steps=8192, device=indices.device).long()
+        sample = torch.linspace(
+            0, indices.numel() - 1, steps=8192, device=indices.device
+        ).long()
         indices = indices[sample]
+
+    smoothness = torch.stack(
+        [patches[patch_id].smoothness() for patch_id in active_patch_ids]
+    ).mean()
+    if int(indices.numel()) == 0:
+        return weight * smoothness
+
     xyz = state.model.get_xyz[indices]
     uv = state.model.surface_uv[indices]
     patch_ids = state.model.surface_patch_ids[indices]
-    anchors = torch.empty_like(xyz)
-    patches = state.surface_patches or [state.surface]
-    for patch_id, patch in enumerate(patches):
-        mask = patch_ids == patch_id
-        if bool(mask.any()):
-            anchors[mask] = patch.evaluate(uv[mask])
-    invalid = (patch_ids < 0) | (patch_ids >= len(patches))
-    if bool(invalid.any()):
-        anchors[invalid] = state.surface.evaluate(uv[invalid])
-    scale = state.model.get_scaling[indices].detach().mean(dim=1).clamp_min(1e-4)
-    fit = (((xyz - anchors).square().sum(dim=1) / scale.square()).clamp_max(100.0)).mean()
-    smoothness = torch.stack([patch.smoothness() for patch in patches]).mean()
+    active_ids = torch.tensor(
+        active_patch_ids, dtype=patch_ids.dtype, device=patch_ids.device
+    )
+    valid = (patch_ids >= 0) & (patch_ids < patch_count)
+    active_mask = valid & torch.isin(patch_ids, active_ids)
+    active_xyz = xyz[active_mask]
+    active_uv = uv[active_mask]
+    active_patch_ids_tensor = patch_ids[active_mask]
+    anchors = torch.zeros_like(active_xyz)
+
+    # Empty local groups are valid tensor operations. This avoids bool(mask.any())
+    # and the per-patch CPU/GPU synchronization it would otherwise introduce.
+    for patch_id in active_patch_ids:
+        local_indices = torch.nonzero(
+            active_patch_ids_tensor == patch_id, as_tuple=False
+        ).reshape(-1)
+        local_anchors = patches[patch_id].evaluate(active_uv[local_indices])
+        anchors = anchors.index_copy(0, local_indices, local_anchors)
+
+    active_scale = (
+        state.model.get_scaling[indices][active_mask]
+        .detach()
+        .mean(dim=1)
+        .clamp_min(1e-4)
+    )
+    squared_error = (active_xyz - anchors).square().sum(dim=1)
+    fit = (squared_error / active_scale.square()).clamp_max(100.0).sum()
+    fit = fit / active_mask.sum().to(dtype=fit.dtype).clamp_min(1.0)
     return weight * (fit + 0.1 * smoothness)
 
 

@@ -9,6 +9,7 @@ from osn_gs.gaussian.torch_model import TorchGaussianModel
 from osn_gs.surface.torch_nurbs import (
     TorchCurveSet,
     TorchNURBSSurface,
+    NURBSFitDiagnostics,
     fit_torch_base_curves,
     fit_torch_visible_surface,
     fit_torch_visible_surface_lsq,
@@ -80,6 +81,7 @@ class TorchPipelineState:
     occlusion_curves: TorchCurveSet
     surface: TorchNURBSSurface
     surface_patches: list[TorchNURBSSurface]
+    surface_fit_diagnostics: list[NURBSFitDiagnostics] = field(default_factory=list)
     voxel_regions: TorchVoxelSurfaceRegions | None = None
     surface_optimizer: Any | None = None
     surface_patch_residuals: dict[int, float] = field(default_factory=dict)
@@ -117,7 +119,7 @@ class TorchOSNGSPipeline:
             voxel_regions.region_patch_ids if voxel_regions is not None else None,
         )
         occlusion_curves = self._empty_occlusion_curves(points)
-        surface_patches = self._fit_surface_patches(curve_points, voxel_regions)
+        surface_patches, surface_fit_diagnostics = self._fit_surface_patches(curve_points, voxel_regions)
         surface = surface_patches[0]
 
         count = points.shape[0]
@@ -139,6 +141,13 @@ class TorchOSNGSPipeline:
             cluster_ids=cluster_ids,
             confidence=confidence,
         )
+        for patch_id, diagnostics in enumerate(surface_fit_diagnostics):
+            assigned = cluster_ids == patch_id
+            if patch_id == 0:
+                assigned = assigned | (cluster_ids < 0) | (cluster_ids >= len(surface_patches))
+            indices = torch.nonzero(assigned, as_tuple=False).reshape(-1)
+            diagnostics.final_gaussian_indices = indices.detach().clone()
+            diagnostics.final_gaussian_uv = surface_uv[indices].detach().clone()
         return TorchPipelineState(
             model=model,
             base_curves=base_curves,
@@ -146,6 +155,7 @@ class TorchOSNGSPipeline:
             surface=surface,
             surface_patches=surface_patches,
             voxel_regions=voxel_regions,
+            surface_fit_diagnostics=surface_fit_diagnostics,
         )
 
     def maintain_surface_from_certain(
@@ -324,7 +334,7 @@ class TorchOSNGSPipeline:
                 continue
 
             component_points = model.get_xyz.detach()[component_indices]
-            patch = self._fit_visible_patch(component_points, resolution_u, resolution_v)
+            patch, _ = self._fit_visible_patch(component_points, resolution_u, resolution_v)
             new_patch_id = len(state.surface_patches)
             state.surface_patches.append(patch)
             model.cluster_ids[component_indices] = new_patch_id
@@ -340,7 +350,7 @@ class TorchOSNGSPipeline:
 
     def _fit_surface_patches(
         self, curve_points: Any, regions: TorchVoxelSurfaceRegions | None
-    ) -> list[TorchNURBSSurface]:
+    ) -> tuple[list[TorchNURBSSurface], list[NURBSFitDiagnostics]]:
         """Fit density-budgeted visible NURBS charts inside voxel patches."""
 
         torch = require_torch()
@@ -401,10 +411,12 @@ class TorchOSNGSPipeline:
             f"{max(u * v for u, v in resolutions)}",
             flush=True,
         )
-        patches = []
+        patches, diagnostics = [], []
         for points, weights, (resolution_u, resolution_v) in zip(groups, weight_groups, resolutions):
-            patches.append(self._fit_visible_patch(points, resolution_u, resolution_v, weights))
-        return patches
+            patch, patch_diagnostics = self._fit_visible_patch(points, resolution_u, resolution_v, weights)
+            patches.append(patch)
+            diagnostics.append(patch_diagnostics)
+        return patches, diagnostics
 
     def _fit_visible_patch(
         self,
@@ -412,7 +424,7 @@ class TorchOSNGSPipeline:
         resolution_u: int,
         resolution_v: int,
         point_weights: Any | None = None,
-    ) -> TorchNURBSSurface:
+    ) -> tuple[TorchNURBSSurface, NURBSFitDiagnostics]:
         """Fit one visible NURBS chart in the configured fitting mode."""
 
         fit_points = self._surface_fit_points(points)
@@ -420,7 +432,7 @@ class TorchOSNGSPipeline:
         if str(self.config.surface_fit_mode).lower() == "lsq":
             if point_weights is not None:
                 point_weights = point_weights.detach().to(fit_points.device)
-            patch, _ = fit_torch_visible_surface_lsq(
+            patch, _, diagnostics = fit_torch_visible_surface_lsq(
                 fit_points,
                 resolution_u=resolution_u,
                 resolution_v=resolution_v,
@@ -432,6 +444,7 @@ class TorchOSNGSPipeline:
                 chunk_size=chunk_size,
                 point_weights=point_weights,
                 projection_iterations=int(self.config.surface_projection_iterations),
+                collect_diagnostics=True,
             )
         else:
             patch = fit_torch_visible_surface(
@@ -442,7 +455,9 @@ class TorchOSNGSPipeline:
                 degree_u=int(self.config.surface_degree_u),
                 degree_v=int(self.config.surface_degree_v),
             )
-        return self._move_surface(patch, self.device)
+            initial_uv = __import__("osn_gs.surface.torch_nurbs", fromlist=["pca_parameterize_points"]).pca_parameterize_points(fit_points)
+            diagnostics = NURBSFitDiagnostics(fit_points.detach().clone(), None, initial_uv.detach().clone(), patch.control_grid.detach().clone(), [], patch.control_grid.detach().clone(), patch.weights.detach().clone())
+        return self._move_surface(patch, self.device), diagnostics
 
     def project_points_to_patches(
         self, points: Any, patch_ids: Any, patches: list[TorchNURBSSurface]
@@ -702,4 +717,50 @@ class TorchOSNGSPipeline:
             device=uncertain_points.device,
         ).round().long()
         return uncertain_points[indices], uv[indices]
+
+
+def nurbs_intermediate_payload(state: TorchPipelineState) -> dict[str, Any]:
+    """Build the file-savable NURBS intermediate payload (``nurbs_surface.json``).
+
+    Shared by the trainer's per-iteration file output and any tool that builds
+    a ``TorchPipelineState`` directly (e.g. the synthetic NURBS constructor
+    benchmark), so the file format never drifts out of sync between them.
+    Includes every patch in ``state.surface_patches``, not just the primary
+    one, so multi-patch scenes keep their full reconstructed geometry.
+    """
+
+    surface = state.surface
+    return {
+        "type": "visible_nurbs_intermediate",
+        "iteration": int(state.iteration),
+        "parameter_domain": {"u": [0.0, 1.0], "v": [0.0, 1.0]},
+        "degree_u": int(surface.degree_u),
+        "degree_v": int(surface.degree_v),
+        "observed_v_max": float(surface.observed_v_max),
+        "control_grid_shape": list(surface.control_grid.shape),
+        "control_grid": surface.control_grid.detach().cpu().tolist(),
+        "weights": surface.weights.detach().cpu().tolist(),
+        "base_curves": state.base_curves.control_points.detach().cpu().tolist(),
+        "occlusion_curves": state.occlusion_curves.control_points.detach().cpu().tolist(),
+        "patches": [
+            {
+                "patch_id": patch_id,
+                "control_grid_shape": [int(value) for value in patch.control_grid.shape],
+                "control_grid": patch.control_grid.detach().cpu().tolist(),
+                "weights": patch.weights.detach().cpu().tolist(),
+                "degree_u": int(patch.degree_u),
+                "degree_v": int(patch.degree_v),
+            }
+            for patch_id, patch in enumerate(state.surface_patches)
+        ],
+        "metadata": {
+            "source": "osn_gs_stage1_visible_reconstruction",
+            "gaussian_count": len(state.model),
+            "uncertain_count": int(state.model.is_uncertain.sum().item()),
+            "voxel_role": "initial_bootstrap",
+            "surface_topology_version": int(state.surface_topology_version),
+            "patch_residual_ratios": dict(state.surface_patch_residuals),
+            "final_output_remains_gaussian": True,
+        },
+    }
 

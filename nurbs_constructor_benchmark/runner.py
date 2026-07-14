@@ -10,8 +10,9 @@ from typing import Any
 
 import torch
 
-from osn_gs.core.torch_pipeline import TorchOSNGSPipeline, TorchPipelineConfig
+from osn_gs.core.torch_pipeline import TorchOSNGSPipeline, TorchPipelineConfig, nurbs_intermediate_payload
 
+from .diagnostics import export as export_construction_diagnostics
 from .scenes import SCENE_NAMES, SyntheticGaussianScene, make_scene
 
 
@@ -21,11 +22,35 @@ def _surface_grid(patch: Any, resolution: int = 24) -> torch.Tensor:
     return torch.stack([u.reshape(-1), v.reshape(-1)], dim=1)
 
 
-def evaluate_scene(scene: SyntheticGaussianScene, config: TorchPipelineConfig, device: str) -> dict[str, Any]:
+def export_renderer_output(state: Any, output_dir: Path) -> None:
+    """Save the synthetic Gaussian set + constructed NURBS in the renderer's
+    expected format (see ``RENDERER_INPUT_FORMAT.md``): a Graphdeco-style
+    ``point_cloud.ply`` plus a ``nurbs_surface.json`` sibling, matching the
+    layout of a real training run's ``final`` output directory.
+    """
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    state.model.save_ply(output_dir / "point_cloud.ply")
+    payload = nurbs_intermediate_payload(state)
+    (output_dir / "nurbs_surface.json").write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+
+def evaluate_scene(
+    scene: SyntheticGaussianScene,
+    config: TorchPipelineConfig,
+    device: str,
+    export_dir: Path | None = None,
+) -> dict[str, Any]:
     """Construct with the production pipeline and evaluate against scene truth."""
 
     pipeline = TorchOSNGSPipeline(config, device=device)
     state = pipeline.initialize(scene.points, scene.colors)
+    diagnostics_dir = export_dir.parent / "NURBS_diagnostics" / scene.name if export_dir is not None else None
+    construction_diagnostics = export_construction_diagnostics(state, diagnostics_dir / "construction_diagnostics.json") if diagnostics_dir is not None else []
+    if export_dir is not None:
+        export_renderer_output(state, export_dir / scene.name)
     points = state.model.get_xyz.detach()
     anchors = torch.empty_like(points)
     for patch_id, patch in enumerate(state.surface_patches):
@@ -62,6 +87,8 @@ def evaluate_scene(scene: SyntheticGaussianScene, config: TorchPipelineConfig, d
         "normal_mean_degrees": float(normal_degrees.mean().cpu()),
         "normal_p95_degrees": float(torch.quantile(normal_degrees, 0.95).cpu()),
         "finite": bool(torch.isfinite(anchors).all() and torch.isfinite(residuals).all() and torch.isfinite(normal_degrees).all()),
+        "patch_diagnostics": construction_diagnostics,
+        "construction_diagnostics": str(diagnostics_dir / "construction_diagnostics.json") if diagnostics_dir is not None else None,
     }
 
 
@@ -81,6 +108,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--fit-mode", choices=("lsq", "idw"), default="lsq")
     parser.add_argument("--max-fit-rms", type=float, default=None, help="Fail if a scene's input-point RMS exceeds this value.")
     parser.add_argument("--max-chart-rms", type=float, default=None, help="Fail if a scene's sampled chart RMS exceeds this value.")
+    parser.add_argument(
+        "--skip-renderer-export",
+        action="store_true",
+        help="Skip writing NURBS_output/<scene>/{point_cloud.ply,nurbs_surface.json} for the 3DGS_Renderer.",
+    )
     return parser
 
 
@@ -100,7 +132,11 @@ def main(argv: list[str] | None = None) -> int:
         voxel_max_subdivision_depth=1 if args.adaptive_voxel else 0,
         max_surface_control_points=4096,
     )
-    results = [evaluate_scene(make_scene(name, args.points, args.seed, args.noise_std), config, args.device) for name in names]
+    export_dir = None if args.skip_renderer_export else args.output / "NURBS_output"
+    results = [
+        evaluate_scene(make_scene(name, args.points, args.seed, args.noise_std), config, args.device, export_dir)
+        for name in names
+    ]
     failures = [
         result["scene"] for result in results
         if not result["finite"]
@@ -114,6 +150,8 @@ def main(argv: list[str] | None = None) -> int:
     for result in results:
         print(f"{result['scene']}: patches={result['patches']} controls={result['control_points']} fit_rms={result['fit_rms']:.6f} chart_rms={result['surface_chart_rms']:.6f} normal_mean={result['normal_mean_degrees']:.2f}deg")
     print(f"report={path}")
+    if export_dir is not None:
+        print(f"renderer output={export_dir}")
     return 1 if failures else 0
 
 

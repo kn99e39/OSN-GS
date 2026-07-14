@@ -23,6 +23,7 @@ from osn_gs.interop.colab_args import (
     save_iterations_from_args,
     surface_fit_config_kwargs,
 )
+from osn_gs.render.diff_gaussian_loader import validate_diff_gaussian_build_environment
 from osn_gs.render.gaussian_rasterizer import GaussianRasterizerConfig
 from osn_gs.utils.torch_ops import default_device
 
@@ -35,6 +36,13 @@ def main() -> None:
         image_device = "cpu"
     output_dir = output_dir_from_args(args)
     print(f"OSN-GS device: train={device}, images={image_device}", flush=True)
+    if not args.disable_cuda_rasterizer and not args.skip_cuda_build_preflight:
+        preflight = validate_diff_gaussian_build_environment()
+        print(
+            "OSN-GS CUDA build preflight: "
+            f"cl={preflight['compiler']} nvcc={preflight['nvcc']}",
+            flush=True,
+        )
     save_interval = save_interval_from_args(args)
     save_iterations = save_iterations_from_args(args)
     stream_iterations = tuple(sorted({int(value) for value in args.stream_iterations if int(value) > 0}))
@@ -98,6 +106,7 @@ def main() -> None:
     training_config = TorchTrainingConfig(
         iterations=args.iterations,
         surface_rebuild_interval=max(0, int(args.surface_update_interval)),
+        surface_loss_patch_budget=max(0, int(args.surface_loss_patch_budget)),
         surface_residual_ratio_threshold=max(0.0, float(args.surface_residual_ratio_threshold)),
         surface_residual_patience=max(1, int(args.surface_residual_patience)),
         surface_local_min_gaussians=max(4, int(args.surface_local_min_gaussians)),
@@ -119,6 +128,11 @@ def main() -> None:
         prefer_cuda=device == "cuda",
         train_resolution_scale=train_resolution_scale,
         density_control=density_control_config,
+    )
+    print(
+        "OSN-GS surface loss: "
+        f"patch_budget={training_config.surface_loss_patch_budget} (0=all patches)",
+        flush=True,
     )
     rasterizer_config = GaussianRasterizerConfig(prefer_cuda=not args.disable_cuda_rasterizer)
     trainer = TorchOSNGSTrainer(

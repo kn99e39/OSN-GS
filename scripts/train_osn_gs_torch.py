@@ -13,6 +13,7 @@ from osn_gs.core.torch_trainer import TorchOSNGSTrainer, TorchTrainingConfig
 from osn_gs.data.colmap_scene import load_colmap_scene
 from osn_gs.gaussian.torch_density_control import TorchDensityControlConfig
 from osn_gs.interop.colab_args import add_surface_fit_arguments, surface_fit_config_kwargs
+from osn_gs.render.diff_gaussian_loader import validate_diff_gaussian_build_environment
 from osn_gs.render.gaussian_rasterizer import GaussianRasterizerConfig
 from osn_gs.utils.torch_ops import default_device
 
@@ -91,6 +92,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=1000,
         help="Inspect persistent NURBS patch quality every N iterations; this does not globally rebuild voxels.",
     )
+    parser.add_argument("--surface_loss_patch_budget", type=int, default=16, help="NURBS patches evaluated per iteration. 0 evaluates all patches.")
     parser.add_argument("--surface_residual_ratio_threshold", type=float, default=0.03)
     parser.add_argument("--surface_residual_patience", type=int, default=3)
     parser.add_argument("--surface_local_min_gaussians", type=int, default=64)
@@ -100,6 +102,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--save_interval", type=int, default=1000)
     parser.add_argument("--progress_log_interval", type=int, default=100, help="Print training progress every N iterations. 0 disables periodic progress logs.")
     parser.add_argument("--timing_log_interval", type=int, default=100, help="Print per-stage training timing every N iterations. 0 disables periodic timing logs.")
+    parser.add_argument("--skip_cuda_build_preflight", action="store_true", help="Skip the early MSVC/CUDA/Ninja readiness check before CUDA rasterizer loading.")
     parser.add_argument("--disable_cuda_rasterizer", action="store_true")
     parser.add_argument("--stream_url", type=str, default="")
     parser.add_argument("--stream_every", type=int, default=0)
@@ -124,6 +127,13 @@ def main() -> None:
     if args.low_vram and not args.image_device:
         image_device = "cpu"
     print(f"OSN-GS device: train={device}, images={image_device}", flush=True)
+    if not args.disable_cuda_rasterizer and not args.skip_cuda_build_preflight:
+        preflight = validate_diff_gaussian_build_environment()
+        print(
+            "OSN-GS CUDA build preflight: "
+            f"cl={preflight['compiler']} nvcc={preflight['nvcc']}",
+            flush=True,
+        )
     train_resolution_scale = max(1, int(args.train_resolution_scale))
     uncertain_samples_u = args.uncertain_samples_u
     uncertain_samples_v = args.uncertain_samples_v
@@ -184,6 +194,7 @@ def main() -> None:
     training_config = TorchTrainingConfig(
         iterations=args.iterations,
         surface_rebuild_interval=max(0, int(args.surface_update_interval)),
+        surface_loss_patch_budget=max(0, int(args.surface_loss_patch_budget)),
         surface_residual_ratio_threshold=max(0.0, float(args.surface_residual_ratio_threshold)),
         surface_residual_patience=max(1, int(args.surface_residual_patience)),
         surface_local_min_gaussians=max(4, int(args.surface_local_min_gaussians)),
@@ -207,6 +218,11 @@ def main() -> None:
         density_control=density_control_config,
     )
 
+    print(
+        "OSN-GS surface loss: "
+        f"patch_budget={training_config.surface_loss_patch_budget} (0=all patches)",
+        flush=True,
+    )
     rasterizer_config = GaussianRasterizerConfig(prefer_cuda=not args.disable_cuda_rasterizer)
     trainer = TorchOSNGSTrainer(
         pipeline_config=pipeline_config,

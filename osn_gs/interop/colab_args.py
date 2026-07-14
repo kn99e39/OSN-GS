@@ -132,6 +132,7 @@ def build_osn_gs_train_parser() -> argparse.ArgumentParser:
         default=1000,
         help="Inspect persistent NURBS patch quality every N iterations; this does not globally rebuild voxels.",
     )
+    parser.add_argument("--surface_loss_patch_budget", type=int, default=16, help="NURBS patches evaluated per iteration. 0 evaluates all patches.")
     parser.add_argument("--surface_residual_ratio_threshold", type=float, default=0.03)
     parser.add_argument("--surface_residual_patience", type=int, default=3)
     parser.add_argument("--surface_local_min_gaussians", type=int, default=64)
@@ -148,6 +149,7 @@ def build_osn_gs_train_parser() -> argparse.ArgumentParser:
     parser.add_argument("--disable_stream_nurbs", action="store_true", help="Do not include NURBS payloads in streamed snapshots.")
     parser.add_argument("--disable_output_files", action="store_true", help="Skip PLY/NURBS/checkpoint file output; useful when streaming.")
     parser.add_argument("--resume_checkpoint", type=str, default="", help="Resume a v2 OSN-GS checkpoint.")
+    parser.add_argument("--skip_cuda_build_preflight", action="store_true", help="Skip the early MSVC/CUDA/Ninja readiness check before CUDA rasterizer loading.")
     parser.add_argument("--disable_cuda_rasterizer", action="store_true")
     parser.add_argument(
         "--low_vram",

@@ -139,6 +139,25 @@ class TorchCurveSet:
 
 
 @dataclass
+class NURBSFitRoundDiagnostics:
+    control_grid_after_lsq: Any
+    uv_after_footpoint: Any
+
+
+@dataclass
+class NURBSFitDiagnostics:
+    fitting_points: Any
+    point_weights: Any | None
+    initial_uv: Any
+    idw_seed_control_grid: Any
+    rounds: list[NURBSFitRoundDiagnostics]
+    final_control_grid: Any
+    final_weights: Any
+    final_gaussian_indices: Any | None = None
+    final_gaussian_uv: Any | None = None
+
+
+@dataclass
 class TorchNURBSSurface:
     """OSN-GS가 visible Gaussian geometry에 맞추는 parametric surface."""
 
@@ -483,7 +502,8 @@ def fit_torch_visible_surface_lsq(
     chunk_size: int = 4096,
     point_weights: Any | None = None,
     projection_iterations: int = 4,
-) -> tuple[TorchNURBSSurface, Any]:
+    collect_diagnostics: bool = False,
+) -> tuple[TorchNURBSSurface, Any] | tuple[TorchNURBSSurface, Any, NURBSFitDiagnostics]:
     """Least-squares visible NURBS fit with foot-point parameter correction.
 
     Seeds control points with the IDW heuristic, then alternates a regularized
@@ -502,26 +522,37 @@ def fit_torch_visible_surface_lsq(
         degree_u=degree_u,
         degree_v=degree_v,
     )
+    initial_uv = pca_parameterize_points(points)
+    diagnostics = NURBSFitDiagnostics(points.detach().clone(), None, initial_uv.detach().clone(), surface.control_grid.detach().clone(), [], surface.control_grid.detach().clone(), surface.weights.detach().clone()) if collect_diagnostics else None
     if int(points.shape[0]) <= 1:
-        return surface, pca_parameterize_points(points)
+        return (surface, initial_uv, diagnostics) if diagnostics is not None else (surface, initial_uv)
     if point_weights is not None:
         point_weights = torch.as_tensor(point_weights, dtype=points.dtype, device=points.device).reshape(-1)
         point_weights = torch.nan_to_num(point_weights, nan=0.0, posinf=0.0, neginf=0.0).clamp_min(0.0)
         if not bool((point_weights > 0).any()):
             point_weights = None
+    if diagnostics is not None and point_weights is not None:
+        diagnostics.point_weights = point_weights.detach().clone()
 
-    uv = pca_parameterize_points(points)
+    uv = initial_uv
     with torch.no_grad():
         for _ in range(max(1, int(correction_rounds))):
             surface.control_grid = _solve_control_grid_lsq(
                 points, uv, surface, smoothness_lambda, tikhonov_lambda, chunk_size, point_weights
             )
+            control_grid_after_lsq = surface.control_grid.detach().clone()
             uv = project_torch_points_to_nurbs(
                 points,
                 surface,
                 iterations=int(projection_iterations),
                 chunk_size=chunk_size,
             )
+            if diagnostics is not None:
+                diagnostics.rounds.append(NURBSFitRoundDiagnostics(control_grid_after_lsq, uv.detach().clone()))
+    if diagnostics is not None:
+        diagnostics.final_control_grid = surface.control_grid.detach().clone()
+        diagnostics.final_weights = surface.weights.detach().clone()
+        return surface, uv, diagnostics
     return surface, uv
 
 

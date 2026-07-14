@@ -10,7 +10,12 @@ import time
 from typing import Any
 from pathlib import Path
 
-from osn_gs.core.torch_pipeline import TorchOSNGSPipeline, TorchPipelineConfig, TorchPipelineState
+from osn_gs.core.torch_pipeline import (
+    TorchOSNGSPipeline,
+    TorchPipelineConfig,
+    TorchPipelineState,
+    nurbs_intermediate_payload,
+)
 from osn_gs.data.torch_scene import TorchScene
 from osn_gs.gaussian.torch_model import GaussianParameterGroups
 from osn_gs.gaussian.torch_density_control import (
@@ -44,6 +49,8 @@ class TorchTrainingConfig:
     lambda_surface: float = 0.01
     lambda_uncertainty: float = 0.05
     lambda_anchor: float = 0.01
+    # 0 evaluates all patches. Positive values rotate a bounded NURBS patch minibatch.
+    surface_loss_patch_budget: int = 16
     surface_lr: float = 1.0e-4
     sh_increment_interval: int = 1000
     # Compatibility name: this is now a quality-check interval, not a global rebuild.
@@ -165,6 +172,8 @@ class TorchOSNGSTrainer:
                 device=self.device,
             )
             total = total + self._surface_losses(state, mean_mse)
+            self._record_timing(timings, "surface_loss", phase_start, timed)
+            phase_start = self._time_now(timed)
 
             state.model.optimizer.zero_grad(set_to_none=True)
             if state.surface_optimizer is not None:
@@ -627,7 +636,11 @@ class TorchOSNGSTrainer:
     def _surface_losses(self, state: TorchPipelineState, residual_mse):
         """Bundle surface and uncertainty regularizers."""
 
-        loss = nurbs_surface_loss(state, self.training_config.lambda_surface)
+        loss = nurbs_surface_loss(
+            state,
+            self.training_config.lambda_surface,
+            max_patches=self.training_config.surface_loss_patch_budget,
+        )
         loss = loss + uncertain_anchor_loss(state, self.training_config.lambda_anchor)
         loss = loss + uncertain_confidence_loss(state, residual_mse, self.training_config.lambda_uncertainty)
         return loss
@@ -705,29 +718,7 @@ class TorchOSNGSTrainer:
     def _save_nurbs_intermediate(self, path: Path, state: TorchPipelineState) -> None:
         """Save the visible NURBS-like intermediate for external visualization."""
 
-        surface = state.surface
-        payload = {
-            "type": "visible_nurbs_intermediate",
-            "iteration": int(state.iteration),
-            "parameter_domain": {"u": [0.0, 1.0], "v": [0.0, 1.0]},
-            "degree_u": int(surface.degree_u),
-            "degree_v": int(surface.degree_v),
-            "observed_v_max": float(surface.observed_v_max),
-            "control_grid_shape": list(surface.control_grid.shape),
-            "control_grid": surface.control_grid.detach().cpu().tolist(),
-            "weights": surface.weights.detach().cpu().tolist(),
-            "base_curves": state.base_curves.control_points.detach().cpu().tolist(),
-            "occlusion_curves": state.occlusion_curves.control_points.detach().cpu().tolist(),
-            "metadata": {
-                "source": "osn_gs_stage1_visible_reconstruction",
-                "gaussian_count": len(state.model),
-                "uncertain_count": int(state.model.is_uncertain.sum().item()),
-                "voxel_role": "initial_bootstrap",
-                "surface_topology_version": int(state.surface_topology_version),
-                "patch_residual_ratios": dict(state.surface_patch_residuals),
-                "final_output_remains_gaussian": True,
-            },
-        }
+        payload = nurbs_intermediate_payload(state)
         voxel_payload = self._voxel_regions_payload(state, flatten=False)
         if voxel_payload is not None:
             payload["voxel_regions"] = voxel_payload

@@ -14,6 +14,7 @@ from osn_gs.gaussian.torch_density_control import (
     should_run_adc,
 )
 from osn_gs.gaussian.torch_model import GaussianParameterGroups
+from osn_gs.losses.torch_losses import nurbs_surface_loss
 from osn_gs.surface.torch_voxel_regions import build_torch_voxel_surface_regions
 from osn_gs.utils.torch_checkpoint import load_torch_checkpoint, save_torch_checkpoint
 
@@ -48,6 +49,21 @@ class TrainingRegressionTest(unittest.TestCase):
         self.assertTrue(torch.equal(state.model._opacity, opacity))
         self.assertTrue(torch.equal(state.model._scaling, scaling))
         self.assertTrue(torch.equal(state.model.cluster_ids, bindings))
+
+    def test_surface_loss_patch_minibatch_is_finite_and_trainable(self):
+        _, state = self._state()
+        trainer = TorchOSNGSTrainer.__new__(TorchOSNGSTrainer)
+        trainer.torch = torch
+        trainer.training_config = TorchTrainingConfig(surface_lr=1e-4)
+        trainer._setup_surface_optimizer(state)
+        state.surface_optimizer.zero_grad(set_to_none=True)
+        state.iteration = 1
+        loss = nurbs_surface_loss(state, weight=0.01, max_patches=1)
+        self.assertTrue(torch.isfinite(loss))
+        loss.backward()
+        selected = state.surface_patches[1 % len(state.surface_patches)].control_grid
+        self.assertIsNotNone(selected.grad)
+        self.assertTrue(torch.isfinite(selected.grad).all())
 
     def test_surface_quality_checks_accumulate_without_global_rebuild(self):
         pipeline, state = self._state()
