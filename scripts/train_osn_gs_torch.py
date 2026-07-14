@@ -102,6 +102,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--timing_log_interval", type=int, default=100, help="Print per-stage training timing every N iterations. 0 disables periodic timing logs.")
     parser.add_argument("--disable_cuda_rasterizer", action="store_true")
     parser.add_argument("--stream_url", type=str, default="")
+    parser.add_argument("--stream_server_host", type=str, default="127.0.0.1")
+    parser.add_argument("--stream_server_port", type=int, default=0)
     parser.add_argument("--stream_every", type=int, default=0)
     parser.add_argument("--stream_iterations", nargs="*", type=int, default=[])
     parser.add_argument("--stream_max_gaussians", type=int, default=0)
@@ -195,6 +197,8 @@ def main() -> None:
         progress_log_interval=args.progress_log_interval,
         timing_log_interval=args.timing_log_interval,
         stream_url=args.stream_url,
+        stream_server_host=args.stream_server_host,
+        stream_server_port=max(0, int(args.stream_server_port)),
         stream_every=max(0, int(args.stream_every)),
         stream_iterations=tuple(sorted({int(value) for value in args.stream_iterations if int(value) > 0})),
         stream_max_gaussians=max(0, int(args.stream_max_gaussians)),
@@ -242,7 +246,6 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
 
 
 
