@@ -66,9 +66,9 @@ class TorchTrainingConfig:
     progress_log_interval: int = 100
     timing_log_interval: int = 100
     stream_url: str = ""
-    stream_server_host: str = ""
-    stream_server_port: int = 0
-    stream_every: int = 0
+    stream_server_host: str = "127.0.0.1"
+    stream_server_port: int = 8080
+    stream_every: int = 1
     stream_iterations: tuple[int, ...] = ()
     stream_max_gaussians: int = 0
     stream_nurbs: bool = True
@@ -323,14 +323,15 @@ class TorchOSNGSTrainer:
         return self._stream_socket
 
     def _start_stream_server(self) -> None:
-        if int(self.training_config.stream_server_port) <= 0:
-            return
+        host = str(self.training_config.stream_server_host or "127.0.0.1")
+        if host != "127.0.0.1":
+            raise ValueError("Trainer WebSocket server is loopback-only; use --stream_server_host 127.0.0.1.")
+        port = int(self.training_config.stream_server_port)
+        if not 1 <= port <= 65535:
+            raise ValueError("--stream_server_port must be between 1 and 65535.")
         from osn_gs.interop.trainer_ws_server import TrainerWebSocketServer
 
-        self._stream_server = TrainerWebSocketServer(
-            host=self.training_config.stream_server_host or "127.0.0.1",
-            port=int(self.training_config.stream_server_port),
-        )
+        self._stream_server = TrainerWebSocketServer(host=host, port=port)
         self._stream_server.start()
 
     def _stop_stream_server(self) -> None:

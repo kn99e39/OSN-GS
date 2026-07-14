@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 """Argument helpers for Colab/notebook entrypoints.
 
@@ -143,8 +143,8 @@ def build_osn_gs_train_parser() -> argparse.ArgumentParser:
     parser.add_argument("--timing_log_interval", type=int, default=100, help="Print per-stage training timing every N iterations. 0 disables periodic timing logs.")
     parser.add_argument("--stream_url", type=str, default="", help="Optional WebSocket URL for live renderer snapshots.")
     parser.add_argument("--stream_server_host", type=str, default="127.0.0.1", help="Host for the trainer-owned local WebSocket server.")
-    parser.add_argument("--stream_server_port", type=int, default=0, help="Trainer WebSocket server port. 0 disables server mode.")
-    parser.add_argument("--stream_every", type=int, default=0, help="Stream every N iterations. 0 disables interval streaming.")
+    parser.add_argument("--stream_server_port", type=int, default=8080, help="Loopback-only trainer WebSocket server port.")
+    parser.add_argument("--stream_every", type=int, default=1, help="Broadcast every N iterations; default 1 broadcasts each iteration.")
     parser.add_argument("--stream_iterations", nargs="*", type=int, default=[], help="Exact iterations to stream.")
     parser.add_argument("--stream_max_gaussians", type=int, default=0, help="Cap streamed Gaussians. 0 streams all Gaussians.")
     parser.add_argument("--stream_cache_dir", type=str, default="", help="Directory for cached stream snapshot JSON files.")

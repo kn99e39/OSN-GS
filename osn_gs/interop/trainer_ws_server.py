@@ -11,6 +11,10 @@ class TrainerWebSocketServer:
     """Broadcast trainer snapshots to renderer clients over a local WebSocket."""
 
     def __init__(self, host: str = "127.0.0.1", port: int = 8080) -> None:
+        if host != "127.0.0.1":
+            raise ValueError("TrainerWebSocketServer must bind only to 127.0.0.1.")
+        if not 1 <= int(port) <= 65535:
+            raise ValueError("TrainerWebSocketServer port must be between 1 and 65535.")
         self.host = host
         self.port = int(port)
         self._clients: set[Any] = set()
