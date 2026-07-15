@@ -341,3 +341,7 @@ The workspace already contains a reference `gaussian-splatting` checkout, so tho
 
 The local Graphdeco notebook cells read/write patched Python sources with explicit UTF-8 encoding and decode captured subprocess output with `encoding='utf-8', errors='replace'` so Windows kernels do not fall back to `cp949` when upstream files or tool output contain non-ASCII text. The CUDA extension cell also skips rebuilding extensions that are already importable, because Windows keeps imported `.pyd` files locked until the Jupyter kernel restarts.
 
+## 2026-07-15 Renderer Multi-Patch Validation
+
+- Confirmed WebRenderer revision 88477a8 renders all valid NURBS patches, uses deterministic patch color, keeps iso-lines inside each patch, and includes all patches in camera bounds.
+- Node is unavailable in this environment, so the included smoke test was not run. Remaining renderer diagnostics, parity, and provenance work are recorded in docs/worklogs/19_renderer_multipatch_validation.md.
