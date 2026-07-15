@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 """Torch-based OSN-GS training loop."""
 
@@ -44,8 +44,8 @@ class TorchTrainingConfig:
     iterations: int = 1000
     batch_size: int = 1
     train_resolution_scale: int = 1
-    lambda_l1: float = 0.8
-    lambda_mse: float = 0.2
+    # Image loss weight, matching original 3DGS: (1 - lambda_dssim)*L1 + lambda_dssim*(1 - SSIM).
+    lambda_dssim: float = 0.2
     lambda_surface: float = 0.01
     lambda_uncertainty: float = 0.05
     lambda_anchor: float = 0.01
@@ -66,8 +66,6 @@ class TorchTrainingConfig:
     progress_log_interval: int = 100
     timing_log_interval: int = 100
     stream_url: str = ""
-    stream_server_host: str = "127.0.0.1"
-    stream_server_port: int = 8080
     stream_every: int = 1
     stream_iterations: tuple[int, ...] = ()
     stream_max_gaussians: int = 0
@@ -104,7 +102,6 @@ class TorchOSNGSTrainer:
         self.pipeline = TorchOSNGSPipeline(pipeline_config or TorchPipelineConfig(), device=self.device)
         self.rasterizer = OSNGaussianRasterizer(rasterizer_config)
         self._stream_socket: Any | None = None
-        self._stream_server: Any | None = None
         self._stream_last_error_at = 0.0
         self._streamed_nurbs_signature: tuple[int, tuple[int, ...]] | None = None
         self._stream_queue: queue.Queue[Any] | None = None
@@ -117,7 +114,6 @@ class TorchOSNGSTrainer:
         torch = self.torch
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
-        self._start_stream_server()
 
         state = self.pipeline.initialize(scene.initial_points, scene.initial_colors)
         scene_extent = self._scene_extent(scene.initial_points)
@@ -149,7 +145,9 @@ class TorchOSNGSTrainer:
             self._record_timing(timings, "sample", phase_start, timed)
             phase_start = self._time_now(timed)
             total = torch.zeros((), dtype=torch.float32, device=self.device)
-            image_loss_value = 0.0
+            # Keep the MSE accumulator on-device; forcing a host scalar per view
+            # here would serialize the hot path on GPU→CPU synchronization.
+            mse_accum = torch.zeros((), dtype=torch.float32, device=self.device)
             render_packages = []
             for camera, target in zip(batch.cameras, batch.images):
                 camera, target = self._prepare_training_view(camera, target)
@@ -161,20 +159,19 @@ class TorchOSNGSTrainer:
                 image_loss, mse = image_reconstruction_loss(
                     image,
                     target,
-                    self.training_config.lambda_l1,
-                    self.training_config.lambda_mse,
+                    self.training_config.lambda_dssim,
                 )
                 total = total + image_loss
-                image_loss_value += float(mse.detach().cpu())
-            total = total / max(len(batch.cameras), 1)
+                mse_accum = mse_accum + mse.detach()
+            num_cameras = max(len(batch.cameras), 1)
+            total = total / num_cameras
             self._record_timing(timings, "render_loss", phase_start, timed)
             phase_start = self._time_now(timed)
 
-            mean_mse = torch.as_tensor(
-                image_loss_value / max(len(batch.cameras), 1),
-                dtype=torch.float32,
-                device=self.device,
-            )
+            # Mean MSE stays a device tensor: it feeds the uncertainty loss without
+            # a GPU→CPU→GPU round trip and is only materialized to a host float
+            # when a logging/streaming/saving cadence actually needs it.
+            mean_mse = mse_accum / num_cameras
             total = total + self._surface_losses(state, mean_mse)
             self._record_timing(timings, "surface_loss", phase_start, timed)
             phase_start = self._time_now(timed)
@@ -195,8 +192,11 @@ class TorchOSNGSTrainer:
             self._record_timing(timings, "optim", phase_start, timed)
             phase_start = self._time_now(timed)
             state.iteration = iteration
-            state.last_loss = float(total.detach().cpu())
-            state.last_psnr = psnr_from_mse(image_loss_value / max(len(batch.cameras), 1))
+            # Only pay the GPU→CPU synchronization for metric scalars on
+            # iterations that a progress log, stream snapshot, or file save reads.
+            if self._needs_metric_scalars(iteration):
+                state.last_loss = float(total.detach().cpu())
+                state.last_psnr = psnr_from_mse(float(mean_mse.detach().cpu()))
 
             if self.training_config.surface_rebuild_interval > 0 and iteration % self.training_config.surface_rebuild_interval == 0:
                 report = self.pipeline.maintain_surface_from_certain(
@@ -274,10 +274,23 @@ class TorchOSNGSTrainer:
         self._stream_snapshot(state, include_nurbs=self._should_stream_nurbs(state, force=True))
         self._finish_stream_worker()
         self._close_stream_socket()
-        self._stop_stream_server()
         if self.training_config.write_output_files:
             self.save_outputs(state, output_dir / "final", scene.cameras[0])
         return TorchTrainingResult(state=state, output_dir=output_dir)
+
+    def _needs_metric_scalars(self, iteration: int) -> bool:
+        """True when this iteration's loss/PSNR host scalars will be read.
+
+        Consumers are the progress log, the stream snapshot metadata, and the
+        saved metrics file. On every other iteration the scalars stay on-device
+        and no GPU→CPU synchronization is forced.
+        """
+
+        return (
+            self._should_log_progress(iteration)
+            or self._should_stream_iteration(iteration)
+            or (self.training_config.write_output_files and self._should_save_iteration(iteration))
+        )
 
     def _should_save_iteration(self, iteration: int) -> bool:
         if self.training_config.save_iterations:
@@ -288,8 +301,7 @@ class TorchOSNGSTrainer:
         return iteration % interval == 0
 
     def _should_stream_iteration(self, iteration: int) -> bool:
-        if (not self.training_config.stream_url and not self.training_config.stream_server_port
-                and not self.training_config.stream_cache_dir):
+        if not self.training_config.stream_url and not self.training_config.stream_cache_dir:
             return False
         if iteration in set(int(value) for value in self.training_config.stream_iterations):
             return True
@@ -321,23 +333,6 @@ class TorchOSNGSTrainer:
             pass
         print(f"[WS] connected to renderer WebSocket: {self.training_config.stream_url}", flush=True)
         return self._stream_socket
-
-    def _start_stream_server(self) -> None:
-        host = str(self.training_config.stream_server_host or "127.0.0.1")
-        if host != "127.0.0.1":
-            raise ValueError("Trainer WebSocket server is loopback-only; use --stream_server_host 127.0.0.1.")
-        port = int(self.training_config.stream_server_port)
-        if not 1 <= port <= 65535:
-            raise ValueError("--stream_server_port must be between 1 and 65535.")
-        from osn_gs.interop.trainer_ws_server import TrainerWebSocketServer
-
-        self._stream_server = TrainerWebSocketServer(host=host, port=port)
-        self._stream_server.start()
-
-    def _stop_stream_server(self) -> None:
-        if self._stream_server is not None:
-            self._stream_server.stop()
-            self._stream_server = None
 
     def _close_stream_socket(self) -> None:
         if self._stream_socket is None:
@@ -390,9 +385,6 @@ class TorchOSNGSTrainer:
                 iteration, include_nurbs, payload = item
                 payload = self._materialize_stream_payload(payload)
                 self._cache_stream_snapshot(iteration, payload)
-                delivered = 0
-                if self._stream_server is not None:
-                    delivered = self._stream_server.broadcast(json.dumps(payload, separators=(",", ":")))
                 if self.training_config.stream_url:
                     self._get_stream_socket().send(json.dumps(payload, separators=(",", ":")))
                     capped = " capped" if payload["metadata"]["capped"] else ""
@@ -402,8 +394,6 @@ class TorchOSNGSTrainer:
                         f"{payload['count']}/{payload['metadata']['totalCount']} gaussians{capped}{nurbs}",
                         flush=True,
                     )
-                elif self._stream_server is not None:
-                    print(f"[WS] broadcast iteration {iteration} to {delivered} renderer client(s)", flush=True)
             except Exception as exc:
                 now = time.time()
                 if now - self._stream_last_error_at > 10:
@@ -763,3 +753,4 @@ class TorchOSNGSTrainer:
             handle.write(f"uncertain={int(state.model.is_uncertain.sum().item())}\n")
             handle.write(f"cuda_rasterizer={self.rasterizer.has_cuda_backend}\n")
             handle.write("nurbs_intermediate=nurbs_surface.json\n")
+

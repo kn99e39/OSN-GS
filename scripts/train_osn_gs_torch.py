@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 """OSN-GS Torch training CLI."""
 
@@ -38,7 +38,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--base_curve_count", type=int, default=8)
     parser.add_argument("--visible_surface_resolution_u", type=int, default=8)
     parser.add_argument("--visible_surface_resolution_v", type=int, default=4)
-    parser.add_argument("--visible_surface_resolution_scale", type=float, default=1.0)
+    parser.add_argument("--visible_surface_resolution_scale", type=float, default=4.0)
     parser.add_argument("--max_surface_control_points", type=int, default=65536)
     parser.add_argument("--covariance_init", type=str, default="knn", choices=("knn", "constant"))
     parser.add_argument("--covariance_knn_chunk_size", type=int, default=0)
@@ -73,8 +73,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--uncertain_samples_v", type=int, default=3)
     parser.add_argument("--max_uncertain_gaussians", type=int, default=0, help="Cap the number of uncertain Gaussians.")
     parser.add_argument("--densify_from_iter", type=int, default=500)
-    parser.add_argument("--densify_until_iter", type=int, default=0, help="Run 3DGS-style ADC until this iteration. 0 disables ADC.")
-    parser.add_argument("--densification_interval", type=int, default=0, help="Run 3DGS-style ADC every N iterations. 0 disables ADC.")
+    # Defaults reproduce the notebook's VRAM-safe recipe (original 3DGS ADC schedule)
+    # so this CLI matches train.py / colab_train_3dgs.ipynb. Pass 0 to disable ADC.
+    parser.add_argument("--densify_until_iter", type=int, default=15000, help="Run 3DGS-style ADC until this iteration. 0 disables ADC.")
+    parser.add_argument("--densification_interval", type=int, default=100, help="Run 3DGS-style ADC every N iterations. 0 disables ADC.")
     parser.add_argument("--densify_grad_threshold", type=float, default=0.0002, help="Screen-space gradient threshold for ADC clone/split.")
     parser.add_argument("--adc_max_gaussians", type=int, default=0, help="Optional hard cap for Gaussian count during ADC. 0 means uncapped.")
     parser.add_argument("--adc_percent_dense", type=float, default=0.01)
@@ -105,8 +107,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--skip_cuda_build_preflight", action="store_true", help="Skip the early MSVC/CUDA/Ninja readiness check before CUDA rasterizer loading.")
     parser.add_argument("--disable_cuda_rasterizer", action="store_true")
     parser.add_argument("--stream_url", type=str, default="")
-    parser.add_argument("--stream_server_host", type=str, default="127.0.0.1")
-    parser.add_argument("--stream_server_port", type=int, default=8080)
     parser.add_argument("--stream_every", type=int, default=1)
     parser.add_argument("--stream_iterations", nargs="*", type=int, default=[])
     parser.add_argument("--stream_max_gaussians", type=int, default=0)
@@ -116,8 +116,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--resume_checkpoint", type=str, default="")
     parser.add_argument(
         "--low_vram",
-        action="store_true",
-        help="Apply a conservative preset for 16GB-class GPUs: keep images on CPU, halve train resolution, and cap uncertain Gaussians.",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Conservative preset for 16GB-class GPUs (on by default): keep images on CPU, halve train resolution, and cap uncertain Gaussians. Pass --no-low_vram for a full-resolution run.",
     )
     return parser
 
@@ -208,8 +209,6 @@ def main() -> None:
         progress_log_interval=args.progress_log_interval,
         timing_log_interval=args.timing_log_interval,
         stream_url=args.stream_url,
-        stream_server_host=args.stream_server_host,
-        stream_server_port=int(args.stream_server_port),
         stream_every=max(0, int(args.stream_every)),
         stream_iterations=tuple(sorted({int(value) for value in args.stream_iterations if int(value) > 0})),
         stream_max_gaussians=max(0, int(args.stream_max_gaussians)),
@@ -262,6 +261,7 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
 
 
 

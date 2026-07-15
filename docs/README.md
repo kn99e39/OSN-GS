@@ -277,3 +277,67 @@ The workspace already contains a reference `gaussian-splatting` checkout, so tho
 - The recurring large cost is ADC: at approximately 190k Gaussians, the density stage measured 4.644s because clone/split/prune each rebuild Gaussian tensors and preserve Adam state.
 - Per-iteration CUDA-to-CPU metric extraction currently serializes the training stream. Full GPU-to-CPU streaming snapshots and periodic global surface maintenance are checkpoint-bound costs.
 - See docs/worklogs/11_training_bottleneck_audit.md.
+
+## 2026-07-15 D-SSIM Image Loss
+
+- OSN-GS image loss now matches original 3DGS: `(1 - lambda_dssim)*L1 + lambda_dssim*(1 - SSIM)` with `lambda_dssim=0.2` (was `0.8*L1 + 0.2*MSE`, no SSIM). This was the #1 suspected cause of the baseline quality gap in `TODO.md`.
+- Added a pure-torch `ssim` in `osn_gs/losses/torch_losses.py` ported from `gaussian-splatting/utils/loss_utils.py` (window 11, sigma 1.5, C1/C2 identical) — verified numerically identical to the original (diff 0.0). MSE stays only for PSNR. `TorchTrainingConfig.lambda_l1/lambda_mse` replaced by `lambda_dssim`.
+- Tests (26) pass; 6-iteration smoke shows the D-SSIM loss decreasing and differentiable. Still needs a resolution-matched 10k A/B re-train to quantify the gap reduction (see `TODO.md`). See `docs/worklogs/18_ssim_image_loss.md`.
+
+## 2026-07-15 SSH Stream Server Split
+
+- OSN-GS live streaming is split from the training loop again. Training remains a WebSocket client using `--stream_url`; it no longer opens a trainer-owned WebSocket server.
+- `scripts/start_trainer_stream.ps1` starts only the loopback stream server at `127.0.0.1:8080` by default. It does not start training or require dataset/output paths.
+- Remote renderers should use SSH local port forwarding, for example `ssh -N -L 8080:127.0.0.1:8080 user@trainer-host`, then connect the browser renderer to `ws://localhost:8080` on the renderer machine.
+- Notebook/training on the trainer machine should stream to `ws://127.0.0.1:8080` when the local stream server is running.
+- See docs/worklogs/12_ssh_stream_server_split.md.
+
+## 2026-07-15 UV Trimming (Surface Support)
+
+- Each NURBS patch now carries a UV support (trim) mask so the rectangular chart is not drawn/measured past the observed point footprint. Computed in `TorchOSNGSPipeline.initialize` from bound Gaussian UVs (occupancy grid + dilation); config knobs `surface_trim_resolution` (default 24, 0 disables) / `surface_trim_dilation` (default 1). `TorchNURBSSurface.uv_support_mask` + `.support(uv)`; exported per-patch as `uv_support` in `nurbs_surface.json`; persisted in checkpoint v2.
+- Benchmark support metric samples only the trimmed region. Extrapolation dropped without opening coverage holes (uncovered unchanged): plane 0.239→0.089, sine 0.184→0.092, crease 0.010→0.004. `density_gradient` (0.759→0.659) is limited by the support threshold being calibrated to the dense cluster's spacing, not by trimming. Training math is unaffected (mask is metadata / renderer hint only). See `docs/worklogs/17_uv_trimming.md`.
+
+## 2026-07-15 Ground-Truth NURBS Benchmark Metrics
+
+- `nurbs_constructor_benchmark` now scores the generated NURBS against ground truth on three independent concerns instead of one conflated residual: **Surface Fitting Accuracy** (`chamfer_rms`/`accuracy_rms`/`completeness_rms`), **Surface Support** (`support_coverage_uncovered_fraction`, `support_extrapolation_fraction`), and **Patch Topology** (`topology_label_ari`, patch-count match). Each result carries a `ground_truth` block; optional gates `--max-chamfer-rms`, `--max-extrapolation`, `--min-topology-ari`.
+- Each scene exposes its analytic surface + true patch topology (`scenes.py`); metrics in `metrics.py`; a ground-truth NURBS is emitted as `NURBS_output/<scene>/nurbs_surface_gt.json` (renderer format, correct topology — 2 patches for `crease`) for visual overlay.
+- These separate failure modes the chart RMS hid: `crease` fits with low residual but low topology ARI (over-segmentation), `density_gradient` shows a high extrapolation fraction. See `docs/worklogs/16_ground_truth_nurbs_metrics.md`.
+
+## 2026-07-15 Baseline 3DGS Comparison Enabled
+
+- The local `gaussian-splatting/` folder (original Graphdeco 3DGS) is now selectable and runnable on this system for side-by-side comparison. Notebook `FRAMEWORK_MODE='graphdeco_3dgs'` now resolves `GS_ROOT` to the local `gaussian-splatting/` folder (previously both modes pointed at the OSN-GS root).
+- Its CUDA extensions (`diff_gaussian_rasterization`, `simple_knn`) build on torch 2.12+cu130 / RTX 5080 (sm_120) with `TORCH_CUDA_ARCH_LIST=12.0` and `CL=/Zc:preprocessor` (required by CUDA 13 CCCL headers). `fused_ssim` is optional (train.py falls back to torch SSIM). Reusable build script: `scripts/build_baseline_extensions.bat`. The notebook build cell now injects these flags so a fresh run can compile them.
+- Verified end-to-end: 30-iteration `gaussian-splatting/train.py` run on `DATASET` (loss decreasing, train PSNR ~16.8 at iter 30). Installing `diff_gaussian_rasterization` in the venv makes OSN-GS use it as the installed backend (same source as vendored, so behavior is unchanged and faster). Tests (26) pass.
+- Fairness: OSN-GS defaults to half-resolution (`--low_vram`) while the baseline trains near full resolution, and the two use different image losses (L1+MSE vs L1+D-SSIM). Match resolution (`--no-low_vram` on OSN-GS or `-r` on the baseline) before comparing. See `docs/worklogs/15_baseline_3dgs_comparison_setup.md` and `TODO.md`.
+
+## 2026-07-15 Notebook/CLI Training Parity
+
+- Fixed a silent divergence where a bare CLI run (`train.py` or `scripts/train_osn_gs_torch.py`) used different defaults than the notebook, most importantly ADC being OFF on the CLI (`densify_until_iter`/`densification_interval` defaulted to 0).
+- Both CLI parsers now default to the notebook's **VRAM-safe recipe** so an argument-free run reproduces `colab_train_3dgs.ipynb`: `densify_until_iter=15000`, `densification_interval=100`, `visible_surface_resolution_scale=4.0`, and `--low_vram` on by default (`BooleanOptionalAction`; pass `--no-low_vram` for a full-resolution run).
+- Notebook's `--low_vram` forwarding updated to `--low_vram`/`--no-low_vram` so `OSN_LOW_VRAM=False` still opts out under the new default-on semantics.
+- Defaults are duplicated across `osn_gs/interop/colab_args.py`, `scripts/train_osn_gs_torch.py`, and the notebook `OSN_*` block — keep all three in sync when changing a training default. Perf-only knobs (`image_device`, `visible_surface_fit_device`, chunk sizes, streaming/log cadence) are intentionally not forced to match since they do not change the trained result. See `docs/worklogs/14_notebook_cli_training_parity.md`.
+
+## 2026-07-15 Hot-Path Metric Scalars Removed
+
+- Implemented priority 1 from `docs/worklogs/11_training_bottleneck_audit.md`: the training loop no longer forces a per-view or per-iteration GPU→CPU synchronization for loss/MSE scalars.
+- MSE is accumulated as a device tensor, `mean_mse` feeds the uncertainty loss directly (no CPU→GPU round trip), and `state.last_loss`/`state.last_psnr` are only materialized to host floats when a progress log, stream snapshot, or file save reads them (`_needs_metric_scalars`).
+- State dataclass and checkpoint format are unchanged; loss/PSNR remain float fields. Tests (26) pass; a CPU smoke confirms metrics stay finite and correct when intermediate iterations skip materialization.
+- Bottleneck audit priorities 2 (ADC single shape transaction) and 3 (snapshot decouple + duplicate-final-snapshot removal) remain open. See `docs/worklogs/13_hot_path_metric_scalars.md`.
+
+## 2026-07-15 NURBS Patch Aspect-Ratio Fix
+
+- Fixed the elongated/sliver-patch NURBS fitting bug tracked in `TODO.md`: `_fit_surface_patches` and `_split_failed_patch` now split each patch's control-point budget using the patch's actual PCA extent aspect ratio (`pca_extent_aspect_ratio` in `osn_gs/surface/torch_nurbs.py`) via the shared `_target_resolution` helper, instead of a fixed global `base_u/base_v` aspect for every patch.
+- `crease` benchmark patch grid aspect moved toward the true shape (e.g. patches with true aspect ~5.3 went from grid 2.33 to 2.67-4.00); still bounded by the global `base_u` cap. Tests (26) pass, benchmark shows no regression on the other scenes. See `TODO.md` for the remaining known limitation.
+
+## 2026-07-15 Notebook Interrupt Cleanup
+
+- The notebook Train cell now catches `KeyboardInterrupt` inside `_run_monitored_process()` and terminates the active `train.py` subprocess before re-raising the interrupt.
+- Termination first calls `process.terminate()` and waits up to 10 seconds; if the process does not exit, it falls back to `process.kill()`.
+- This cleanup affects the training subprocess only. The standalone stream server started by `scripts/start_trainer_stream.ps1` remains a separate process and should still be stopped with Ctrl+C in its own terminal.
+
+## 2026-07-15 Local Graphdeco Notebook Build
+
+`colab_train_3dgs.ipynb` now supports the bundled `gaussian-splatting` project from a Windows local Jupyter kernel. The dependency cell runs `apt-get` only in Colab. Its CUDA extension cell activates the installed MSVC x64 environment, exposes `cl.exe` and `nvcc`, sets `TORCH_CUDA_ARCH_LIST` for the active GPU, and prints complete compiler output on failure. Re-run notebook cells 3, 5, and 6 after a kernel restart before using the Graphdeco training cell. CUDA Toolkit 13.3 with PyTorch CUDA 13.0 emits a minor-version warning but the local diff rasterizer and simple-knn extensions were built and imported successfully.
+
+The local Graphdeco notebook cells read/write patched Python sources with explicit UTF-8 encoding and decode captured subprocess output with `encoding='utf-8', errors='replace'` so Windows kernels do not fall back to `cp949` when upstream files or tool output contain non-ASCII text. The CUDA extension cell also skips rebuilding extensions that are already importable, because Windows keeps imported `.pyd` files locked until the Jupyter kernel restarts.
+

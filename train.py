@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 """Notebook-compatible OSN-GS training entrypoint.
 
@@ -118,8 +118,6 @@ def main() -> None:
         progress_log_interval=args.progress_log_interval,
         timing_log_interval=args.timing_log_interval,
         stream_url=args.stream_url,
-        stream_server_host=args.stream_server_host,
-        stream_server_port=int(args.stream_server_port),
         stream_every=max(0, int(args.stream_every)),
         stream_iterations=stream_iterations,
         stream_max_gaussians=max(0, int(args.stream_max_gaussians)),
@@ -171,5 +169,6 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
 
 
