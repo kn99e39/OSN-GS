@@ -249,6 +249,11 @@ class TorchOSNGSPipeline:
             ):
                 candidates.append(patch_id)
 
+        support_masks_refreshed = 0
+        if refresh_uv and uv_refreshed and int(self.config.surface_trim_resolution) > 0:
+            self._assign_uv_support_masks(model, state.surface_patches)
+            support_masks_refreshed = len(state.surface_patches)
+
         state.surface_patch_residuals = residuals
         added_patches = 0
         corrected: list[int] = []
@@ -273,6 +278,7 @@ class TorchOSNGSPipeline:
             "corrected": corrected,
             "added_patches": added_patches,
             "uv_refreshed": uv_refreshed,
+            "support_masks_refreshed": support_masks_refreshed,
             "topology_changed": added_patches > 0,
         }
 
