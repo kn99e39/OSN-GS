@@ -3,6 +3,10 @@
 This document describes the file and WebSocket formats accepted by
 `3DGS_Renderer`.
 
+For an SSH-forwarded trainer server, enter the local tunnel endpoint in the
+renderer, for example `ws://localhost:8080`. The transport address changes,
+but this WebSocket payload format does not.
+
 ## 1. Local File Input
 
 The file picker accepts multiple files and directory selection:
@@ -132,7 +136,7 @@ The filename must be exactly:
 nurbs_surface.json
 ```
 
-Required field:
+For a single-patch payload, the required field is:
 
 ```json
 {
@@ -143,7 +147,19 @@ Required field:
 }
 ```
 
-Supported optional fields:
+The renderer treats the first array axis as **U** and the second as **V**:
+
+```text
+control_grid[u][v] = [x, y, z]
+control_grid_shape = [U, V, 3]
+```
+
+`u` and `v` are both evaluated over the normalized domain `[0, 1]`. The
+renderer generates clamped-uniform knot vectors from each patch's control
+count and degree. Explicit `knots_u` / `knots_v` fields are not read yet, so a
+producer must not rely on custom knot vectors being preserved by this renderer.
+
+Supported optional top-level fields:
 
 ```json
 {
@@ -159,8 +175,84 @@ Supported optional fields:
 }
 ```
 
-The renderer generates surface triangles and visualization curves from this
-JSON. The available NURBS-related modes are:
+For a multi-patch surface, `patches[]` is the authoritative renderable surface
+set and is required instead of the single top-level `control_grid`. Top-level
+`control_grid`, `weights`, and degrees remain a backward-compatible primary
+patch representation, but are **not** rendered again when `patches[]` is
+non-empty.
+
+Every patch is independently normalized and evaluated. A patch has its own
+`control_grid`, `weights`, `degree_u`, `degree_v`, and optional
+`observed_v_max`. When a patch omits `observed_v_max`, the top-level value is
+used; when both omit it, the default is `0.5`.
+
+`patch_id` is optional syntactically, but multi-patch producers should provide
+a unique numeric ID for every patch. The renderer uses it for status metadata,
+mouse selection, and highlight lookup. If omitted, the patch's array index is
+used. Duplicate IDs make selection ambiguous and must be avoided.
+
+```json
+{
+  "type": "nurbs_surface",
+  "iteration": 10000,
+  "observed_v_max": 0.5,
+  "base_curves": [[[0, 0, 0], [0.5, 0.3, 0], [1, 0, 0]]],
+  "occlusion_curves": [],
+  "patches": [
+    {
+      "patch_id": 0,
+      "control_grid_shape": [3, 3, 3],
+      "control_grid": [
+        [[0, 0, 0], [0, 1, 0], [0, 2, 0]],
+        [[1, 0, 0], [1, 1, 0], [1, 2, 0]],
+        [[2, 0, 0], [2, 1, 0], [2, 2, 0]]
+      ],
+      "weights": [[1, 1, 1], [1, 1, 1], [1, 1, 1]],
+      "degree_u": 2,
+      "degree_v": 2,
+      "observed_v_max": 0.6
+    },
+    {
+      "patch_id": 1,
+      "control_grid_shape": [3, 2, 3],
+      "control_grid": [
+        [[3, 0, 0], [3, 1, 0]],
+        [[4, 0, 0], [4, 1, 0]],
+        [[5, 0, 0], [5, 1, 0]]
+      ],
+      "weights": [[1, 1], [1, 1], [1, 1]],
+      "degree_u": 2,
+      "degree_v": 1
+    }
+  ]
+}
+```
+
+Each patch is tessellated independently. Missing weights are treated as one,
+and flattened arrays are reshaped with `control_grid_shape`. Degrees are
+clamped to the corresponding control count minus one. An invalid patch is
+skipped without discarding valid patches; its ID is reported in renderer
+metadata.
+
+### U/V Curves, Boundaries, and Patch Selection
+
+The cyan wireframe is made from evaluated NURBS iso-parametric curves, not from
+the control polygon:
+
+- **U iso-curves**: `v` is fixed and `u` varies from `0` to `1`.
+- **V iso-curves**: `u` is fixed and `v` varies from `0` to `1`.
+- **Patch boundary**: the four evaluated edges `v=0`, `u=1`, `v=1`, and `u=0`.
+
+`NURBS Surface` displays the filled surface and each patch boundary. Clicking a
+surface patch highlights that patch and its boundary, and reports its
+`patch_id` in the Statistics panel. `NURBS Curves` and `Point Cloud + NURBS
+Curves` display evaluated U/V curves and boundaries for every patch.
+
+`base_curves` and `occlusion_curves` are top-level diagnostic polylines. They
+are rendered once for the payload and are not duplicated for every patch.
+
+The renderer generates surface triangles, boundaries, and visualization curves
+from this JSON. The available NURBS-related modes are:
 
 - `NURBS Surface`
 - `NURBS Curves`
@@ -168,7 +260,8 @@ JSON. The available NURBS-related modes are:
 
 In the combined mode, the NURBS curve pass is rendered after the point-cloud
 pass and does not use a depth buffer, so curves are visually placed in front
-of the point cloud.
+of the point cloud. This combined mode uses a sharper point-cloud falloff than
+the standalone `Point Cloud` mode; the standalone mode remains unchanged.
 
 ## 5. WebSocket Snapshot Format
 
@@ -286,4 +379,3 @@ For a new training framework, provide:
    `nurbs_surface` WebSocket field containing `control_grid`.
 4. The correct `parameterSpace` value so scales and opacity are not decoded
    twice or left undecoded.
-
