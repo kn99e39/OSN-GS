@@ -4,11 +4,6 @@
 
 동일 데이터셋 10k에서 OSN-GS가 원본 Graphdeco 3DGS(`gaussian-splatting/`)보다 품질이 낮은 문제. 실행환경 노트북+CUDA(ADC 정상). 정적 코드 대조로 후보를 좁혔고, **최우선 원인이던 image loss의 SSIM 부재는 해결함** — 원본과 동일한 `(1-0.2)·L1 + 0.2·(1-SSIM)` 도입, SSIM은 원본 3DGS와 수치 일치(`docs/worklogs/18_ssim_image_loss.md`). 아래는 남은 2차 후보(미검증)와 검증 계획.
 
-## Completed items
-
-- **D-SSIM image loss**: Implemented and numerically matched to the Graphdeco reference. The remaining work is the resolution-matched 10k A/B measurement, retained below as verification. (`docs/worklogs/18_ssim_image_loss.md`)
-
-
 ## 남은 후보 1 — NURBS surface anchor loss가 certain Gaussian 위치를 구속 (OSN-GS 고유, 2차)
 
 - `nurbs_surface_loss`가 매 iteration certain Gaussian에 대해 `(gaussian_xyz - patch.evaluate(uv))²`를 최소화한다(`osn_gs/losses/torch_losses.py`, `nurbs_surface_loss`). gradient가 Gaussian `_xyz`로도 흘러 Gaussian을 NURBS 표면 쪽으로 끌어당긴다. `lambda_surface=0.01`(`torch_trainer.py`).
@@ -130,12 +125,10 @@ Synthetic / Raw Gaussian Source
 - `visible_surface_resolution_u/v`의 기본 상한이 사실상 `8/4` 수준이면 5:1 이상의 긴 patch를 충분히 표현하지 못할 수 있다.
 - patch PCA extent에 따른 U/V 비율 배분은 일부 반영됐지만 global `base_u`/budget cap이 극단적 anisotropy를 제한한다.
 - regularization 기본값은 synthetic 기준이며 실제 COLMAP 분포에서 검증되지 않았다.
-- 현재 residual은 모든 실험에서 symmetric/bidirectional metric으로 강제되지 않는다.
-- CI/regression threshold가 아직 강제되지 않는다.
+- CI/regression threshold가 아직 강제되지 않는다(게이트는 있으나 기본 비활성).
 
 ## Priority 2 — 극단적 aspect ratio와 anisotropic control budget
 
-- [ ] patch PCA extent에 따라 `n_ctrl_u`, `n_ctrl_v`를 anisotropic하게 할당한다.
 - [ ] 총 control-point budget을 유지한다.
 - [ ] 각 축에서 `degree + 1` 이상의 최소 control-point 조건을 보장한다.
 - [ ] U/V 축 swap에 대해 결과가 동치인지 검증한다.
@@ -397,7 +390,6 @@ Raw COLMAP / trained 3DGS Gaussian
 
 Correctness 안정화 이후 수행한다.
 
-- [ ] hot path의 `float(...cpu())` 동기화 제거.
 - [ ] ADC의 여러 clone/rebuild를 단일 shape transaction으로 통합.
 - [ ] snapshot capture를 bounded pinned-memory asynchronous copy로 분리.
 - [ ] duplicate snapshot 전송 제거.
@@ -423,7 +415,6 @@ Correctness 안정화 이후 수행한다.
 
 - [ ] Gaussian minimum-axis normal, planarity confidence, PCA/voxel normal 비교 artifact 추가.
 - [ ] crease·curved ribbon·close parallel sheets용 topology boundary score diagnostic 추가.
-- [ ] local-density-adaptive support tau 실험 경로 추가.
 - [ ] 기존 rectangular benchmark 결과가 변하지 않는지 regression 확인.
 
 이 change set의 목적은 새 support 알고리즘을 즉시 확정하는 것이 아니라, **geometry fitting 실패와 support-domain estimation 실패를 독립적으로 측정할 수 있는 검증 기반을 만드는 것**이다.
