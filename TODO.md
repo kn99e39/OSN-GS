@@ -162,7 +162,6 @@ Gaussian + coarse NURBS
 
 현재 UV trimming 자체는 구현되어 있고 plane/sine/crease에서 unsupported ratio를 줄인 결과가 있다. 따라서 다음 작업은 단순한 "mask 최초 구현"이 아니라 아래의 **일반화·진단·lifecycle 안정화**다.
 
-- [ ] patch별 center-based UV occupancy 결과를 독립 diagnostic artifact로 export한다.
 - [ ] occupancy grid resolution과 threshold에 대한 sensitivity sweep을 추가한다.
 - [ ] global median NN spacing 기반 support tau를 local-density-adaptive tau로 교체한다.
 - [ ] patch-relative threshold와 quantile threshold를 비교한다.
@@ -175,27 +174,13 @@ Gaussian + coarse NURBS
 
 대상 scene:
 
-- [ ] triangle
 - [ ] trapezoid
 - [ ] wedge
 - [ ] L-shape
-- [ ] U-shape
-- [ ] crescent
-- [ ] planar patch with hole
 
 필수 output/metric:
 
-- [ ] occupancy/support mask
 - [ ] outer contour와 hole contour
-- [ ] connected-component count
-- [ ] hole count / Euler characteristic 또는 동등 topology metric
-- [ ] UV coverage ratio
-- [ ] unsupported surface ratio
-- [ ] uncovered observed-support ratio
-- [ ] boundary Chamfer distance
-- [ ] boundary Hausdorff distance
-- [ ] topology mismatch flag
-- [ ] GT support 대비 precision/recall 또는 IoU
 
 ### 단계적 support estimator
 
@@ -436,13 +421,9 @@ Correctness 안정화 이후 수행한다.
 
 기존 fitting 알고리즘은 변경하지 않고 아래를 하나의 benchmark-focused change set으로 묶는다.
 
-- [ ] triangle, U-shape, crescent, planar-hole synthetic scene 추가.
 - [ ] Gaussian minimum-axis normal, planarity confidence, PCA/voxel normal 비교 artifact 추가.
 - [ ] crease·curved ribbon·close parallel sheets용 topology boundary score diagnostic 추가.
-- [ ] patch별 center-occupancy/support-mask export 추가.
 - [ ] local-density-adaptive support tau 실험 경로 추가.
-- [ ] coverage, unsupported/uncovered ratio, boundary Chamfer/Hausdorff, component/hole preservation metric 추가.
-- [ ] fitting result와 support diagnostic을 별도 artifact로 저장.
 - [ ] 기존 rectangular benchmark 결과가 변하지 않는지 regression 확인.
 
 이 change set의 목적은 새 support 알고리즘을 즉시 확정하는 것이 아니라, **geometry fitting 실패와 support-domain estimation 실패를 독립적으로 측정할 수 있는 검증 기반을 만드는 것**이다.

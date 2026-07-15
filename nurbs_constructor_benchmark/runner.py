@@ -46,6 +46,25 @@ def export_renderer_output(scene: SyntheticGaussianScene, state: Any, output_dir
     )
 
 
+def _export_support_artifact(raster: dict[str, Any], output_dir: Path) -> dict[str, str]:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    json_path = output_dir / "support_domain.json"
+    json_path.write_text(json.dumps(raster, indent=2), encoding="utf-8")
+    resolution = int(raster["resolution"])
+    panels = []
+    for index, key in enumerate(("gt_mask", "generated_mask", "intersection_mask")):
+        mask = raster[key]
+        pixels = "".join(
+            f'<rect x="{index * (resolution + 8) + row}" y="{col}" width="1" height="1"/>'
+            for row, values in enumerate(mask) for col, enabled in enumerate(values) if enabled
+        )
+        panels.append(f'<g fill="#20a4d8">{pixels}</g><text x="{index * (resolution + 8)}" y="{resolution + 12}" fill="#222">{key.replace("_mask", "")}</text>')
+    svg_path = output_dir / "support_domain.svg"
+    width = 3 * (resolution + 8)
+    svg_path.write_text(f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{resolution + 20}" viewBox="0 0 {width} {resolution + 20}"><rect width="100%" height="100%" fill="white"/>' + "".join(panels) + "</svg>", encoding="utf-8")
+    return {"support_domain_json": str(json_path), "support_domain_svg": str(svg_path)}
+
+
 def evaluate_scene(
     scene: SyntheticGaussianScene,
     config: TorchPipelineConfig,
@@ -83,7 +102,11 @@ def evaluate_scene(
     residuals = torch.cat(surface_residuals)
     normal_degrees = torch.cat(normal_errors)
     controls = sum(int(patch.control_grid.shape[0] * patch.control_grid.shape[1]) for patch in state.surface_patches)
-    gt = ground_truth_metrics(scene, state)
+    gt, support_raster = ground_truth_metrics(scene, state)
+    support_artifact_dir = export_dir.parent / "NURBS_diagnostics" / scene.name if export_dir is not None else None
+    support_artifacts = _export_support_artifact(support_raster, support_artifact_dir) if support_artifact_dir is not None else {}
+    if diagnostics_dir is not None:
+        support_artifacts.update({"uv_occupancy_json": str(diagnostics_dir / "uv_support.json"), "uv_occupancy_svg": str(diagnostics_dir / "uv_support.svg")})
     return {
         "scene": scene.name,
         "description": scene.description,
@@ -106,6 +129,7 @@ def evaluate_scene(
         ),
         "patch_diagnostics": construction_diagnostics,
         "construction_diagnostics": str(diagnostics_dir / "construction_diagnostics.json") if diagnostics_dir is not None else None,
+        "support_artifacts": support_artifacts,
     }
 
 
@@ -183,7 +207,7 @@ def main(argv: list[str] | None = None) -> int:
             f"| [accuracy] chamfer_rms={gt['chamfer_rms']:.6f} acc_rms={gt['accuracy_rms']:.6f} "
             f"| [support] uncovered={gt['support_coverage_uncovered_fraction']:.3f} "
             f"extrapolation_global={gt['support_extrapolation_fraction']:.3f} "
-            f"extrapolation_local={gt['support_extrapolation_fraction_local']:.3f} "
+            f"extrapolation_local={gt['support_extrapolation_fraction_local']:.3f} iou={gt['support_iou']:.3f} "
             f"| [topology] ari={gt['topology_label_ari']:.3f}"
         )
     print(f"report={path}")

@@ -67,3 +67,9 @@ results/NURBS_output/<scene>/nurbs_surface_gt.json
 
 Add a scene in `scenes.py`: provide its analytic height `surface_fn`, pointwise `oracle` (residual + normal), and ground-truth topology (`gt_patch_count`, `gt_patch_label`), then add its name to `SCENE_NAMES`. The GT metrics and GT-NURBS export pick these up automatically. Keep constructor changes in the production `osn_gs` modules; this benchmark will automatically evaluate the changed path.
 
+
+## Support-domain scenes and metrics
+
+The deterministic support-domain scenes are triangle, u_shape, crescent, and planar_hole (annulus). Gaussian centers are sampled only inside each analytic GT predicate.
+
+The benchmark rasterizes the GT predicate and trim-respecting generated NURBS samples on the same XY grid. The ground_truth block records coverage, unsupported and uncovered fractions, precision/recall/IoU, component and hole counts, Euler-equivalent topology, topology mismatch, and boundary Chamfer/Hausdorff. report.json also links shared-XY support JSON/SVG and per-patch UV occupancy/trim-mask JSON/SVG artifacts.

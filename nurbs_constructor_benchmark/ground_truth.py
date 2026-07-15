@@ -18,6 +18,8 @@ from typing import Any
 import torch
 
 from .scenes import SyntheticGaussianScene
+from .support_domains import mask_on_grid
+from .support_domains import mask_on_grid
 
 _DOMAIN = (-1.0, 1.0)
 
@@ -33,6 +35,8 @@ def gt_surface_points(scene: SyntheticGaussianScene, grid_n: int = 128) -> torch
     """Dense ``(grid_n^2, 3)`` samples on the true surface over the whole domain."""
 
     xy = _grid_xy(_DOMAIN, _DOMAIN, grid_n, grid_n)
+    xy = xy[scene.support_predicate(xy)]
+    xy = xy[scene.support_predicate(xy)]
     z = scene.surface_fn(xy)
     return torch.cat([xy, z.reshape(-1, 1)], dim=1)
 
@@ -80,6 +84,10 @@ def gt_nurbs_payload(scene: SyntheticGaussianScene, nu: int = 12, nv: int = 12) 
     """
 
     grids = gt_nurbs_control_grids(scene, nu, nv)
+    support_mask = mask_on_grid(scene.support_predicate, max(nu, nv))
+    uv_support = {"resolution": [int(support_mask.shape[0]), int(support_mask.shape[1])], "mask": support_mask.tolist(), "coordinate_space": "xy"}
+    support_mask = mask_on_grid(scene.support_predicate, max(nu, nv))
+    uv_support = {"resolution": [int(support_mask.shape[0]), int(support_mask.shape[1])], "mask": support_mask.tolist(), "coordinate_space": "xy"}
     patches = [
         {
             "patch_id": patch_id,
@@ -88,6 +96,8 @@ def gt_nurbs_payload(scene: SyntheticGaussianScene, nu: int = 12, nv: int = 12) 
             "weights": torch.ones(grid.shape[0], grid.shape[1]).tolist(),
             "degree_u": 1,
             "degree_v": 1,
+            "uv_support": uv_support,
+            "uv_support": uv_support,
         }
         for patch_id, grid in enumerate(grids)
     ]
@@ -102,6 +112,8 @@ def gt_nurbs_payload(scene: SyntheticGaussianScene, nu: int = 12, nv: int = 12) 
         "control_grid_shape": list(primary.shape),
         "control_grid": primary.tolist(),
         "weights": torch.ones(primary.shape[0], primary.shape[1]).tolist(),
+        "uv_support": uv_support,
+        "uv_support": uv_support,
         "base_curves": [],
         "occlusion_curves": [],
         "patches": patches,
@@ -109,5 +121,7 @@ def gt_nurbs_payload(scene: SyntheticGaussianScene, nu: int = 12, nv: int = 12) 
             "source": "nurbs_constructor_benchmark_ground_truth",
             "scene": scene.name,
             "gt_patch_count": int(scene.gt_patch_count),
+            "support_domain": scene.support_name,
+            "support_domain": scene.support_name,
         },
     }

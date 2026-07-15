@@ -7,6 +7,8 @@ from typing import Callable
 
 import torch
 
+from .support_domains import SupportPredicate, annulus, crescent, full_square, sample_in_domain, triangle, u_shape
+
 
 Oracle = Callable[[torch.Tensor], tuple[torch.Tensor, torch.Tensor]]
 HeightFn = Callable[[torch.Tensor], torch.Tensor]
@@ -40,6 +42,8 @@ class SyntheticGaussianScene:
     surface_fn: HeightFn
     gt_patch_count: int
     gt_patch_label: LabelFn
+    support_predicate: SupportPredicate
+    support_name: str
 
 
 def _colors(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
@@ -122,8 +126,16 @@ def make_scene(name: str, count: int, seed: int = 0, noise_std: float = 0.0) -> 
         raise ValueError(f"Unknown synthetic scene: {name}")
     generator = torch.Generator(device="cpu").manual_seed(seed)
     count = max(4, int(count))
+    support_predicate: SupportPredicate = full_square
+    support_name = "square"
     if name == "density_gradient":
         xy = _density_gradient_xy(count, generator)
+    elif name in {"triangle", "u_shape", "crescent", "planar_hole"}:
+        support_predicate, support_name = {
+            "triangle": (triangle, "triangle"), "u_shape": (u_shape, "u_shape"),
+            "crescent": (crescent, "crescent"), "planar_hole": (annulus, "annulus"),
+        }[name]
+        xy = sample_in_domain(support_predicate, count, generator)
     else:
         xy = torch.rand((count, 2), generator=generator) * 2.0 - 1.0
     x, y = xy[:, 0], xy[:, 1]
@@ -137,6 +149,18 @@ def make_scene(name: str, count: int, seed: int = 0, noise_std: float = 0.0) -> 
     elif name == "density_gradient":
         surface_fn, oracle = _sine_height, _sine_oracle
         description = "Same smooth sheet as 'sine' but with a dense central cluster plus sparse background: stresses density-adaptive voxel subdivision (run with --adaptive-voxel to exercise it)."
+    elif name == "triangle":
+        surface_fn, oracle = _plane_height, _plane_oracle
+        description = "Planar triangular support: outer-boundary coverage and precision."
+    elif name == "u_shape":
+        surface_fn, oracle = _plane_height, _plane_oracle
+        description = "Planar U-shaped support: concavity and connected-support preservation."
+    elif name == "crescent":
+        surface_fn, oracle = _plane_height, _plane_oracle
+        description = "Planar crescent support: curved outer and inner boundaries."
+    elif name == "planar_hole":
+        surface_fn, oracle = _plane_height, _plane_oracle
+        description = "Planar annular support: hole preservation and Euler-equivalent topology."
     else:
         surface_fn, oracle = _crease_height, _crease_oracle
         gt_patch_count, gt_patch_label = 2, _crease_patch_label
@@ -154,7 +178,9 @@ def make_scene(name: str, count: int, seed: int = 0, noise_std: float = 0.0) -> 
         surface_fn=surface_fn,
         gt_patch_count=gt_patch_count,
         gt_patch_label=gt_patch_label,
+        support_predicate=support_predicate,
+        support_name=support_name,
     )
 
 
-SCENE_NAMES = ("plane", "sine", "crease", "density_gradient")
+SCENE_NAMES = ("plane", "sine", "crease", "density_gradient", "triangle", "u_shape", "crescent", "planar_hole")

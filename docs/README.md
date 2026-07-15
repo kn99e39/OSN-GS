@@ -353,3 +353,9 @@ The local Graphdeco notebook cells read/write patched Python sources with explic
 ## 2026-07-15 NURBS Constructor TODO Audit
 
 - Removed already implemented constructor benchmark baselines and metrics from TODO. Remaining NURBS work is recorded in docs/worklogs/21_nurbs_constructor_todo_audit.md.
+
+## 2026-07-15 Support-Domain Constructor Benchmark
+
+- Added deterministic triangle, u_shape, crescent, and planar_hole scenes with analytic GT support predicates and in-domain Gaussian sampling.
+- report.json now includes shared-XY support precision/recall/IoU, coverage/unsupported/uncovered, components/holes/Euler topology mismatch, boundary Chamfer/Hausdorff, and artifact paths.
+- See docs/worklogs/24_support_domain_benchmark.md.
