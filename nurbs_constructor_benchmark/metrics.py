@@ -105,7 +105,10 @@ def ground_truth_metrics(scene: SyntheticGaussianScene, state: Any, grid_n: int 
 
     input_pts = scene.points.detach().cpu()
     input_xy = input_pts[:, :2]
-    spacing = _median_nn_spacing(input_xy)
+    local_spacing_matrix = torch.cdist(input_xy, input_xy)
+    local_spacing_matrix.fill_diagonal_(float("inf"))
+    local_spacing = local_spacing_matrix.min(dim=1).values.clamp_min(torch.finfo(input_xy.dtype).eps)
+    spacing = float(local_spacing.median()) if local_spacing.numel() else 1.0
     observed_radius = _OBSERVED_RADIUS_FACTOR * spacing
     support_tau = _SUPPORT_TAU_FACTOR * spacing
 
@@ -122,7 +125,10 @@ def ground_truth_metrics(scene: SyntheticGaussianScene, state: Any, grid_n: int 
     comp = _min_dist(obs_gt, gen)
 
     # --- 2. Support. ---
-    extrap = _min_dist(gen, input_pts)  # generated -> nearest input point (3D)
+    nearest_input = torch.cdist(gen, input_pts).min(dim=1)
+    extrap = nearest_input.values
+    local_support_tau = _SUPPORT_TAU_FACTOR * local_spacing[nearest_input.indices]
+    local_extrapolation = float((extrap > local_support_tau).float().mean()) if extrap.numel() else float("nan")
 
     # --- 3. Topology: per-Gaussian generated vs ground-truth patch labels. ---
     gen_labels = state.model.cluster_ids.detach().cpu().clamp_min(0)
@@ -145,6 +151,9 @@ def ground_truth_metrics(scene: SyntheticGaussianScene, state: Any, grid_n: int 
         # 2. Surface Support
         "support_coverage_uncovered_fraction": _frac_over(comp, support_tau),
         "support_extrapolation_fraction": _frac_over(extrap, support_tau),
+        "support_extrapolation_fraction_local": local_extrapolation,
+        "support_local_threshold_p50": float(local_support_tau.median()) if local_support_tau.numel() else float("nan"),
+        "support_local_threshold_p95": float(torch.quantile(local_support_tau, 0.95)) if local_support_tau.numel() else float("nan"),
         "support_observed_gt_samples": int(obs_gt.shape[0]),
         "support_threshold": float(support_tau),
         # 3. Patch Topology

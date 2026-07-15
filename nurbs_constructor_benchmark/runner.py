@@ -182,7 +182,8 @@ def main(argv: list[str] | None = None) -> int:
             f"controls={result['control_points']} "
             f"| [accuracy] chamfer_rms={gt['chamfer_rms']:.6f} acc_rms={gt['accuracy_rms']:.6f} "
             f"| [support] uncovered={gt['support_coverage_uncovered_fraction']:.3f} "
-            f"extrapolation={gt['support_extrapolation_fraction']:.3f} "
+            f"extrapolation_global={gt['support_extrapolation_fraction']:.3f} "
+            f"extrapolation_local={gt['support_extrapolation_fraction_local']:.3f} "
             f"| [topology] ari={gt['topology_label_ari']:.3f}"
         )
     print(f"report={path}")
