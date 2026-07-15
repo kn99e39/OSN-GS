@@ -339,9 +339,13 @@ The workspace already contains a reference `gaussian-splatting` checkout, so tho
 
 `colab_train_3dgs.ipynb` now supports the bundled `gaussian-splatting` project from a Windows local Jupyter kernel. The dependency cell runs `apt-get` only in Colab. Its CUDA extension cell activates the installed MSVC x64 environment, exposes `cl.exe` and `nvcc`, sets `TORCH_CUDA_ARCH_LIST` for the active GPU, and prints complete compiler output on failure. Re-run notebook cells 3, 5, and 6 after a kernel restart before using the Graphdeco training cell. CUDA Toolkit 13.3 with PyTorch CUDA 13.0 emits a minor-version warning but the local diff rasterizer and simple-knn extensions were built and imported successfully.
 
-The local Graphdeco notebook cells read/write patched Python sources with explicit UTF-8 encoding and decode captured subprocess output with `encoding='utf-8', errors='replace'` so Windows kernels do not fall back to `cp949` when upstream files or tool output contain non-ASCII text. The CUDA extension cell also skips rebuilding extensions that are already importable, because Windows keeps imported `.pyd` files locked until the Jupyter kernel restarts.
+The local Graphdeco notebook cells read/write patched Python sources with explicit UTF-8 encoding and decode captured subprocess output with `encoding='utf-8', errors='replace'` so Windows kernels do not fall back to `cp949` when upstream files or tool output contain non-ASCII text. The CUDA extension cell also skips rebuilding extensions that are already importable, because Windows keeps imported `.pyd` files locked until the Jupyter kernel restarts. The train cell now uses the same compact live monitor for OSN-GS and baseline Graphdeco runs: resource status, one progress bar with ETA, and one latest iteration/log line.
 
 ## 2026-07-15 Renderer Multi-Patch Validation
 
 - Confirmed WebRenderer revision 88477a8 renders all valid NURBS patches, uses deterministic patch color, keeps iso-lines inside each patch, and includes all patches in camera bounds.
 - Node is unavailable in this environment, so the included smoke test was not run. Remaining renderer diagnostics, parity, and provenance work are recorded in docs/worklogs/19_renderer_multipatch_validation.md.
+
+## 2026-07-15 Renderer Local-Test Handoff
+
+- Renderer Priority 0 test procedure and pass criteria were moved to docs/worklogs/20_renderer_local_test_handoff.md for execution on a WebGPU-capable local machine.

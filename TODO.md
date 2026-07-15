@@ -112,25 +112,6 @@ Synthetic / Raw Gaussian Source
 - initialize 후 모든 Gaussian을 patch ID와 UV에 binding한다.
 - 학습 중 control grid와 rational weight는 trainable이지만, 현재 constructor benchmark는 initialize 직후·학습 0회 결과다.
 
-## Priority 0 — Renderer, parity, provenance 검증
-
-스크린샷의 cyan iso-line 수렴 현상은 fitting collapse로 확정하지 않는다. Python Cox-de Boor 평가에서는 동일 exported surface의 global collapse가 재현되지 않았으므로 renderer/evaluation/provenance 오류를 먼저 배제한다.
-
-- [ ] patch isolate/toggle 기능을 추가한다.
-- [ ] Gaussian을 assigned patch ID로 색칠한다.
-- [ ] sampled surface points, U iso-lines, V iso-lines, control grid, `base_curves`를 독립 toggle로 분리한다.
-- [ ] Python/JavaScript에서 동일 patch·동일 UV sample의 Cox-de Boor 평가 결과를 수치 비교한다.
-- [ ] knot vector, degree, control-point layout, weight indexing, U/V axis convention의 parity를 검증한다.
-- [ ] perspective/orthographic 전환으로 시각적 원근 수렴을 구분한다.
-- [ ] export JSON에 source run path, CLI, seed, config, timestamp, file hash를 기록한다.
-- [ ] screenshot과 validation JSON이 같은 run artifact인지 확인 가능하게 한다.
-
-### Priority 0 완료 조건
-
-- 동일 UV sample에 대한 Python/JS position 오차가 지정 tolerance 이하.
-- 모든 synthetic scene에서 patch 누락 없이 동일 bounds에 표시됨.
-- renderer artifact만으로 fitting collapse처럼 보이는 false positive가 없어야 함.
-
 ## Priority 1 — Rectangular baseline 안정화
 
 대상 scene:
@@ -465,7 +446,6 @@ Correctness 안정화 이후 수행한다.
 
 기존 fitting 알고리즘은 변경하지 않고 아래를 하나의 benchmark-focused change set으로 묶는다.
 
-- [ ] Python/JavaScript surface evaluation parity test 추가.
 - [ ] triangle, U-shape, crescent, planar-hole synthetic scene 추가.
 - [ ] Gaussian minimum-axis normal, planarity confidence, PCA/voxel normal 비교 artifact 추가.
 - [ ] crease·curved ribbon·close parallel sheets용 topology boundary score diagnostic 추가.
