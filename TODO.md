@@ -116,21 +116,12 @@ Synthetic / Raw Gaussian Source
 
 대상 scene:
 
-- [ ] rectangular plane
 - [ ] elongated plane
-- [ ] sine surface
-- [ ] density-gradient surface
 - [ ] mild curved sheet
 
 필수 metric:
 
-- [ ] point-to-surface residual
-- [ ] surface-to-ground-truth residual
-- [ ] bidirectional Chamfer/RMS
-- [ ] Jacobian determinant 또는 area scale의 degeneracy ratio
 - [ ] Jacobian condition number 분포
-- [ ] control-grid collapse/fold-over 여부
-- [ ] expected patch count
 - [ ] Gaussian seed, voxel density, LSQ regularization 변화에 대한 stability
 
 ### Rectangular baseline의 알려진 한계
@@ -381,7 +372,6 @@ Boundary curve와 interior U/V curve network를 먼저 만들고 Coons/Gordon su
 
 ### Gaussian topology 방법론의 완료 조건
 
-- `crease`의 expected patch count와 topology ARI가 개선되며 smooth curved scene의 false split이 증가하지 않는다.
 - close parallel sheet와 thin shell의 cross-surface adjacency가 지정 threshold 이하가 된다.
 - near-spherical/low-confidence Gaussian을 포함해도 patch topology가 seed와 density에 대해 안정적이다.
 - Gaussian covariance normal, PCA/voxel normal, fitted NURBS normal 간 mismatch가 diagnostic으로 재현 가능하다.

@@ -349,3 +349,7 @@ The local Graphdeco notebook cells read/write patched Python sources with explic
 ## 2026-07-15 Renderer Local-Test Handoff
 
 - Renderer Priority 0 test procedure and pass criteria were moved to docs/worklogs/20_renderer_local_test_handoff.md for execution on a WebGPU-capable local machine.
+
+## 2026-07-15 NURBS Constructor TODO Audit
+
+- Removed already implemented constructor benchmark baselines and metrics from TODO. Remaining NURBS work is recorded in docs/worklogs/21_nurbs_constructor_todo_audit.md.
