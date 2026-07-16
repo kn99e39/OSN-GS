@@ -371,3 +371,8 @@ The local Graphdeco notebook cells read/write patched Python sources with explic
 
 - The OSN-GS Train cell now captures vcvars64.bat into the train.py subprocess environment on Windows, including PATH, INCLUDE, and LIB. This fixes the CUDA rasterizer preflight failure where cl.exe was absent despite the notebook extension-build cell succeeding.
 - The subprocess environment is verified with where cl before training starts. See docs/worklogs/25_notebook_train_msvc_env.md.
+
+## 2026-07-16 Unified PowerShell CLI
+
+- After activating .venv, osn-gs --help lists train, benchmark, inspect-surface, and stream-server. The editable package install registers the console script; each subcommand delegates to the existing implementation and preserves its original options.
+- Install or refresh it with .venv\Scripts\python.exe -m pip install -e . --no-deps. See docs/worklogs/26_unified_cli.md.
