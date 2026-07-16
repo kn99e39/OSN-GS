@@ -58,15 +58,21 @@ Every run (unless `--skip-renderer-export`) also writes, per scene:
 ```text
 results/NURBS_output/<scene>/point_cloud.ply
 results/NURBS_output/<scene>/nurbs_surface.json
-results/NURBS_output/<scene>/nurbs_surface_gt.json
+results/NURBS_output/<scene>_gt/nurbs_surface.json
 ```
 
-`point_cloud.ply` + `nurbs_surface.json` are the same pair a real training run writes to its `final` output directory (see `osn_gs/core/torch_trainer.py:save_outputs`), built from the exact same `nurbs_intermediate_payload()` helper so the two never drift apart. `nurbs_surface_gt.json` is the **ground-truth NURBS** in the identical renderer format (`ground_truth.py`) — a degree-1 surface lying on the true `z = f(x, y)`, with the correct topology (two patches for `crease`). Load both at `3DGS_Renderer`/`WebRenderer` per `RENDERER_INPUT_FORMAT.md` to overlay the reconstructed surface on ground truth. Each file's top-level `control_grid` is the primary patch; the full `patches[]` array carries every patch for multi-patch scenes.
+`point_cloud.ply` + `nurbs_surface.json` are the same pair a real training run writes to its `final` output directory (see `osn_gs/core/torch_trainer.py:save_outputs`), built from the exact same `nurbs_intermediate_payload()` helper so the two never drift apart. `<scene>_gt/nurbs_surface.json` is the **ground-truth NURBS** in the identical renderer format (`ground_truth.py`) — a degree-1 surface lying on the true `z = f(x, y)`, with the correct topology (two patches for `crease`). Load both at `3DGS_Renderer`/`WebRenderer` per `RENDERER_INPUT_FORMAT.md` to overlay the reconstructed surface on ground truth. Each file's top-level `control_grid` is the primary patch; the full `patches[]` array carries every patch for multi-patch scenes.
 
 ## Extending it
 
 Add a scene in `scenes.py`: provide its analytic height `surface_fn`, pointwise `oracle` (residual + normal), and ground-truth topology (`gt_patch_count`, `gt_patch_label`), then add its name to `SCENE_NAMES`. The GT metrics and GT-NURBS export pick these up automatically. Keep constructor changes in the production `osn_gs` modules; this benchmark will automatically evaluate the changed path.
 
+
+## Stage 1 voxel-per-patch constructor
+
+`--constructor voxel_patch_stage1` runs the experimental Stage 1 architecture (see `OSN_GS_Voxel_Driven_NURBS_Migration_Plan.md`): a recursive raw-count voxel hierarchy (`--voxel-min-count`, `--voxel-max-count`, `--voxel-max-depth`, `--voxel-min-size`), one NURBS patch per active leaf fitted to the raw Gaussians inside that voxel, and a support mask from the exact plane-AABB intersection polygon (`--stage1-support voxel|none`). The default `--constructor legacy` path is unchanged and regression-checked.
+
+Stage 1 additions to the report: a `patch_union` block (support topology on the world-space union of all trimmed patches — hole count/IoU, false-fill, Euler, patch overlap/gap ratios, component/hole area histograms exposing raster fragmentation) and a `stage1` block (leaf state counts, underdetermined-patch count, observations-per-control, per-patch provenance incl. source voxel, local plane, and support polygon). Extra scenes: `elongated_plane`, `mild_curved_sheet`, `close_parallel_sheets` (two sheets at z = ±0.06; XY-projected union/overlap metrics conflate stacked sheets — read them with that caveat). `scripts/stage1_ablation.py` runs the required ablation matrix and writes `results/stage1_ablation/summary.{json,md}`.
 
 ## Support-domain scenes and metrics
 

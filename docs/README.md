@@ -376,3 +376,7 @@ The local Graphdeco notebook cells read/write patched Python sources with explic
 
 - After activating .venv, osn-gs --help lists train, benchmark, inspect-surface, and stream-server. The editable package install registers the console script; each subcommand delegates to the existing implementation and preserves its original options.
 - Install or refresh it with .venv\Scripts\python.exe -m pip install -e . --no-deps. See docs/worklogs/26_unified_cli.md.
+
+## 2026-07-16 Benchmark GT Renderer Folder Split
+
+- Constructor benchmark renderer exports now keep generated and GT NURBS in separate sibling folders: NURBS_output/scene and NURBS_output/scene_gt. Both use the renderer-standard filename nurbs_surface.json, so loading directories no longer combines two same-type surfaces in one snapshot. See docs/worklogs/27_benchmark_gt_folder_split.md.
