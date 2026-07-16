@@ -13,6 +13,7 @@ from osn_gs.surface.torch_nurbs import (
     fit_torch_base_curves,
     fit_torch_visible_surface,
     fit_torch_visible_surface_lsq,
+    pca_extent_aspect_ratio,
     project_torch_points_to_nurbs,
 )
 from osn_gs.surface.torch_voxel_regions import TorchVoxelSurfaceRegions, build_torch_voxel_surface_regions
@@ -61,6 +62,13 @@ class TorchPipelineConfig:
     surface_projection_chunk_size: int = 65536
     surface_projection_iterations: int = 4
     max_surface_control_points: int = 65536
+    # UV trimming: mark each patch's supported (data-backed) UV region so the
+    # rectangular NURBS chart is not drawn/measured past the observed footprint.
+    # 0 disables trimming; dilation closes small gaps between sparse UV samples.
+    # Resolution 24 / dilation 1 trims the empty chart corners without opening
+    # coverage holes on the synthetic scenes (see benchmark sweep).
+    surface_trim_resolution: int = 24
+    surface_trim_dilation: int = 1
     # Stage 2 legacy knobs. They are kept in the config for CLI compatibility,
     # but Stage 1 does not use them to create occluded geometry.
     occlusion_offset_scale: float = 0.25
@@ -148,6 +156,7 @@ class TorchOSNGSPipeline:
             indices = torch.nonzero(assigned, as_tuple=False).reshape(-1)
             diagnostics.final_gaussian_indices = indices.detach().clone()
             diagnostics.final_gaussian_uv = surface_uv[indices].detach().clone()
+        self._assign_uv_support_masks(model, surface_patches)
         return TorchPipelineState(
             model=model,
             base_curves=base_curves,
@@ -240,6 +249,11 @@ class TorchOSNGSPipeline:
             ):
                 candidates.append(patch_id)
 
+        support_masks_refreshed = 0
+        if refresh_uv and uv_refreshed and int(self.config.surface_trim_resolution) > 0:
+            self._assign_uv_support_masks(model, state.surface_patches)
+            support_masks_refreshed = len(state.surface_patches)
+
         state.surface_patch_residuals = residuals
         added_patches = 0
         corrected: list[int] = []
@@ -264,6 +278,7 @@ class TorchOSNGSPipeline:
             "corrected": corrected,
             "added_patches": added_patches,
             "uv_refreshed": uv_refreshed,
+            "support_masks_refreshed": support_masks_refreshed,
             "topology_changed": added_patches > 0,
         }
 
@@ -324,16 +339,14 @@ class TorchOSNGSPipeline:
             ):
                 continue
             target = min(base_u * base_v, remaining_budget)
-            aspect = float(base_u) / float(base_v)
-            resolution_u = max(
-                2, min(base_u, int(round((target * aspect) ** 0.5)))
+            component_points = model.get_xyz.detach()[component_indices]
+            resolution_u, resolution_v = self._target_resolution(
+                component_points, target, base_u, base_v
             )
-            resolution_v = max(2, min(base_v, int(target // resolution_u)))
             controls = resolution_u * resolution_v
             if controls > remaining_budget:
                 continue
 
-            component_points = model.get_xyz.detach()[component_indices]
             patch, _ = self._fit_visible_patch(component_points, resolution_u, resolution_v)
             new_patch_id = len(state.surface_patches)
             state.surface_patches.append(patch)
@@ -344,9 +357,37 @@ class TorchOSNGSPipeline:
                 iterations=int(self.config.surface_projection_iterations),
                 chunk_size=int(self.config.surface_projection_chunk_size),
             )
+            if int(self.config.surface_trim_resolution) > 0:
+                patch.uv_support_mask = self._uv_occupancy_mask(
+                    model.surface_uv[component_indices],
+                    int(self.config.surface_trim_resolution),
+                    max(0, int(self.config.surface_trim_dilation)),
+                )
             remaining_budget -= controls
             added += 1
         return added
+
+    @staticmethod
+    def _target_resolution(
+        points: Any, target: int, base_u: int, base_v: int
+    ) -> tuple[int, int]:
+        """Split a control-point budget into (u, v) matching the points' PCA aspect ratio.
+
+        Falls back to the global ``base_u/base_v`` aspect when there are too few
+        points to estimate a PCA extent, instead of always using the global
+        aspect for every patch regardless of its actual shape.
+        """
+
+        aspect = (
+            pca_extent_aspect_ratio(points)
+            if hasattr(points, "shape") and int(points.shape[0]) >= 2
+            else float(base_u) / float(base_v)
+        )
+        resolution_u = max(2, min(base_u, int(round((target * aspect) ** 0.5))))
+        resolution_v = max(2, min(base_v, int(round(target / resolution_u))))
+        while resolution_u * resolution_v > target and resolution_v > 2:
+            resolution_v -= 1
+        return resolution_u, resolution_v
 
     def _fit_surface_patches(
         self, curve_points: Any, regions: TorchVoxelSurfaceRegions | None
@@ -395,14 +436,10 @@ class TorchOSNGSPipeline:
             index = int(candidates[torch.argmax(targets[candidates])])
             targets[index] -= 1
 
-        aspect = float(base_u) / float(base_v)
-        resolutions: list[tuple[int, int]] = []
-        for target in targets.tolist():
-            resolution_u = max(2, min(base_u, int(round((target * aspect) ** 0.5))))
-            resolution_v = max(2, min(base_v, int(round(target / resolution_u))))
-            while resolution_u * resolution_v > target and resolution_v > 2:
-                resolution_v -= 1
-            resolutions.append((resolution_u, resolution_v))
+        resolutions: list[tuple[int, int]] = [
+            self._target_resolution(points, target, base_u, base_v)
+            for points, target in zip(groups, targets.tolist())
+        ]
 
         print(
             "OSN-GS NURBS density budget: "
@@ -492,6 +529,50 @@ class TorchOSNGSPipeline:
             iterations=int(self.config.surface_projection_iterations),
             chunk_size=int(self.config.surface_projection_chunk_size),
         )
+
+    def _assign_uv_support_masks(
+        self, model: TorchGaussianModel, patches: list[TorchNURBSSurface]
+    ) -> None:
+        """Trim each patch to the UV region actually backed by observed Gaussians.
+
+        The rectangular NURBS chart spans all of ``[0, 1]^2`` but the observed
+        points usually cover an irregular sub-region; sampling the untrimmed
+        corners draws surface where there is no data. This records, per patch, a
+        UV occupancy mask (dilated to close gaps) so downstream consumers can
+        restrict the surface to its supported footprint.
+        """
+
+        resolution = int(self.config.surface_trim_resolution)
+        if resolution <= 0:
+            return
+        dilation = max(0, int(self.config.surface_trim_dilation))
+        uv = model.surface_uv.detach()
+        cluster_ids = model.cluster_ids.detach()
+        n_patches = len(patches)
+        for patch_id, patch in enumerate(patches):
+            assigned = cluster_ids == patch_id
+            if patch_id == 0:
+                assigned = assigned | (cluster_ids < 0) | (cluster_ids >= n_patches)
+            patch.uv_support_mask = self._uv_occupancy_mask(uv[assigned], resolution, dilation)
+
+    @staticmethod
+    def _uv_occupancy_mask(uv: Any, resolution: int, dilation: int) -> Any:
+        """Boolean ``(resolution, resolution)`` mask of occupied (then dilated) UV cells."""
+
+        torch = require_torch()
+        device = uv.device
+        mask = torch.zeros((resolution, resolution), dtype=torch.bool, device=device)
+        if int(uv.numel()) == 0:
+            return mask
+        cell_u = torch.clamp((uv[:, 0] * resolution).long(), 0, resolution - 1)
+        cell_v = torch.clamp((uv[:, 1] * resolution).long(), 0, resolution - 1)
+        mask[cell_u, cell_v] = True
+        if dilation > 0:
+            pooled = torch.nn.functional.max_pool2d(
+                mask.float()[None, None], kernel_size=2 * dilation + 1, stride=1, padding=dilation
+            )
+            mask = pooled[0, 0] > 0.5
+        return mask
 
     def _point_region_ids(self, regions: TorchVoxelSurfaceRegions | None, count: int, device: Any) -> Any:
         torch = require_torch()
@@ -719,6 +800,18 @@ class TorchOSNGSPipeline:
         return uncertain_points[indices], uv[indices]
 
 
+def _uv_support_payload(surface: TorchNURBSSurface) -> dict[str, Any] | None:
+    """Serialize a patch's UV trim mask for the renderer, or ``None`` if untrimmed."""
+
+    mask = getattr(surface, "uv_support_mask", None)
+    if mask is None:
+        return None
+    return {
+        "resolution": [int(mask.shape[0]), int(mask.shape[1])],
+        "mask": mask.detach().cpu().bool().tolist(),
+    }
+
+
 def nurbs_intermediate_payload(state: TorchPipelineState) -> dict[str, Any]:
     """Build the file-savable NURBS intermediate payload (``nurbs_surface.json``).
 
@@ -740,6 +833,7 @@ def nurbs_intermediate_payload(state: TorchPipelineState) -> dict[str, Any]:
         "control_grid_shape": list(surface.control_grid.shape),
         "control_grid": surface.control_grid.detach().cpu().tolist(),
         "weights": surface.weights.detach().cpu().tolist(),
+        "uv_support": _uv_support_payload(surface),
         "base_curves": state.base_curves.control_points.detach().cpu().tolist(),
         "occlusion_curves": state.occlusion_curves.control_points.detach().cpu().tolist(),
         "patches": [
@@ -750,6 +844,7 @@ def nurbs_intermediate_payload(state: TorchPipelineState) -> dict[str, Any]:
                 "weights": patch.weights.detach().cpu().tolist(),
                 "degree_u": int(patch.degree_u),
                 "degree_v": int(patch.degree_v),
+                "uv_support": _uv_support_payload(patch),
             }
             for patch_id, patch in enumerate(state.surface_patches)
         ],

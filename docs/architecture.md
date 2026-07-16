@@ -1,6 +1,17 @@
 # OSN-GS Architecture
 
-OSN-GS는 3D Gaussian Splatting을 표면 중심(surface-centric) 구조로 확장하는 프레임워크이다. 기존 3DGS가 Gaussian primitive 자체를 장면 표현의 중심으로 최적화한다면, OSN-GS는 NURBS 기반 parametric surface를 장면의 canonical geometry로 두고 Gaussian을 그 표면에서 파생된 렌더링 샘플로 취급한다.
+OSN-GS는 3D Gaussian Splatting을 표면 중심(surface-centric) 구조로 확장하는 프레임워크이다. 기존 3DGS가 관측된 표면만 복원한다면, OSN-GS는 **관측된 Gaussian에서 NURBS parametric surface를 유도하고, 그 표면을 비관측(occluded) 영역으로 연장해 그곳에도 Gaussian을 생성**하는 것을 목표로 한다.
+
+**데이터 흐름은 단방향이다.**
+
+```text
+보이는 구조(관측 Gaussian)
+  -> NURBS 표면 유도
+  -> 보이지 않는 표면 유추
+  -> 그 표면 위에 uncertain Gaussian 생성
+```
+
+관측(certain) Gaussian은 기존 3DGS와 동일하게 **image loss만으로 최적화되며, NURBS의 영향을 받지 않는다.** NURBS는 관측 Gaussian에서 파생되는 중간 표현이고, geometry를 공급받는 대상은 오직 비관측 영역에서 새로 생성되는 uncertain Gaussian이다.
 
 핵심 목표는 단순히 누락된 Gaussian을 추가하는 것이 아니라, 관측 표면에서 추출한 구조적 prior를 이용해 비관측 영역까지 이어지는 연속적인 표면 가설을 만들고, 그 표면 위에서 Gaussian 분포를 생성, 검증, 갱신하는 것이다.
 
@@ -17,17 +28,19 @@ Scene
 
 ### Surface-Centric Representation
 
-NURBS surface는 OSN-GS의 단일한 geometric source of truth이다. Gaussian은 독립적인 geometry가 아니라 표면에서 평가된 위치와 방향을 가진 렌더링 instance로 해석한다.
+NURBS surface는 **관측 Gaussian에서 유도되는 중간 표현**이다. 관측된 표면 구조를 연속적인 parametric form으로 요약해, 비관측 영역으로 연장할 수 있게 만드는 것이 존재 이유다. 최종 출력은 여전히 Gaussian primitive이며, NURBS가 이를 대체하지 않는다.
 
 이 관점에서 다음 원칙을 따른다.
 
-- surface 수정은 Gaussian 위치와 normal을 갱신한다.
-- ADC는 geometry 자체를 바꾸는 과정이 아니라 surface 위 sampling density를 조절하는 과정이다.
+- **관측(certain) Gaussian은 NURBS의 영향을 받지 않는다.** image loss만으로 최적화되며, surface fitting term은 Gaussian 위치로 gradient를 되돌리지 않는다(관측 Gaussian은 표면의 fitting target이지 결과물이 아니다).
+- surface는 매 iteration 관측 Gaussian을 따라 갱신된다. 방향은 **Gaussian → NURBS 단방향**이다.
+- surface geometry가 위치를 공급하는 대상은 **비관측 영역에서 생성되는 uncertain Gaussian뿐이다.**
+- ADC는 관측 Gaussian에 대해 기존 3DGS와 동일하게 동작한다. surface는 uncertain Gaussian의 sampling domain을 제공한다.
 - rendering residual은 개별 Gaussian 오류에 머무르지 않고, 해당 Gaussian이 속한 surface patch와 control point를 검증하는 신호로 사용한다.
 
 ### Persistent Gaussian-Surface Binding
 
-모든 Gaussian은 자신이 어떤 surface patch와 parameter 위치에서 파생되었는지 저장한다.
+모든 Gaussian은 자신이 어떤 surface patch와 parameter 위치에 대응하는지 저장한다. 관측 Gaussian에게 이 binding은 **표면을 fitting하기 위한 대응 정보이자 residual backtracking 경로**이고, uncertain Gaussian에게는 자신이 파생된 출처다.
 
 각 Gaussian이 보관해야 하는 surface 관련 정보:
 
@@ -206,7 +219,7 @@ Rendered Pixel
 
 ## Surface-Aware Adaptive Density Control
 
-기존 3DGS의 ADC는 Gaussian primitive의 clone, split, prune으로 density를 조절한다. OSN-GS에서는 ADC를 surface 위 adaptive sampling으로 재해석한다.
+기존 3DGS의 ADC는 Gaussian primitive의 clone, split, prune으로 density를 조절한다. OSN-GS는 **관측 Gaussian에 대해서는 이 정책을 그대로 유지하고**, 비관측 영역에서 표면으로부터 생성되는 uncertain Gaussian에 한해 ADC를 surface 위 adaptive sampling으로 재해석한다.
 
 ```text
 Surface
@@ -270,14 +283,17 @@ for iteration in training_iterations:
     )
 
     image_loss = image_similarity(rendered, batch.images)
-    surface_loss = nurbs_regularization(nurbs_surface)
-    uncertainty_loss = residual_to_surface_loss(rendered, batch.images, bindings)
+    # Fits the surface to the observed Gaussians. Their positions are detached,
+    # so this never moves a certain Gaussian.
+    surface_loss = nurbs_fit_to_observed(nurbs_surface, certain_gaussians.detach())
+    # Applies to uncertain Gaussians only: they are sampled from the surface.
+    uncertainty_loss = uncertain_surface_anchor(uncertain_gaussians, nurbs_surface)
 
     total_loss = image_loss + surface_loss + uncertainty_loss
     total_loss.backward()
 
-    update_gaussian_attributes()
-    update_surface_bound_gaussian_positions()
+    update_gaussian_attributes()   # certain Gaussians: image loss only
+    update_surface_control_points()  # NURBS follows the observed Gaussians
 
     if should_analyze_residuals(iteration):
         backtrack_residuals_to_surface()

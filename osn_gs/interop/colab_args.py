@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 """Argument helpers for Colab/notebook entrypoints.
 
@@ -53,8 +53,11 @@ def build_osn_gs_train_parser() -> argparse.ArgumentParser:
     parser.add_argument("--save_iterations", nargs="*", type=int, default=[])
     parser.add_argument("--test_iterations", nargs="*", type=int, default=[])
     parser.add_argument("--densify_from_iter", type=int, default=500)
-    parser.add_argument("--densify_until_iter", type=int, default=0)
-    parser.add_argument("--densification_interval", type=int, default=0)
+    # Defaults reproduce the notebook's VRAM-safe recipe so a bare CLI run matches
+    # colab_train_3dgs.ipynb exactly. ADC is on by default (original 3DGS schedule);
+    # pass 0 to disable. See docs/README.md "Notebook/CLI Training Parity".
+    parser.add_argument("--densify_until_iter", type=int, default=15000)
+    parser.add_argument("--densification_interval", type=int, default=100)
     parser.add_argument("--densify_grad_threshold", type=float, default=0.0002)
     parser.add_argument("--adc_max_gaussians", type=int, default=0, help="Optional hard cap for Gaussian count during ADC. 0 means uncapped.")
     parser.add_argument("--adc_percent_dense", type=float, default=0.01)
@@ -85,7 +88,7 @@ def build_osn_gs_train_parser() -> argparse.ArgumentParser:
     parser.add_argument("--base_curve_count", type=int, default=8)
     parser.add_argument("--visible_surface_resolution_u", type=int, default=8)
     parser.add_argument("--visible_surface_resolution_v", type=int, default=4)
-    parser.add_argument("--visible_surface_resolution_scale", type=float, default=1.0)
+    parser.add_argument("--visible_surface_resolution_scale", type=float, default=4.0)
     parser.add_argument("--max_surface_control_points", type=int, default=65536)
     parser.add_argument("--covariance_init", type=str, default="knn", choices=("knn", "constant"), help="Initialize Gaussian covariance scales from KNN spacing or a constant fallback.")
     parser.add_argument("--covariance_knn_chunk_size", type=int, default=0, help="KNN chunk for covariance initialization. 0 auto-selects from VRAM.")
@@ -142,8 +145,6 @@ def build_osn_gs_train_parser() -> argparse.ArgumentParser:
     parser.add_argument("--progress_log_interval", type=int, default=100, help="Print training progress every N iterations. 0 disables periodic progress logs.")
     parser.add_argument("--timing_log_interval", type=int, default=100, help="Print per-stage training timing every N iterations. 0 disables periodic timing logs.")
     parser.add_argument("--stream_url", type=str, default="", help="Optional WebSocket URL for live renderer snapshots.")
-    parser.add_argument("--stream_server_host", type=str, default="127.0.0.1", help="Host for the trainer-owned local WebSocket server.")
-    parser.add_argument("--stream_server_port", type=int, default=8080, help="Loopback-only trainer WebSocket server port.")
     parser.add_argument("--stream_every", type=int, default=1, help="Broadcast every N iterations; default 1 broadcasts each iteration.")
     parser.add_argument("--stream_iterations", nargs="*", type=int, default=[], help="Exact iterations to stream.")
     parser.add_argument("--stream_max_gaussians", type=int, default=0, help="Cap streamed Gaussians. 0 streams all Gaussians.")
@@ -155,8 +156,9 @@ def build_osn_gs_train_parser() -> argparse.ArgumentParser:
     parser.add_argument("--disable_cuda_rasterizer", action="store_true")
     parser.add_argument(
         "--low_vram",
-        action="store_true",
-        help="Apply a conservative preset for 16GB-class GPUs: keep images on CPU, halve train resolution, and cap uncertain Gaussians.",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Conservative preset for 16GB-class GPUs (on by default): keep images on CPU, halve train resolution, and cap uncertain Gaussians. Pass --no-low_vram for a full-resolution run.",
     )
     return parser
 
@@ -173,4 +175,5 @@ def save_interval_from_args(args: argparse.Namespace) -> int:
 
 def output_dir_from_args(args: argparse.Namespace) -> Path:
     return Path(args.model_path)
+
 

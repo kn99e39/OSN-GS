@@ -49,6 +49,7 @@ def save_torch_checkpoint(path: str | Path, state: TorchPipelineState, extra: di
                 "degree_u": patch.degree_u,
                 "degree_v": patch.degree_v,
                 "observed_v_max": patch.observed_v_max,
+                "uv_support_mask": None if patch.uv_support_mask is None else patch.uv_support_mask.detach().cpu(),
             }
             for patch in state.surface_patches
         ],
@@ -93,11 +94,13 @@ def load_torch_checkpoint(
 
     patches = []
     for saved in payload["surface_patches"]:
+        saved_mask = saved.get("uv_support_mask")
         patches.append(TorchNURBSSurface(
             control_grid=saved["control_grid"].to(state.model.device).requires_grad_(True),
             weights=saved["weights"].to(state.model.device).requires_grad_(True),
             degree_u=int(saved["degree_u"]), degree_v=int(saved["degree_v"]),
             observed_v_max=float(saved["observed_v_max"]),
+            uv_support_mask=None if saved_mask is None else saved_mask.to(state.model.device),
         ))
     state.surface_patches = patches
     state.surface = patches[0]

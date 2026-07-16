@@ -13,18 +13,66 @@ from osn_gs.core.torch_pipeline import TorchPipelineState
 from osn_gs.utils.torch_ops import require_torch
 
 
+_SSIM_WINDOW_CACHE: dict[Any, Any] = {}
+
+
+def _ssim_window(window_size: int, sigma: float, channel: int, device: Any, dtype: Any) -> Any:
+    """Cached separable Gaussian window matching the original 3DGS SSIM."""
+
+    torch = require_torch()
+    key = (window_size, sigma, channel, str(device), str(dtype))
+    cached = _SSIM_WINDOW_CACHE.get(key)
+    if cached is not None:
+        return cached
+    coords = torch.arange(window_size, dtype=dtype, device=device) - window_size // 2
+    gauss = torch.exp(-(coords**2) / (2.0 * sigma**2))
+    gauss = gauss / gauss.sum()
+    window_2d = (gauss[:, None] @ gauss[None, :])[None, None]
+    window = window_2d.expand(channel, 1, window_size, window_size).contiguous()
+    _SSIM_WINDOW_CACHE[key] = window
+    return window
+
+
+def ssim(image: Any, target: Any, window_size: int = 11, sigma: float = 1.5) -> Any:
+    """Structural similarity, matching the original 3DGS ``utils/loss_utils.ssim``.
+
+    Accepts ``(C, H, W)`` or ``(N, C, H, W)`` and returns the mean SSIM.
+    """
+
+    torch = require_torch()
+    functional = torch.nn.functional
+    if image.dim() == 3:
+        image, target = image[None], target[None]
+    channel = int(image.shape[-3])
+    window = _ssim_window(window_size, sigma, channel, image.device, image.dtype)
+    pad = window_size // 2
+    mu1 = functional.conv2d(image, window, padding=pad, groups=channel)
+    mu2 = functional.conv2d(target, window, padding=pad, groups=channel)
+    mu1_sq, mu2_sq, mu1_mu2 = mu1 * mu1, mu2 * mu2, mu1 * mu2
+    sigma1_sq = functional.conv2d(image * image, window, padding=pad, groups=channel) - mu1_sq
+    sigma2_sq = functional.conv2d(target * target, window, padding=pad, groups=channel) - mu2_sq
+    sigma12 = functional.conv2d(image * target, window, padding=pad, groups=channel) - mu1_mu2
+    c1, c2 = 0.01**2, 0.03**2
+    ssim_map = ((2 * mu1_mu2 + c1) * (2 * sigma12 + c2)) / ((mu1_sq + mu2_sq + c1) * (sigma1_sq + sigma2_sq + c2))
+    return ssim_map.mean()
+
+
 def image_reconstruction_loss(
     image: Any,
     target: Any,
-    lambda_l1: float = 0.8,
-    lambda_mse: float = 0.2,
+    lambda_dssim: float = 0.2,
 ) -> tuple[Any, Any]:
-    """렌더 이미지와 GT 이미지의 기본 reconstruction loss."""
+    """렌더 이미지와 GT 이미지의 reconstruction loss (original 3DGS와 동일 구성).
 
-    # L1은 색상 절대 오차에 robust하고, MSE는 PSNR 계산과 연결된다.
+    ``(1 - lambda_dssim) * L1 + lambda_dssim * (1 - SSIM)``. D-SSIM(구조 유사도)이
+    3DGS 품질의 선명도를 좌우한다. MSE는 loss에 직접 쓰지 않고 PSNR 계산용으로만
+    함께 반환한다.
+    """
+
     l1 = (image - target).abs().mean()
     mse = (image - target).square().mean()
-    return lambda_l1 * l1 + lambda_mse * mse, mse
+    dssim = 1.0 - ssim(image, target)
+    return (1.0 - lambda_dssim) * l1 + lambda_dssim * dssim, mse
 
 
 def nurbs_surface_loss(
@@ -32,7 +80,14 @@ def nurbs_surface_loss(
     weight: float = 0.01,
     max_patches: int = 0,
 ) -> Any:
-    """Fit persistent NURBS patches with a round-robin patch minibatch.
+    """Fit persistent NURBS patches to the observed Gaussians (one-way).
+
+    Direction matters: the visible (certain) Gaussians are the observation and
+    the NURBS is the derived intermediate. This term therefore pulls the surface
+    toward the Gaussians and never the reverse -- the Gaussian positions are
+    detached, so visible Gaussians stay optimized by the image loss alone, as in
+    baseline 3DGS. Surface geometry only supplies positions to *uncertain*
+    Gaussians sampled on inferred/occluded regions (``uncertain_anchor_loss``).
 
     A zero budget retains the full-patch loss. A positive budget evaluates a
     deterministic rotating subset, so large multi-patch scenes stay surface-aware
@@ -68,7 +123,9 @@ def nurbs_surface_loss(
     if int(indices.numel()) == 0:
         return weight * smoothness
 
-    xyz = state.model.get_xyz[indices]
+    # Detached: the observed Gaussians are the fitting target for the surface,
+    # so no gradient from this term may flow back into their positions.
+    xyz = state.model.get_xyz[indices].detach()
     uv = state.model.surface_uv[indices]
     patch_ids = state.model.surface_patch_ids[indices]
     active_ids = torch.tensor(

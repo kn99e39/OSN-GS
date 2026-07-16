@@ -171,6 +171,26 @@ class TorchNURBSSurface:
     degree_v: int = 2
     # Stage 1 visible-only surface는 전체 v domain이 관측 surface다.
     observed_v_max: float = 1.0
+    # Optional UV trimming mask (R, R) over [0, 1]^2: True where the patch is
+    # supported by observed data. ``None`` means the whole domain is valid.
+    # Consumers (renderer export, support metrics) restrict the surface to the
+    # supported cells so it is not drawn/measured where there is no data.
+    uv_support_mask: Any | None = None
+
+    def support(self, uv: Any) -> Any:
+        """Boolean mask of whether each ``uv`` lies in the trimmed (supported) domain."""
+
+        torch = require_torch()
+        uv = torch.as_tensor(uv, dtype=self.control_grid.dtype, device=self.control_grid.device)
+        if uv.ndim == 1:
+            uv = uv[None, :]
+        if self.uv_support_mask is None:
+            return torch.ones((uv.shape[0],), dtype=torch.bool, device=uv.device)
+        mask = torch.as_tensor(self.uv_support_mask, dtype=torch.bool, device=uv.device)
+        res_u, res_v = int(mask.shape[0]), int(mask.shape[1])
+        cell_u = torch.clamp((uv[:, 0] * res_u).long(), 0, res_u - 1)
+        cell_v = torch.clamp((uv[:, 1] * res_v).long(), 0, res_v - 1)
+        return mask[cell_u, cell_v]
 
     def _basis_tables(self, uv: Any) -> tuple[Any, Any, Any | None, Any | None]:
         """Return ``(basis_u, basis_v, dbasis_u, dbasis_v)`` for query ``uv``.
@@ -343,6 +363,27 @@ def pca_parameterize_points(points: Any) -> Any:
     coord_min = coords.min(dim=0).values
     span = torch.clamp(coords.max(dim=0).values - coord_min, min=1e-6)
     return torch.clamp((coords - coord_min) / span, 0.0, 1.0)
+
+
+def pca_extent_aspect_ratio(points: Any, min_ratio: float = 0.1, max_ratio: float = 10.0) -> float:
+    """Return the PCA in-plane extent[0]/extent[1] ratio of ``points``, clamped.
+
+    Uses the same PCA axes as :func:`pca_parameterize_points` so the reported
+    aspect ratio matches what that function normalizes away.
+    """
+
+    torch = require_torch()
+    points = torch.as_tensor(points, dtype=torch.float32, device=points.device if hasattr(points, "device") else None)
+    if int(points.shape[0]) < 2:
+        return 1.0
+    centered = points - points.mean(dim=0, keepdim=True)
+    _, _, vh = torch.linalg.svd(centered, full_matrices=False)
+    axis_u = vh[0]
+    axis_v = vh[1] if vh.shape[0] > 1 else _orthogonal_axis(axis_u)
+    coords = centered @ torch.stack([axis_u, axis_v], dim=1)
+    extent = coords.max(dim=0).values - coords.min(dim=0).values
+    ratio = float(extent[0] / extent[1].clamp_min(1e-6))
+    return max(min_ratio, min(max_ratio, ratio))
 
 
 def fit_torch_visible_surface(

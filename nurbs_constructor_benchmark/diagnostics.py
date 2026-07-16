@@ -51,13 +51,14 @@ def summarize(state: Any) -> list[dict[str, Any]]:
             stage_surface = TorchNURBSSurface(round_diag.control_grid_after_lsq.to(patch.control_grid.device), torch.ones_like(patch.weights), patch.degree_u, patch.degree_v)
             residual = (stage_surface.evaluate(round_diag.uv_after_footpoint.to(patch.control_grid.device)) - point).norm(dim=1)
             stages.append({"stage": f"round_{index}", "grid": _grid_metrics(round_diag.control_grid_after_lsq), "uv_support": _uv_support(round_diag.uv_after_footpoint), "fit_rms": float(residual.square().mean().sqrt().cpu()), "mapping": _mapping_metrics(stage_surface)})
-        out.append({"patch_id": patch_id, "fit_point_count": int(point.shape[0]), "point_weights": _num(diag.point_weights), "initial_uv": _num(diag.initial_uv), "idw_seed_control_grid": _num(diag.idw_seed_control_grid), "rounds": _num(diag.rounds), "final_control_grid": _num(diag.final_control_grid), "final_weights": _num(diag.final_weights), "final_gaussian_indices": _num(diag.final_gaussian_indices), "final_gaussian_uv": _num(diag.final_gaussian_uv), "stages": stages, "final_mapping": _mapping_metrics(patch)})
+        out.append({"patch_id": patch_id, "fit_point_count": int(point.shape[0]), "point_weights": _num(diag.point_weights), "initial_uv": _num(diag.initial_uv), "idw_seed_control_grid": _num(diag.idw_seed_control_grid), "rounds": _num(diag.rounds), "final_control_grid": _num(diag.final_control_grid), "final_weights": _num(diag.final_weights), "final_gaussian_indices": _num(diag.final_gaussian_indices), "final_gaussian_uv": _num(diag.final_gaussian_uv), "uv_support_mask": _num(getattr(patch, "uv_support_mask", None)), "stages": stages, "final_mapping": _mapping_metrics(patch)})
     return out
 
 def export(state: Any, path: Path) -> list[dict[str, Any]]:
     result = summarize(state)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps({"patches": result}, indent=2), encoding="utf-8")
+    path.with_name("uv_support.json").write_text(json.dumps({"patches": result}, indent=2), encoding="utf-8")
     panels = []
     for item in result:
         uv = item["initial_uv"]
