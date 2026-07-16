@@ -19,3 +19,6 @@ outputs/
 *.tar
 *.tar.gz
 *.tgz
+
+# Generated synthetic NURBS benchmark reports, renderer payloads, and diagnostics
+nurbs_constructor_benchmark/results/
