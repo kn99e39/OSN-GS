@@ -80,7 +80,14 @@ def nurbs_surface_loss(
     weight: float = 0.01,
     max_patches: int = 0,
 ) -> Any:
-    """Fit persistent NURBS patches with a round-robin patch minibatch.
+    """Fit persistent NURBS patches to the observed Gaussians (one-way).
+
+    Direction matters: the visible (certain) Gaussians are the observation and
+    the NURBS is the derived intermediate. This term therefore pulls the surface
+    toward the Gaussians and never the reverse -- the Gaussian positions are
+    detached, so visible Gaussians stay optimized by the image loss alone, as in
+    baseline 3DGS. Surface geometry only supplies positions to *uncertain*
+    Gaussians sampled on inferred/occluded regions (``uncertain_anchor_loss``).
 
     A zero budget retains the full-patch loss. A positive budget evaluates a
     deterministic rotating subset, so large multi-patch scenes stay surface-aware
@@ -116,7 +123,9 @@ def nurbs_surface_loss(
     if int(indices.numel()) == 0:
         return weight * smoothness
 
-    xyz = state.model.get_xyz[indices]
+    # Detached: the observed Gaussians are the fitting target for the surface,
+    # so no gradient from this term may flow back into their positions.
+    xyz = state.model.get_xyz[indices].detach()
     uv = state.model.surface_uv[indices]
     patch_ids = state.model.surface_patch_ids[indices]
     active_ids = torch.tensor(

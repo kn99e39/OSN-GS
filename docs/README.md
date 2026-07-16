@@ -278,6 +278,13 @@ The workspace already contains a reference `gaussian-splatting` checkout, so tho
 - Per-iteration CUDA-to-CPU metric extraction currently serializes the training stream. Full GPU-to-CPU streaming snapshots and periodic global surface maintenance are checkpoint-bound costs.
 - See docs/worklogs/11_training_bottleneck_audit.md.
 
+## 2026-07-15 Direction Correction: NURBS must not move visible Gaussians
+
+- **Corrects a wrong premise that had propagated from `docs/architecture.md` into the code.** The doc described the NURBS as the "single geometric source of truth" whose updates move Gaussian positions. The actual intent is the opposite and one-way: visible structure -> derive NURBS -> infer the occluded surface -> generate Gaussians there. Visible/certain Gaussians are optimized by the image loss alone and must never be pulled by the surface.
+- `nurbs_surface_loss` selected `certain = ~is_uncertain` and let gradient flow back into their `_xyz`, so the surface was dragging visible Gaussians. Fixed by detaching the observed Gaussian positions: the term now fits the surface to the Gaussians only. Verified: grad to `model._xyz` is 0 while grad to `control_grid` is > 0. Per-iteration NURBS updates are retained (intended).
+- `docs/architecture.md` rewritten accordingly (data-flow, Core Principles, ADC, training-loop pseudocode). Prior worklogs are intentionally left as-is; **`docs/worklogs/19_nurbs_direction_correction.md` states the go-forward direction and takes precedence over any conflicting older text.**
+- This also removes, by design, the `TODO.md` candidate "NURBS anchor constrains certain Gaussians". Note `lambda_surface` now means "how fast the surface follows the Gaussians", not how hard Gaussians are constrained.
+
 ## 2026-07-15 D-SSIM Image Loss
 
 - OSN-GS image loss now matches original 3DGS: `(1 - lambda_dssim)*L1 + lambda_dssim*(1 - SSIM)` with `lambda_dssim=0.2` (was `0.8*L1 + 0.2*MSE`, no SSIM). This was the #1 suspected cause of the baseline quality gap in `TODO.md`.
@@ -359,3 +366,8 @@ The local Graphdeco notebook cells read/write patched Python sources with explic
 - Added deterministic triangle, u_shape, crescent, and planar_hole scenes with analytic GT support predicates and in-domain Gaussian sampling.
 - report.json now includes shared-XY support precision/recall/IoU, coverage/unsupported/uncovered, components/holes/Euler topology mismatch, boundary Chamfer/Hausdorff, and artifact paths.
 - See docs/worklogs/24_support_domain_benchmark.md.
+
+## 2026-07-16 Notebook Train MSVC Environment
+
+- The OSN-GS Train cell now captures vcvars64.bat into the train.py subprocess environment on Windows, including PATH, INCLUDE, and LIB. This fixes the CUDA rasterizer preflight failure where cl.exe was absent despite the notebook extension-build cell succeeding.
+- The subprocess environment is verified with where cl before training starts. See docs/worklogs/25_notebook_train_msvc_env.md.

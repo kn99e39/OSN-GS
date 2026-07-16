@@ -2,15 +2,9 @@
 
 # TODO: baseline 3DGS 대비 Scene 품질 하락 — 남은 후보
 
-동일 데이터셋 10k에서 OSN-GS가 원본 Graphdeco 3DGS(`gaussian-splatting/`)보다 품질이 낮은 문제. 실행환경 노트북+CUDA(ADC 정상). 정적 코드 대조로 후보를 좁혔고, **최우선 원인이던 image loss의 SSIM 부재는 해결함** — 원본과 동일한 `(1-0.2)·L1 + 0.2·(1-SSIM)` 도입, SSIM은 원본 3DGS와 수치 일치(`docs/worklogs/18_ssim_image_loss.md`). 아래는 남은 2차 후보(미검증).
+동일 데이터셋 10k에서 OSN-GS가 원본 Graphdeco 3DGS(`gaussian-splatting/`)보다 품질이 낮은 문제. 실행환경 노트북+CUDA(ADC 정상). 정적 코드 대조로 후보를 좁혔고, **최우선 원인이던 image loss의 SSIM 부재는 해결함** — 원본과 동일한 `(1-0.2)·L1 + 0.2·(1-SSIM)` 도입, SSIM은 원본 3DGS와 수치 일치(`docs/worklogs/18_ssim_image_loss.md`). NURBS anchor가 보이는 Gaussian을 구속하던 문제도 방향성 정정으로 해소했다(`docs/worklogs/19_nurbs_direction_correction.md`). 아래는 남은 2차 후보(미검증).
 
-## 남은 후보 1 — NURBS surface anchor loss가 certain Gaussian 위치를 구속 (OSN-GS 고유, 2차)
-
-- `nurbs_surface_loss`가 매 iteration certain Gaussian에 대해 `(gaussian_xyz - patch.evaluate(uv))²`를 최소화한다(`osn_gs/losses/torch_losses.py`, `nurbs_surface_loss`). gradient가 Gaussian `_xyz`로도 흘러 Gaussian을 NURBS 표면 쪽으로 끌어당긴다. `lambda_surface=0.01`(`torch_trainer.py`).
-- baseline에는 없는 제약. NURBS fit이 부정확한 영역에서는 이 anchor가 이미지 최적화와 충돌해 fidelity를 떨어뜨릴 수 있다.
-- 방향: ablation으로 `lambda_surface=0`과 비교. 품질이 회복되면 이 항을 약화하거나, image residual이 큰 Gaussian에는 anchor 가중치를 낮추는 방식 검토. **단, NURBS는 프레임워크 핵심이라 완전 제거가 아니라 가중/스케줄 조정 방향**(설계 제약은 `docs/architecture.md` 2026-07-10 참고).
-
-## 남은 후보 2 — 학습 뷰 샘플링이 무작위가 아니라 결정론적 순환 (2차)
+## 남은 후보 1 — 학습 뷰 샘플링이 무작위가 아니라 결정론적 순환 (2차)
 
 - 원본: 매 iteration `randint`로 무작위 카메라, 스택 소진 시 재셔플(`gaussian-splatting/train.py:89-94`).
 - 우리: `(iteration + offset) % count`로 순차 순환(`osn_gs/data/torch_scene.py:38`). gradient 다양성이 줄고, 100(densify)/3000(opacity reset) 같은 주기 이벤트와 카메라 순서가 고정 위상으로 맞물려 편향이 생길 수 있다.
