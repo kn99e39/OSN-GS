@@ -2,7 +2,7 @@
 
 # TODO: baseline 3DGS 대비 Scene 품질 하락 — 남은 후보
 
-동일 데이터셋 10k에서 OSN-GS가 원본 Graphdeco 3DGS(`gaussian-splatting/`)보다 품질이 낮은 문제. 실행환경 노트북+CUDA(ADC 정상). 정적 코드 대조로 후보를 좁혔고, **최우선 원인이던 image loss의 SSIM 부재는 해결함** — 원본과 동일한 `(1-0.2)·L1 + 0.2·(1-SSIM)` 도입, SSIM은 원본 3DGS와 수치 일치(`docs/worklogs/18_ssim_image_loss.md`). 아래는 남은 2차 후보(미검증)와 검증 계획.
+동일 데이터셋 10k에서 OSN-GS가 원본 Graphdeco 3DGS(`gaussian-splatting/`)보다 품질이 낮은 문제. 실행환경 노트북+CUDA(ADC 정상). 정적 코드 대조로 후보를 좁혔고, **최우선 원인이던 image loss의 SSIM 부재는 해결함** — 원본과 동일한 `(1-0.2)·L1 + 0.2·(1-SSIM)` 도입, SSIM은 원본 3DGS와 수치 일치(`docs/worklogs/18_ssim_image_loss.md`). 아래는 남은 2차 후보(미검증).
 
 ## 남은 후보 1 — NURBS surface anchor loss가 certain Gaussian 위치를 구속 (OSN-GS 고유, 2차)
 
@@ -15,12 +15,6 @@
 - 원본: 매 iteration `randint`로 무작위 카메라, 스택 소진 시 재셔플(`gaussian-splatting/train.py:89-94`).
 - 우리: `(iteration + offset) % count`로 순차 순환(`osn_gs/data/torch_scene.py:38`). gradient 다양성이 줄고, 100(densify)/3000(opacity reset) 같은 주기 이벤트와 카메라 순서가 고정 위상으로 맞물려 편향이 생길 수 있다.
 - 방향: iteration seed 기반 무작위 순열 샘플링(without replacement, epoch 셔플)로 교체.
-
-## 검증 계획
-
-1. **SSIM 적용 상태로 baseline vs OSN-GS 10k 재학습** → PSNR/SSIM 격차가 얼마나 줄었는지 측정. **공정 비교: 해상도 맞춤 필수** — OSN-GS를 `--no-low_vram`(전해상도)로 돌리거나 baseline에 `-r`로 OSN-GS 해상도를 맞춘다(`docs/worklogs/14`, `15`).
-2. 남은 후보 1은 `lambda_surface=0` ablation으로 기여도 격리.
-3. 부수 확인: run 로그의 `OSN-GS rasterizer backend:`가 CUDA인지(`osn_gs/render/gaussian_rasterizer.py`). fallback이면 screen-space gradient 미제공으로 ADC가 왜곡돼 비교가 apples-to-apples가 아니게 된다.
 
 ## 참고 (원인 아님, 원본과 동치 확인됨)
 
