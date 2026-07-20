@@ -437,6 +437,8 @@ class TorchOSNGSTrainer:
             rotation = model.get_rotation[idx].detach().float().cpu()
             opacity = model.get_opacity[idx].detach().float().reshape(-1).cpu()
             color = torch.clamp(sh_dc_to_rgb(model.get_features_dc[idx, 0, :].detach().float()), 0.0, 1.0).cpu()
+            sh_degree = int(model.active_sh_degree)
+            sh_coefficients = model.get_features[idx, : (sh_degree + 1) ** 2, :].detach().float().cpu()
 
         count = int(xyz.shape[0])
         payload: dict[str, Any] = {
@@ -449,6 +451,8 @@ class TorchOSNGSTrainer:
             "colors": color.reshape(-1),
             "opacities": opacity.reshape(-1),
             "rotations": rotation.reshape(-1),
+            "shDegree": sh_degree,
+            "shCoefficients": sh_coefficients.reshape(-1),
             "metadata": {
                 "source": "osn-gs-training-stream",
                 "totalCount": total_count,
@@ -753,4 +757,3 @@ class TorchOSNGSTrainer:
             handle.write(f"uncertain={int(state.model.is_uncertain.sum().item())}\n")
             handle.write(f"cuda_rasterizer={self.rasterizer.has_cuda_backend}\n")
             handle.write("nurbs_intermediate=nurbs_surface.json\n")
-

@@ -136,6 +136,7 @@ The workspace already contains a reference `gaussian-splatting` checkout, so tho
 ## 2026-07-06 Streaming NURBS Snapshots
 
 - OSN-GS training can now stream packed Gaussian snapshots over WebSocket directly from `train.py`.
+- 2026-07-20: Stream snapshots now include `shDegree` and coefficient-major RGB `shCoefficients` for the active SH degree, so the WebGPU renderer can reproduce view-dependent color in Gaussian Composition. Degree-3 payloads are substantially larger than prior DC-RGB snapshots; use a lower stream cadence or `stream_max_gaussians` when live streaming becomes bandwidth-bound. See `docs/worklogs/29_renderer_sh_streaming.md`.
 - Streamed snapshots can include the visible NURBS intermediate as `nurbs_surface`; the payload is sent when the surface is first available or rebuilt.
 - Notebook OSN-GS training exposes streaming knobs and can disable slow PLY/NURBS/checkpoint file output when using the renderer stream.
 
