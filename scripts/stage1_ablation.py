@@ -2,7 +2,7 @@
 
 Runs the constructor benchmark over the required config matrix on the required
 scenes, then writes a per-run/per-scene summary table (JSON + Markdown) so the
-legacy vs. voxel-per-patch comparison is one file.
+boundary-first vs. voxel-per-patch comparison is one file.
 
 Usage (repo root):
     python scripts/stage1_ablation.py [--output nurbs_constructor_benchmark/results/stage1_ablation]
@@ -28,8 +28,9 @@ SCENES = [
 
 # name -> (extra CLI args, export renderer output?)
 RUNS: dict[str, tuple[list[str], bool]] = {
-    # 1. legacy constructor (unchanged production path)
-    "legacy": ([], True),
+    # 1. boundary_first constructor (default; the legacy path is no longer
+    #    selectable in this benchmark, see nurbs_constructor_benchmark/runner.py)
+    "boundary_first": ([], True),
     # 2. voxel-per-patch, voxel support mask OFF (untrimmed charts)
     "stage1_mask_off": (["--constructor", "voxel_patch_stage1", "--stage1-support", "none"], False),
     # 3a. voxel-per-patch, exact plane-AABB voxel support mask (polygon only)

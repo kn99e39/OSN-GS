@@ -444,12 +444,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--voxel-grid", type=int, default=6)
     parser.add_argument(
         "--constructor",
-        choices=("legacy", "voxel_patch_stage1", "boundary_first"),
-        default="legacy",
+        choices=("voxel_patch_stage1", "boundary_first"),
+        default="boundary_first",
         help=(
-            "NURBS constructor architecture. 'legacy' is the unchanged production path. "
-            "'boundary_first' runs the Phase 1-4 component/boundary/topology-routed-chart "
-            "pipeline (OSN_GS_Final_Boundary_First_NURBS_Direction.md); see the --bf-* options."
+            "NURBS constructor architecture. 'boundary_first' (default) runs the Phase 1-4 "
+            "component/boundary/topology-routed-chart pipeline "
+            "(OSN_GS_Final_Boundary_First_NURBS_Direction.md); see the --bf-* options. "
+            "'voxel_patch_stage1' is the Stage 1 ablation baseline, kept for comparison only. "
+            "The legacy pipeline is retired from this benchmark and cannot be selected here."
         ),
     )
     parser.add_argument("--voxel-min-count", type=int, default=10, help="[stage1] Minimum raw Gaussian count for an active leaf voxel.")
