@@ -22,3 +22,6 @@ outputs/
 
 # Generated synthetic NURBS benchmark reports, renderer payloads, and diagnostics
 nurbs_constructor_benchmark/results/
+
+# Editable-install metadata
+osn_gs.egg-info/
