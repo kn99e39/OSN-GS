@@ -12,6 +12,8 @@ import torch
 
 from osn_gs.core.torch_pipeline import TorchOSNGSPipeline, TorchPipelineConfig, nurbs_intermediate_payload
 
+from .boundary_first import construct_boundary_first
+from .boundary_first import renderer_payload as boundary_first_renderer_payload
 from .diagnostics import export as export_construction_diagnostics
 from .ground_truth import gt_nurbs_payload
 from .metrics import (
@@ -255,7 +257,7 @@ def evaluate_scene(
     device: str,
     export_dir: Path | None = None,
 ) -> dict[str, Any]:
-    """Construct with the production pipeline and evaluate against scene truth."""
+    """Construct with the production pipeline (``legacy``/``voxel_patch_stage1``) and score against scene truth."""
 
     import time
 
@@ -263,10 +265,76 @@ def evaluate_scene(
     construct_start = time.perf_counter()
     state = pipeline.initialize(scene.points, scene.colors)
     construct_seconds = time.perf_counter() - construct_start
-    diagnostics_dir = export_dir.parent / "NURBS_diagnostics" / scene.name if export_dir is not None else None
-    construction_diagnostics = export_construction_diagnostics(state, diagnostics_dir / "construction_diagnostics.json") if diagnostics_dir is not None else []
     if export_dir is not None:
         export_renderer_output(scene, state, export_dir)
+    return score_state(scene, state, construct_seconds, export_dir)
+
+
+def evaluate_scene_boundary_first(
+    scene: SyntheticGaussianScene,
+    args: argparse.Namespace,
+    export_dir: Path | None = None,
+) -> dict[str, Any]:
+    """Construct with the boundary-first Phase 1-4 pipeline and score against scene truth.
+
+    Reuses ``score_state`` -- the exact same scoring body as
+    ``legacy``/``voxel_patch_stage1`` -- so all three constructors land in one
+    ``report.json`` with directly comparable numbers, instead of separate
+    per-phase report scripts.
+    """
+
+    import time
+
+    construct_start = time.perf_counter()
+    state, payload_patches = construct_boundary_first(
+        scene,
+        normal_threshold_degrees=args.bf_normal_threshold_degrees,
+        offset_threshold_ratio=args.bf_offset_threshold_ratio,
+        boundary_resolution=args.bf_boundary_resolution,
+        density_threshold=args.bf_density_threshold,
+        coarse_gap_closing_cells=args.bf_coarse_gap_closing_cells,
+        annulus_segments=args.bf_annulus_segments,
+        export_dir=export_dir,
+    )
+    construct_seconds = time.perf_counter() - construct_start
+    if export_dir is not None:
+        from .boundary_first import write_point_cloud_ply
+
+        scene_dir = export_dir / scene.name
+        gt_dir = export_dir / f"{scene.name}_gt"
+        scene_dir.mkdir(parents=True, exist_ok=True)
+        gt_dir.mkdir(parents=True, exist_ok=True)
+        write_point_cloud_ply(scene, scene_dir / "point_cloud.ply")
+        write_point_cloud_ply(scene, gt_dir / "point_cloud.ply")
+        (scene_dir / "nurbs_surface.json").write_text(
+            json.dumps(boundary_first_renderer_payload(scene.name, payload_patches), indent=2), encoding="utf-8"
+        )
+        (gt_dir / "nurbs_surface.json").write_text(
+            json.dumps(gt_nurbs_payload(scene), indent=2), encoding="utf-8"
+        )
+    result = score_state(scene, state, construct_seconds, export_dir=None)
+    result["boundary_first"] = {
+        "component_count": state.component_count,
+        "per_component": state.per_component,
+    }
+    return result
+
+
+def score_state(
+    scene: SyntheticGaussianScene,
+    state: Any,
+    construct_seconds: float,
+    export_dir: Path | None = None,
+) -> dict[str, Any]:
+    """Score any duck-typed state (``surface_patches`` + ``model.cluster_ids``/``.surface_uv``/``.get_xyz``)
+    against scene truth. Shared by every constructor so numbers are directly comparable."""
+
+    diagnostics_dir = export_dir.parent / "NURBS_diagnostics" / scene.name if export_dir is not None else None
+    construction_diagnostics = (
+        export_construction_diagnostics(state, diagnostics_dir / "construction_diagnostics.json")
+        if diagnostics_dir is not None and getattr(state, "surface_fit_diagnostics", None) is not None
+        else []
+    )
     points = state.model.get_xyz.detach()
     anchors = torch.empty_like(points)
     for patch_id, patch in enumerate(state.surface_patches):
@@ -275,7 +343,16 @@ def evaluate_scene(
             anchors[mask] = patch.evaluate(state.model.surface_uv[mask]).detach()
     invalid = (state.model.cluster_ids < 0) | (state.model.cluster_ids >= len(state.surface_patches))
     if bool(invalid.any()):
-        anchors[invalid] = state.surface.evaluate(state.model.surface_uv[invalid]).detach()
+        # Constructors with a single coarse fallback surface (legacy/Stage 1)
+        # score unassigned points against it. Boundary-first has no such
+        # surface (unassigned points are components the hierarchy simply
+        # never covered) -- score them as zero residual so they only show up
+        # via `unassigned_gaussians`/`fit_rms_assigned`, not a fabricated
+        # fallback-surface distance.
+        if getattr(state, "surface", None) is not None:
+            anchors[invalid] = state.surface.evaluate(state.model.surface_uv[invalid]).detach()
+        else:
+            anchors[invalid] = points[invalid]
     fit_distances = (points - anchors).norm(dim=1)
 
     surface_residuals, normal_errors = [], []
@@ -367,9 +444,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--voxel-grid", type=int, default=6)
     parser.add_argument(
         "--constructor",
-        choices=("legacy", "voxel_patch_stage1"),
+        choices=("legacy", "voxel_patch_stage1", "boundary_first"),
         default="legacy",
-        help="NURBS constructor architecture. 'legacy' is the unchanged production path.",
+        help=(
+            "NURBS constructor architecture. 'legacy' is the unchanged production path. "
+            "'boundary_first' runs the Phase 1-4 component/boundary/topology-routed-chart "
+            "pipeline (OSN_GS_Final_Boundary_First_NURBS_Direction.md); see the --bf-* options."
+        ),
     )
     parser.add_argument("--voxel-min-count", type=int, default=10, help="[stage1] Minimum raw Gaussian count for an active leaf voxel.")
     parser.add_argument("--voxel-max-count", type=int, default=150, help="[stage1] Raw count above which a voxel subdivides.")
@@ -386,6 +467,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--stage1-density-bandwidth", type=float, default=2.0, help="[stage1-F] Adaptive KDE bandwidth as a multiple of each sample's own UV NN spacing.")
     parser.add_argument("--stage1-density-threshold", type=float, default=2.0, help="[stage1-F] Absolute support level in effective-neighbor units.")
     parser.add_argument("--no-stage1-boundary-refinement", action="store_true", help="[stage1-F] Disable density boundary refinement (voxel_density falls back to polygon-only).")
+    parser.add_argument("--bf-normal-threshold-degrees", type=float, default=40.0, help="[boundary_first] Phase 1 leaf-merge normal-angle tolerance.")
+    parser.add_argument("--bf-offset-threshold-ratio", type=float, default=0.5, help="[boundary_first] Phase 1 leaf-merge coplanarity tolerance.")
+    parser.add_argument("--bf-boundary-resolution", type=int, default=64, help="[boundary_first] Phase 2 per-component UV raster resolution.")
+    parser.add_argument("--bf-density-threshold", type=float, default=3.0, help="[boundary_first] Phase 2/3 KDE support threshold, tuned against the rendered/trimmed surface (see docs/worklogs/30).")
+    parser.add_argument("--bf-coarse-gap-closing-cells", type=int, default=2, help="[boundary_first] Phase 2 curved-component polygon-reprojection seam-closing dilation.")
+    parser.add_argument("--bf-annulus-segments", type=int, default=8, help="[boundary_first] Phase 4 O-grid wedge count for annulus-topology components.")
     parser.add_argument("--resolution-u", type=int, default=8)
     parser.add_argument("--resolution-v", type=int, default=4)
     parser.add_argument("--fit-mode", choices=("lsq", "idw"), default="lsq")
@@ -410,35 +497,41 @@ def main(argv: list[str] | None = None) -> int:
     if args.device == "cuda" and not torch.cuda.is_available():
         raise SystemExit("--device cuda was requested but CUDA is unavailable.")
     names = list(SCENE_NAMES) if "all" in args.scenes else args.scenes
-    config = TorchPipelineConfig(
-        base_curve_count=4,
-        visible_surface_resolution_u=max(2, args.resolution_u),
-        visible_surface_resolution_v=max(2, args.resolution_v),
-        surface_fit_mode=args.fit_mode,
-        use_voxel_surface_regions=not args.disable_voxel,
-        voxel_grid_resolution=max(2, args.voxel_grid),
-        adaptive_voxel_density=args.adaptive_voxel,
-        voxel_max_subdivision_depth=1 if args.adaptive_voxel else 0,
-        max_surface_control_points=4096,
-        nurbs_constructor_mode=args.constructor,
-        voxel_min_gaussian_count=max(1, args.voxel_min_count),
-        voxel_max_gaussian_count=max(1, args.voxel_max_count),
-        voxel_max_depth=max(0, args.voxel_max_depth),
-        voxel_min_size=max(0.0, args.voxel_min_size),
-        stage1_support_mode=args.stage1_support,
-        stage1_observations_per_control=max(0.1, args.stage1_obs_per_control),
-        stage1_boundary_refinement_enabled=not args.no_stage1_boundary_refinement,
-        stage1_boundary_density_resolution=max(4, args.stage1_density_resolution),
-        stage1_boundary_density_bandwidth=max(0.1, args.stage1_density_bandwidth),
-        stage1_boundary_density_threshold=max(0.0, args.stage1_density_threshold),
-        **({"surface_trim_resolution": args.trim_resolution} if args.trim_resolution is not None else {}),
-        **({"surface_trim_dilation": args.trim_dilation} if args.trim_dilation is not None else {}),
-    )
     export_dir = None if args.skip_renderer_export else args.output / "NURBS_output"
-    results = [
-        evaluate_scene(make_scene(name, args.points, args.seed, args.noise_std), config, args.device, export_dir)
-        for name in names
-    ]
+    if args.constructor == "boundary_first":
+        results = [
+            evaluate_scene_boundary_first(make_scene(name, args.points, args.seed, args.noise_std), args, export_dir)
+            for name in names
+        ]
+    else:
+        config = TorchPipelineConfig(
+            base_curve_count=4,
+            visible_surface_resolution_u=max(2, args.resolution_u),
+            visible_surface_resolution_v=max(2, args.resolution_v),
+            surface_fit_mode=args.fit_mode,
+            use_voxel_surface_regions=not args.disable_voxel,
+            voxel_grid_resolution=max(2, args.voxel_grid),
+            adaptive_voxel_density=args.adaptive_voxel,
+            voxel_max_subdivision_depth=1 if args.adaptive_voxel else 0,
+            max_surface_control_points=4096,
+            nurbs_constructor_mode=args.constructor,
+            voxel_min_gaussian_count=max(1, args.voxel_min_count),
+            voxel_max_gaussian_count=max(1, args.voxel_max_count),
+            voxel_max_depth=max(0, args.voxel_max_depth),
+            voxel_min_size=max(0.0, args.voxel_min_size),
+            stage1_support_mode=args.stage1_support,
+            stage1_observations_per_control=max(0.1, args.stage1_obs_per_control),
+            stage1_boundary_refinement_enabled=not args.no_stage1_boundary_refinement,
+            stage1_boundary_density_resolution=max(4, args.stage1_density_resolution),
+            stage1_boundary_density_bandwidth=max(0.1, args.stage1_density_bandwidth),
+            stage1_boundary_density_threshold=max(0.0, args.stage1_density_threshold),
+            **({"surface_trim_resolution": args.trim_resolution} if args.trim_resolution is not None else {}),
+            **({"surface_trim_dilation": args.trim_dilation} if args.trim_dilation is not None else {}),
+        )
+        results = [
+            evaluate_scene(make_scene(name, args.points, args.seed, args.noise_std), config, args.device, export_dir)
+            for name in names
+        ]
     failures = [
         result["scene"] for result in results
         if not result["finite"]
@@ -448,7 +541,12 @@ def main(argv: list[str] | None = None) -> int:
         or (args.max_extrapolation is not None and result["ground_truth"]["support_extrapolation_fraction"] > args.max_extrapolation)
         or (args.min_topology_ari is not None and result["ground_truth"]["topology_label_ari"] < args.min_topology_ari)
     ]
-    report = {"config": asdict(config), "run": vars(args) | {"output": str(args.output)}, "results": results, "failures": failures}
+    report = {
+        "config": asdict(config) if args.constructor != "boundary_first" else None,
+        "run": vars(args) | {"output": str(args.output)},
+        "results": results,
+        "failures": failures,
+    }
     args.output.mkdir(parents=True, exist_ok=True)
     path = args.output / "report.json"
     path.write_text(json.dumps(report, indent=2), encoding="utf-8")
@@ -477,6 +575,20 @@ def main(argv: list[str] | None = None) -> int:
                 f"empty_masks={stage1['empty_support_mask_count']} "
                 f"construction={result['construction_seconds']:.2f}s"
             )
+        if result.get("boundary_first"):
+            bf = result["boundary_first"]
+            topologies = [c["topology"] for c in bf["per_component"]]
+            print(f"  boundary_first: components={bf['component_count']} topologies={topologies}")
+            for c in bf["per_component"]:
+                if c["chart"] == "o_grid":
+                    print(
+                        f"    c{c['component_id']} [o_grid x{c['segments']}]: "
+                        f"mean_seam_gap={c['mean_seam_gap']:.5f} max_seam_gap={c['max_seam_gap']:.5f} "
+                        f"jacobian_fold={c['topology_checks']['jacobian_fold_count']}"
+                    )
+                else:
+                    fm = c["fit_metrics"]
+                    print(f"    c{c['component_id']} [{c['chart']}]: rms={fm['point_to_surface_rms']:.6f} jacobian_min={fm['jacobian_min']:.4f}")
     print(f"report={path}")
     if export_dir is not None:
         print(f"renderer output={export_dir}")

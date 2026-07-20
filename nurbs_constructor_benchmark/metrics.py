@@ -77,7 +77,14 @@ def adjusted_rand_index(a: torch.Tensor, b: torch.Tensor) -> float:
 
 def support_domain_metrics(scene: SyntheticGaussianScene, state: Any, resolution: int = 128) -> tuple[dict[str, Any], dict[str, Any]]:
     gt = mask_on_grid(scene.support_predicate, resolution)
-    generated = _rasterize_xy(sample_generated_surface(state, per_patch=resolution), resolution)
+    # Use the same extent-adaptive UV oversampling as patch_union_metrics.
+    # Sampling only one UV point per output raster cell fragments a trimmed
+    # 64x64 chart when it is scored on this 128x128 world grid, producing
+    # artificial enclosed background cells that look like thousands of holes.
+    # The union raster is the supported surface representation being measured.
+    generated = torch.zeros((resolution, resolution), dtype=torch.bool)
+    for patch in state.surface_patches:
+        generated |= _patch_xy_mask(patch, resolution)
     intersection = gt & generated
     gt_count, gen_count, common = int(gt.sum()), int(generated.sum()), int(intersection.sum())
     precision = common / gen_count if gen_count else 0.0

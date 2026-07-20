@@ -44,6 +44,18 @@ work. See
 
 ## 1.1 OSN-GS
 
+## 1.1a Governing Adaptive Voxel Contract
+
+The adaptive voxel scaffold starts from one large, uniform root AABB over the eligible Gaussian set. It is recursively subdivided only by local evidence:
+
+- count below voxel_min_gaussian_count: inactive leaf (insufficient support);
+- count from voxel_min_gaussian_count through voxel_max_gaussian_count: active leaf;
+- count above voxel_max_gaussian_count: subdivide that leaf into eight children;
+- stop only at voxel_max_depth or voxel_min_size; an unsplittable non-planar leaf is recorded as complex rather than silently treated as a support hole.
+
+The hierarchy must retain deterministic parent/child IDs, raw Gaussian-index conservation, leaf AABBs, state, and subdivision reason. Boundary extraction must consume this adaptive hierarchy; it must not replace missing count-driven subdivision with morphology or a fixed loop-area rule.
+
+
 OSN-GS는 observed Gaussian으로부터 NURBS 기반 visible surface를 구성하고, 해당 surface의 구조적 prior를 이용해 occluded surface에 Gaussian을 배치하는 연구 프레임워크다.
 
 ## 1.2 GS-Insp
@@ -1118,6 +1130,28 @@ COMPLEX
 
 ---
 
+# 10.1 Final Integration and Legacy Retirement
+
+During Phases 0 through 6, legacy and voxel_patch_stage1 remain feature-flagged
+comparison paths. They must stay numerically reproducible while the
+boundary-first pipeline is benchmarked.
+
+After the final Phase has passed its required benchmarks and received explicit
+user approval:
+
+1. make the completed boundary-first NURBS construction pipeline the default
+   and only main-training construction path;
+2. wire it into the main OSN-GS trainer, checkpoint, export, streaming, and
+   renderer payload lifecycle;
+3. remove the legacy constructor and its obsolete two-stage voxel-region path,
+   rather than keeping it as a permanent production fallback;
+4. retain only benchmark artifacts and documented measurements needed to
+   reproduce legacy comparisons.
+
+Legacy retirement is therefore an end-state requirement, not a reason to
+remove comparison paths before the final architecture is validated.
+
+---
 # 11. 구현 금지 사항
 
 다음 방식으로 metric을 맞추지 않는다.

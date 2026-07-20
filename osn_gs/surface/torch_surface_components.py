@@ -31,6 +31,7 @@ from osn_gs.surface.torch_voxel_hierarchy import (
     STATE_COMPLEX,
     TorchVoxelGaussianHierarchy,
     VoxelNode,
+    _any_orthogonal,
     _fit_leaf_plane,
     compute_leaf_face_adjacency,
 )
@@ -67,6 +68,14 @@ class SurfaceComponent:
     aabb_max: Any  # (3,)
     centroid: Any  # (3,) mean of member leaf plane centroids
     normal: Any  # (3,) sign-aligned mean of member leaf plane normals
+    # In-plane axes spanning the component's own tangent plane (PCA of the
+    # full raw point union, orthogonal to `normal`). Phase 2 boundary
+    # extraction uses these to build one shared UV frame for the whole
+    # component instead of per-leaf frames -- the entire point of
+    # component-level (vs. leaf-level) boundary extraction is that a single
+    # shared frame has no inter-leaf seam to begin with.
+    tangent_u: Any  # (3,)
+    tangent_v: Any  # (3,)
     # Member leaves with >= 1 face whose neighbor is outside this component
     # (support boundary, crease/topology boundary, or unresolved contact).
     boundary_leaf_ids: list[str] = field(default_factory=list)
@@ -287,12 +296,15 @@ def build_surface_components(
             centroid = component_plane.centroid
             reference = planes[0].normal
             # Sign-align to the member leaves' consensus direction: PCA's
-            # smallest-variance axis is only defined up to sign.
+            # smallest-variance axis is only defined up to sign. Tangents are
+            # left as PCA returns them -- any orthonormal in-plane basis is a
+            # valid UV frame regardless of handedness.
             normal = (
                 component_plane.normal
                 if float((component_plane.normal * reference).sum()) >= 0
                 else -component_plane.normal
             )
+            tangent_u, tangent_v = component_plane.tangent_u, component_plane.tangent_v
         elif planes:
             centroid = torch.stack([plane.centroid for plane in planes]).mean(dim=0)
             reference = planes[0].normal
@@ -303,9 +315,13 @@ def build_surface_components(
                 ]
             )
             normal = torch.nn.functional.normalize(aligned.sum(dim=0), dim=0)
+            tangent_u = _any_orthogonal(normal)
+            tangent_v = torch.cross(normal, tangent_u, dim=0)
         else:
             centroid = (aabb_min + aabb_max) * 0.5
             normal = torch.tensor([0.0, 0.0, 1.0], dtype=aabb_min.dtype, device=aabb_min.device)
+            tangent_u = _any_orthogonal(normal)
+            tangent_v = torch.cross(normal, tangent_u, dim=0)
         boundary_ids = [leaf_id for leaf_id in member_ids if leaf_id in component_boundary_faces]
         components.append(
             SurfaceComponent(
@@ -316,6 +332,8 @@ def build_surface_components(
                 aabb_max=aabb_max,
                 centroid=centroid,
                 normal=normal,
+                tangent_u=tangent_u,
+                tangent_v=tangent_v,
                 boundary_leaf_ids=boundary_ids,
             )
         )
@@ -401,6 +419,8 @@ def surface_component_set_payload(component_set: SurfaceComponentSet) -> dict[st
                 "aabb_max": component.aabb_max.detach().cpu().tolist(),
                 "centroid": component.centroid.detach().cpu().tolist(),
                 "normal": component.normal.detach().cpu().tolist(),
+                "tangent_u": component.tangent_u.detach().cpu().tolist(),
+                "tangent_v": component.tangent_v.detach().cpu().tolist(),
                 "boundary_leaf_ids": component.boundary_leaf_ids,
             }
             for component in component_set.components

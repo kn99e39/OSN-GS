@@ -386,3 +386,16 @@ The local Graphdeco notebook cells read/write patched Python sources with explic
 
 - [OSN_GS_Final_Boundary_First_NURBS_Direction.md](../OSN_GS_Final_Boundary_First_NURBS_Direction.md) is the governing plan for future NURBS construction work. It requires boundary-first topology, component-level Gaussian geometry fitting, topology-aware chart generation, benchmark-only phased implementation, and an explicit user approval gate after every phase.
 - [OSN_GS_Voxel_Driven_NURBS_Migration_Plan.md](../OSN_GS_Voxel_Driven_NURBS_Migration_Plan.md) is retained only as the historical Stage 1 migration record.
+
+## 2026-07-20 Phase 2 Component Boundary Baseline
+
+- Fake-hole handling is governed by the adaptive raw-Gaussian-count voxel hierarchy (large uniform root AABB, recursive split only above the maximum leaf count, inactive below the minimum), not by a fixed support-loop cell-size filter. Sparse density-gradient gaps remain calibration diagnostics. See docs/worklogs/29_phase2_component_boundary.md.
+
+## 2026-07-20 Phase 3 Trimmed Component Correctness Baseline
+
+- Phase 3 reuses the existing LSQ/foot-point fitter once per physical component and applies Phase 2 support as a trim mask. Plane, sine, and planar_hole pass the correctness baseline; density_gradient remains a sparse-support calibration risk. See docs/worklogs/30_phase3_trimmed_component_baseline.md.
+
+## 2026-07-20 Boundary-First End-State Decision
+
+- Legacy and voxel_patch_stage1 remain benchmark comparison modes during the approved Boundary-First phases.
+- After the final Phase benchmarks pass and the user approves integration, the boundary-first NURBS construction pipeline becomes the only main-training path. The legacy constructor and obsolete two-stage voxel-region path are removed rather than retained as a permanent production fallback.
