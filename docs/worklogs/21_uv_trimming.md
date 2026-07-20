@@ -1,4 +1,4 @@
-# 17. UV Trimming (Surface Support)
+# 21. UV Trimming (Surface Support)
 
 날짜: 2026-07-15
 

@@ -1,4 +1,4 @@
-# 08. Persistent Surface Lifecycle
+# 8. Persistent Surface Lifecycle
 
 날짜: 2026-07-10
 

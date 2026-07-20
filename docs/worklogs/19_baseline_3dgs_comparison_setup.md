@@ -1,4 +1,4 @@
-# 15. Baseline Graphdeco 3DGS: Selector + Buildable On This System
+# 19. Baseline Graphdeco 3DGS: Selector + Buildable On This System
 
 날짜: 2026-07-15
 

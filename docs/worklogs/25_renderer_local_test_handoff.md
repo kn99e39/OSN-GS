@@ -1,4 +1,4 @@
-﻿# 20. Renderer Local-Test Handoff
+# 25. Renderer Local-Test Handoff
 
 Use a WebGPU-capable local machine. Do not touch the active notebook or gaussian-splatting.
 

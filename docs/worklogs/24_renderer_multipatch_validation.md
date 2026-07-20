@@ -1,4 +1,4 @@
-# 38. Renderer Multi-Patch Validation
+# 24. Renderer Multi-Patch Validation
 
 Date: 2026-07-15
 

@@ -1,4 +1,4 @@
-# 06. ADC Parity Expansion
+# 6. ADC Parity Expansion
 
 ## 작업 내용
 

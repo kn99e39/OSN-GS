@@ -1,4 +1,4 @@
-# 10. Least-Squares NURBS Fitting with Parameter Correction (Phase B)
+# 11. Least-Squares NURBS Fitting with Parameter Correction (Phase B)
 
 날짜: 2026-07-11
 

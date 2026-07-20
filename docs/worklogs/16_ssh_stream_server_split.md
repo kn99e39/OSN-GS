@@ -1,4 +1,4 @@
-﻿# SSH Stream Server Split
+# SSH Stream Server Split
 
 ## Work Performed
 

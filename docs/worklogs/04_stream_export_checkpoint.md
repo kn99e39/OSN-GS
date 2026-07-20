@@ -1,4 +1,4 @@
-# 04. Streaming, Export, and Resume
+# 4. Streaming, Export, and Resume
 
 ## 작업 내용
 

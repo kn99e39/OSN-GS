@@ -1,4 +1,4 @@
-# 07. Density-Adaptive Voxel NURBS
+# 7. Density-Adaptive Voxel NURBS
 
 날짜: 2026-07-10
 

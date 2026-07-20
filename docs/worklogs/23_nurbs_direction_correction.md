@@ -1,4 +1,4 @@
-# 19. 방향성 정정 — NURBS는 관측 Gaussian에서 파생될 뿐, 관측 Gaussian을 움직이지 않는다
+# 23. 방향성 정정 — NURBS는 관측 Gaussian에서 파생될 뿐, 관측 Gaussian을 움직이지 않는다
 
 날짜: 2026-07-15
 

@@ -1,4 +1,4 @@
-# 16. Ground-Truth NURBS Metrics: Three Construction Concerns
+# 20. Ground-Truth NURBS Metrics: Three Construction Concerns
 
 날짜: 2026-07-15
 

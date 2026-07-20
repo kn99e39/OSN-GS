@@ -1,4 +1,4 @@
-# 34. NURBS Derivatives and Foot-Point UV Binding (Phase A)
+# 10. NURBS Derivatives and Foot-Point UV Binding (Phase A)
 
 날짜: 2026-07-11
 

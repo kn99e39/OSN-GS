@@ -1,4 +1,4 @@
-# 18. D-SSIM Image Loss (Baseline Quality-Gap Cause 1)
+# 22. D-SSIM Image Loss (Baseline Quality-Gap Cause 1)
 
 날짜: 2026-07-15
 

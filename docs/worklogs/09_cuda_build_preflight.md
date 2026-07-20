@@ -1,4 +1,4 @@
-# 09. CUDA Build Preflight
+# 9. CUDA Build Preflight
 
 날짜: 2026-07-14
 

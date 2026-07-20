@@ -1,4 +1,4 @@
-﻿# 23. UV Trim-Mask Lifecycle
+# 28. UV Trim-Mask Lifecycle
 
 Date: 2026-07-15
 

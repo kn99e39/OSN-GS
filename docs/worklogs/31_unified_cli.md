@@ -1,4 +1,4 @@
-# 26. Unified PowerShell CLI
+# 31. Unified PowerShell CLI
 
 Date: 2026-07-16
 

@@ -1,4 +1,4 @@
-# 13. Hot-Path Metric Scalar Extraction Removed
+# 17. Hot-Path Metric Scalar Extraction Removed
 
 날짜: 2026-07-15
 

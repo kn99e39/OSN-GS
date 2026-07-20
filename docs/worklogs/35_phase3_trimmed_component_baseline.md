@@ -1,4 +1,4 @@
-# 30. Phase 3 Trimmed Component 정확성 기준선
+# 35. Phase 3 Trimmed Component 정확성 기준선
 
 날짜: 2026-07-20
 

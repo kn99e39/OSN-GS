@@ -1,4 +1,4 @@
-# 03. Original-3DGS-Aligned ADC
+# 3. Original-3DGS-Aligned ADC
 
 ## 작업 내용
 

@@ -1,4 +1,4 @@
-# 02. Voxel Boundary Patch Binding
+# 2. Voxel Boundary Patch Binding
 
 ## 작업 내용
 

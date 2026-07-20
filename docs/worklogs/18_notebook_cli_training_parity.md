@@ -1,4 +1,4 @@
-# 14. Notebook / CLI Training Parity
+# 18. Notebook / CLI Training Parity
 
 날짜: 2026-07-15
 
