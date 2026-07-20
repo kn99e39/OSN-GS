@@ -1,4 +1,4 @@
-# 10. Surface Loss Patch Minibatch
+# 35. Surface Loss Patch Minibatch
 
 날짜: 2026-07-14
 

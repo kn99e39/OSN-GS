@@ -7,7 +7,7 @@ extracts outer/inner-hole boundary structure for a whole
 ``SurfaceComponent`` (Phase 1) at once, in ONE shared component-level UV
 frame, instead of per-leaf/per-patch trim masks. This is the direct fix for
 Stage 1-F's structural limitation (documented in
-``docs/worklogs/28_stage1_support_modes.md``): per-leaf density refinement
+``docs/worklogs/33_stage1_support_modes.md``): per-leaf density refinement
 cannot remove inter-leaf seams because each leaf has its own independent UV
 frame and polygon; here there is exactly one frame and one density field for
 the whole physical surface region, so there is no inter-leaf seam to begin

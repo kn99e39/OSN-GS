@@ -2,7 +2,7 @@
 
 # TODO: baseline 3DGS 대비 Scene 품질 하락 — 남은 후보
 
-동일 데이터셋 10k에서 OSN-GS가 원본 Graphdeco 3DGS(`gaussian-splatting/`)보다 품질이 낮은 문제. 실행환경 노트북+CUDA(ADC 정상). 정적 코드 대조로 후보를 좁혔고, **최우선 원인이던 image loss의 SSIM 부재는 해결함** — 원본과 동일한 `(1-0.2)·L1 + 0.2·(1-SSIM)` 도입, SSIM은 원본 3DGS와 수치 일치(`docs/worklogs/18_ssim_image_loss.md`). NURBS anchor가 보이는 Gaussian을 구속하던 문제도 방향성 정정으로 해소했다(`docs/worklogs/19_nurbs_direction_correction.md`). 아래는 남은 2차 후보(미검증).
+동일 데이터셋 10k에서 OSN-GS가 원본 Graphdeco 3DGS(`gaussian-splatting/`)보다 품질이 낮은 문제. 실행환경 노트북+CUDA(ADC 정상). 정적 코드 대조로 후보를 좁혔고, **최우선 원인이던 image loss의 SSIM 부재는 해결함** — 원본과 동일한 `(1-0.2)·L1 + 0.2·(1-SSIM)` 도입, SSIM은 원본 3DGS와 수치 일치(`docs/worklogs/22_ssim_image_loss.md`). NURBS anchor가 보이는 Gaussian을 구속하던 문제도 방향성 정정으로 해소했다(`docs/worklogs/23_nurbs_direction_correction.md`). 아래는 남은 2차 후보(미검증).
 
 ## 남은 후보 1 — 학습 뷰 샘플링이 무작위가 아니라 결정론적 순환 (2차)
 
@@ -18,10 +18,10 @@
 
 # NURBS 표면 생성 품질: 세 안건 평가 도구 + 개선 타깃
 
-`nurbs_constructor_benchmark`가 이제 GT 대비 세 안건을 분리 측정한다(`docs/worklogs/16_ground_truth_nurbs_metrics.md`, `nurbs_constructor_benchmark/README.md`). 개선 작업은 이 지표로 before/after를 재는 것을 전제로 한다. 현재 baseline(600pts, seed0, lsq)에서 드러난 우선 타깃:
+`nurbs_constructor_benchmark`가 이제 GT 대비 세 안건을 분리 측정한다(`docs/worklogs/20_ground_truth_nurbs_metrics.md`, `nurbs_constructor_benchmark/README.md`). 개선 작업은 이 지표로 before/after를 재는 것을 전제로 한다. 현재 baseline(600pts, seed0, lsq)에서 드러난 우선 타깃:
 
 - **Patch Topology — `crease` 과분할**: patches=4(GT 2), `topology_label_ari=0.223`. voxel boundary가 능선을 필요 이상으로 잘게 쪼갬(`docs/voxel_role.md`, `torch_voxel_regions.py`의 `voxel_boundary_angle_degrees`/connected-component). 목표: ARI↑, patch_count→2. Patch control-grid aspect ratio already follows each patch PCA extent; the remaining limit is the global `base_u` cap on very elongated patches. (`docs/README.md`, 2026-07-15)
-- **Surface Support metric -- density_gradient calibration**: UV trimming is complete (plane 0.239->0.089, sine 0.184->0.092, crease->0.004; uncovered unchanged). The remaining 0.66 extrapolation is a metric-calibration issue: global median NN spacing is dominated by the dense cluster. Replace it with a local-density-adaptive support tau. (`docs/worklogs/17_uv_trimming.md`)
+- **Surface Support metric -- density_gradient calibration**: UV trimming is complete (plane 0.239->0.089, sine 0.184->0.092, crease->0.004; uncovered unchanged). The remaining 0.66 extrapolation is a metric-calibration issue: global median NN spacing is dominated by the dense cluster. Replace it with a local-density-adaptive support tau. (`docs/worklogs/21_uv_trimming.md`)
 - Accuracy(chamfer_rms)는 네 scene 모두 0.023~0.028로 무난 — 즉 **주 문제는 정확도가 아니라 support와 topology**임을 지표가 말해준다.
 
 ---

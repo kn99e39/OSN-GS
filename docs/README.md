@@ -136,7 +136,7 @@ The workspace already contains a reference `gaussian-splatting` checkout, so tho
 ## 2026-07-06 Streaming NURBS Snapshots
 
 - OSN-GS training can now stream packed Gaussian snapshots over WebSocket directly from `train.py`.
-- 2026-07-20: Stream snapshots now include `shDegree` and coefficient-major RGB `shCoefficients` for the active SH degree, so the WebGPU renderer can reproduce view-dependent color in Gaussian Composition. Degree-3 payloads are substantially larger than prior DC-RGB snapshots; use a lower stream cadence or `stream_max_gaussians` when live streaming becomes bandwidth-bound. See `docs/worklogs/29_renderer_sh_streaming.md`.
+- 2026-07-20: Stream snapshots now include `shDegree` and coefficient-major RGB `shCoefficients` for the active SH degree, so the WebGPU renderer can reproduce view-dependent color in Gaussian Composition. Degree-3 payloads are substantially larger than prior DC-RGB snapshots; use a lower stream cadence or `stream_max_gaussians` when live streaming becomes bandwidth-bound. See `docs/worklogs/38_renderer_sh_streaming.md`.
 - Streamed snapshots can include the visible NURBS intermediate as `nurbs_surface`; the payload is sent when the surface is first available or rebuilt.
 - Notebook OSN-GS training exposes streaming knobs and can disable slow PLY/NURBS/checkpoint file output when using the renderer stream.
 
@@ -238,13 +238,13 @@ The workspace already contains a reference `gaussian-splatting` checkout, so tho
 - Visible NURBS fitting is now a regularized least-squares solve (control grid linear in the fit because rational weights are 1 at fitting time) alternated with foot-point UV reprojection. The old inverse-distance fill remains as the seed and as `--surface_fit_mode idw` fallback. Voxel region density acts as point weights.
 - On an analytic sheet, normalized RMS surface distance improved ~3x versus the IDW seed (0.0087 -> 0.0028); regression-tested with threshold 0.005.
 - Default NURBS degree is now (2, 2) — degree_v was previously 1 (piecewise linear). New knobs in config/CLI/notebook: `surface_fit_mode`, `surface_degree_u/v`, `surface_fit_smoothness` (default 1e-4), `surface_fit_tikhonov` (1e-4), `surface_fit_rounds` (2), `surface_projection_iterations` (4). Both `train.py` and `scripts/train_osn_gs_torch.py` share these via `osn_gs/interop/colab_args.py`; the notebook exposes them as `OSN_SURFACE_*`.
-- Remaining follow-ups: per-patch UV occupancy (trimming) mask, cross-patch UV reassignment, smoothness default revalidation on real COLMAP scenes. See docs/worklogs/09_nurbs_derivatives_footpoint.md and docs/worklogs/10_least_squares_nurbs_fit.md.
+- Remaining follow-ups: per-patch UV occupancy (trimming) mask, cross-patch UV reassignment, smoothness default revalidation on real COLMAP scenes. See docs/worklogs/10_nurbs_derivatives_footpoint.md and docs/worklogs/11_least_squares_nurbs_fit.md.
 
 ## 2026-07-13 Synthetic NURBS Constructor Validation
 
 - Added the isolated root-level `nurbs_constructor_benchmark/` framework. It generates deterministic plane, sine-sheet, and sharp-crease Gaussian-center scenes, then calls the production `TorchOSNGSPipeline.initialize()` path directly; no NURBS constructor code is copied.
 - Each run records input-point foot-point RMS, analytic chart residual, normal error, patch/control-point counts, and finite-value status to `report.json`. Optional error thresholds make it usable as a regression gate.
-- Usage and extension instructions live in `nurbs_constructor_benchmark/README.md`. See `docs/worklogs/11_synthetic_nurbs_constructor_benchmark.md` for scope and verification status.
+- Usage and extension instructions live in `nurbs_constructor_benchmark/README.md`. See `docs/worklogs/14_synthetic_nurbs_constructor_benchmark.md` for scope and verification status.
 
 ## 2026-07-14 CUDA Build Preflight
 
@@ -262,14 +262,14 @@ The workspace already contains a reference `gaussian-splatting` checkout, so tho
 - NURBS loss now uses a deterministic round-robin patch minibatch. Default surface_loss_patch_budget=16; 0 keeps the full-patch behavior.
 - Active patches still receive anchor fitting plus smoothness gradients, and all patches rotate through the loss schedule.
 - Timing now reports surface_loss separately from backward.
-- See docs/worklogs/10_surface_loss_patch_minibatch.md.
+- See docs/worklogs/12_surface_loss_patch_minibatch.md.
 
 ## 2026-07-14 Surface Loss Runtime Audit
 
 - Stored notebook timing showed the old full-patch NURBS loss path: render forward was about 0.006s while the combined surface-loss/backward phase was about 0.30s.
 - The current trainer uses a round-robin surface patch budget of 16 by default; 0 explicitly restores full-patch evaluation.
 - Training startup now prints the effective patch budget, and timing separates surface_loss from backward for the next run.
-- See docs/worklogs/10_surface_loss_runtime_audit.md.
+- See docs/worklogs/13_surface_loss_runtime_audit.md.
 
 
 ## 2026-07-14 Training Bottleneck Audit
@@ -277,20 +277,20 @@ The workspace already contains a reference `gaussian-splatting` checkout, so tho
 - A completed notebook run with the current timing split reports steady NURBS surface loss at 0.056s and backward at 0.123s; renderer forward is 0.013s.
 - The recurring large cost is ADC: at approximately 190k Gaussians, the density stage measured 4.644s because clone/split/prune each rebuild Gaussian tensors and preserve Adam state.
 - Per-iteration CUDA-to-CPU metric extraction currently serializes the training stream. Full GPU-to-CPU streaming snapshots and periodic global surface maintenance are checkpoint-bound costs.
-- See docs/worklogs/11_training_bottleneck_audit.md.
+- See docs/worklogs/15_training_bottleneck_audit.md.
 
 ## 2026-07-15 Direction Correction: NURBS must not move visible Gaussians
 
 - **Corrects a wrong premise that had propagated from `docs/architecture.md` into the code.** The doc described the NURBS as the "single geometric source of truth" whose updates move Gaussian positions. The actual intent is the opposite and one-way: visible structure -> derive NURBS -> infer the occluded surface -> generate Gaussians there. Visible/certain Gaussians are optimized by the image loss alone and must never be pulled by the surface.
 - `nurbs_surface_loss` selected `certain = ~is_uncertain` and let gradient flow back into their `_xyz`, so the surface was dragging visible Gaussians. Fixed by detaching the observed Gaussian positions: the term now fits the surface to the Gaussians only. Verified: grad to `model._xyz` is 0 while grad to `control_grid` is > 0. Per-iteration NURBS updates are retained (intended).
-- `docs/architecture.md` rewritten accordingly (data-flow, Core Principles, ADC, training-loop pseudocode). Prior worklogs are intentionally left as-is; **`docs/worklogs/19_nurbs_direction_correction.md` states the go-forward direction and takes precedence over any conflicting older text.**
+- `docs/architecture.md` rewritten accordingly (data-flow, Core Principles, ADC, training-loop pseudocode). Prior worklogs are intentionally left as-is; **`docs/worklogs/23_nurbs_direction_correction.md` states the go-forward direction and takes precedence over any conflicting older text.**
 - This also removes, by design, the `TODO.md` candidate "NURBS anchor constrains certain Gaussians". Note `lambda_surface` now means "how fast the surface follows the Gaussians", not how hard Gaussians are constrained.
 
 ## 2026-07-15 D-SSIM Image Loss
 
 - OSN-GS image loss now matches original 3DGS: `(1 - lambda_dssim)*L1 + lambda_dssim*(1 - SSIM)` with `lambda_dssim=0.2` (was `0.8*L1 + 0.2*MSE`, no SSIM). This was the #1 suspected cause of the baseline quality gap in `TODO.md`.
 - Added a pure-torch `ssim` in `osn_gs/losses/torch_losses.py` ported from `gaussian-splatting/utils/loss_utils.py` (window 11, sigma 1.5, C1/C2 identical) — verified numerically identical to the original (diff 0.0). MSE stays only for PSNR. `TorchTrainingConfig.lambda_l1/lambda_mse` replaced by `lambda_dssim`.
-- Tests (26) pass; 6-iteration smoke shows the D-SSIM loss decreasing and differentiable. Still needs a resolution-matched 10k A/B re-train to quantify the gap reduction (see `TODO.md`). See `docs/worklogs/18_ssim_image_loss.md`.
+- Tests (26) pass; 6-iteration smoke shows the D-SSIM loss decreasing and differentiable. Still needs a resolution-matched 10k A/B re-train to quantify the gap reduction (see `TODO.md`). See `docs/worklogs/22_ssim_image_loss.md`.
 
 ## 2026-07-15 SSH Stream Server Split
 
@@ -298,39 +298,39 @@ The workspace already contains a reference `gaussian-splatting` checkout, so tho
 - `scripts/start_trainer_stream.ps1` starts only the loopback stream server at `127.0.0.1:8080` by default. It does not start training or require dataset/output paths.
 - Remote renderers should use SSH local port forwarding, for example `ssh -N -L 8080:127.0.0.1:8080 user@trainer-host`, then connect the browser renderer to `ws://localhost:8080` on the renderer machine.
 - Notebook/training on the trainer machine should stream to `ws://127.0.0.1:8080` when the local stream server is running.
-- See docs/worklogs/12_ssh_stream_server_split.md.
+- See docs/worklogs/16_ssh_stream_server_split.md.
 
 ## 2026-07-15 UV Trimming (Surface Support)
 
 - Each NURBS patch now carries a UV support (trim) mask so the rectangular chart is not drawn/measured past the observed point footprint. Computed in `TorchOSNGSPipeline.initialize` from bound Gaussian UVs (occupancy grid + dilation); config knobs `surface_trim_resolution` (default 24, 0 disables) / `surface_trim_dilation` (default 1). `TorchNURBSSurface.uv_support_mask` + `.support(uv)`; exported per-patch as `uv_support` in `nurbs_surface.json`; persisted in checkpoint v2.
-- Benchmark support metric samples only the trimmed region. Extrapolation dropped without opening coverage holes (uncovered unchanged): plane 0.239→0.089, sine 0.184→0.092, crease 0.010→0.004. `density_gradient` (0.759→0.659) is limited by the support threshold being calibrated to the dense cluster's spacing, not by trimming. Training math is unaffected (mask is metadata / renderer hint only). See `docs/worklogs/17_uv_trimming.md`.
+- Benchmark support metric samples only the trimmed region. Extrapolation dropped without opening coverage holes (uncovered unchanged): plane 0.239→0.089, sine 0.184→0.092, crease 0.010→0.004. `density_gradient` (0.759→0.659) is limited by the support threshold being calibrated to the dense cluster's spacing, not by trimming. Training math is unaffected (mask is metadata / renderer hint only). See `docs/worklogs/21_uv_trimming.md`.
 
 ## 2026-07-15 Ground-Truth NURBS Benchmark Metrics
 
 - `nurbs_constructor_benchmark` now scores the generated NURBS against ground truth on three independent concerns instead of one conflated residual: **Surface Fitting Accuracy** (`chamfer_rms`/`accuracy_rms`/`completeness_rms`), **Surface Support** (`support_coverage_uncovered_fraction`, `support_extrapolation_fraction`), and **Patch Topology** (`topology_label_ari`, patch-count match). Each result carries a `ground_truth` block; optional gates `--max-chamfer-rms`, `--max-extrapolation`, `--min-topology-ari`.
 - Each scene exposes its analytic surface + true patch topology (`scenes.py`); metrics in `metrics.py`; a ground-truth NURBS is emitted as `NURBS_output/<scene>/nurbs_surface_gt.json` (renderer format, correct topology — 2 patches for `crease`) for visual overlay.
-- These separate failure modes the chart RMS hid: `crease` fits with low residual but low topology ARI (over-segmentation), `density_gradient` shows a high extrapolation fraction. See `docs/worklogs/16_ground_truth_nurbs_metrics.md`.
+- These separate failure modes the chart RMS hid: `crease` fits with low residual but low topology ARI (over-segmentation), `density_gradient` shows a high extrapolation fraction. See `docs/worklogs/20_ground_truth_nurbs_metrics.md`.
 
 ## 2026-07-15 Baseline 3DGS Comparison Enabled
 
 - The local `gaussian-splatting/` folder (original Graphdeco 3DGS) is now selectable and runnable on this system for side-by-side comparison. Notebook `FRAMEWORK_MODE='graphdeco_3dgs'` now resolves `GS_ROOT` to the local `gaussian-splatting/` folder (previously both modes pointed at the OSN-GS root).
 - Its CUDA extensions (`diff_gaussian_rasterization`, `simple_knn`) build on torch 2.12+cu130 / RTX 5080 (sm_120) with `TORCH_CUDA_ARCH_LIST=12.0` and `CL=/Zc:preprocessor` (required by CUDA 13 CCCL headers). `fused_ssim` is optional (train.py falls back to torch SSIM). Reusable build script: `scripts/build_baseline_extensions.bat`. The notebook build cell now injects these flags so a fresh run can compile them.
 - Verified end-to-end: 30-iteration `gaussian-splatting/train.py` run on `DATASET` (loss decreasing, train PSNR ~16.8 at iter 30). Installing `diff_gaussian_rasterization` in the venv makes OSN-GS use it as the installed backend (same source as vendored, so behavior is unchanged and faster). Tests (26) pass.
-- Fairness: OSN-GS defaults to half-resolution (`--low_vram`) while the baseline trains near full resolution, and the two use different image losses (L1+MSE vs L1+D-SSIM). Match resolution (`--no-low_vram` on OSN-GS or `-r` on the baseline) before comparing. See `docs/worklogs/15_baseline_3dgs_comparison_setup.md` and `TODO.md`.
+- Fairness: OSN-GS defaults to half-resolution (`--low_vram`) while the baseline trains near full resolution, and the two use different image losses (L1+MSE vs L1+D-SSIM). Match resolution (`--no-low_vram` on OSN-GS or `-r` on the baseline) before comparing. See `docs/worklogs/19_baseline_3dgs_comparison_setup.md` and `TODO.md`.
 
 ## 2026-07-15 Notebook/CLI Training Parity
 
 - Fixed a silent divergence where a bare CLI run (`train.py` or `scripts/train_osn_gs_torch.py`) used different defaults than the notebook, most importantly ADC being OFF on the CLI (`densify_until_iter`/`densification_interval` defaulted to 0).
 - Both CLI parsers now default to the notebook's **VRAM-safe recipe** so an argument-free run reproduces `colab_train_3dgs.ipynb`: `densify_until_iter=15000`, `densification_interval=100`, `visible_surface_resolution_scale=4.0`, and `--low_vram` on by default (`BooleanOptionalAction`; pass `--no-low_vram` for a full-resolution run).
 - Notebook's `--low_vram` forwarding updated to `--low_vram`/`--no-low_vram` so `OSN_LOW_VRAM=False` still opts out under the new default-on semantics.
-- Defaults are duplicated across `osn_gs/interop/colab_args.py`, `scripts/train_osn_gs_torch.py`, and the notebook `OSN_*` block — keep all three in sync when changing a training default. Perf-only knobs (`image_device`, `visible_surface_fit_device`, chunk sizes, streaming/log cadence) are intentionally not forced to match since they do not change the trained result. See `docs/worklogs/14_notebook_cli_training_parity.md`.
+- Defaults are duplicated across `osn_gs/interop/colab_args.py`, `scripts/train_osn_gs_torch.py`, and the notebook `OSN_*` block — keep all three in sync when changing a training default. Perf-only knobs (`image_device`, `visible_surface_fit_device`, chunk sizes, streaming/log cadence) are intentionally not forced to match since they do not change the trained result. See `docs/worklogs/18_notebook_cli_training_parity.md`.
 
 ## 2026-07-15 Hot-Path Metric Scalars Removed
 
-- Implemented priority 1 from `docs/worklogs/11_training_bottleneck_audit.md`: the training loop no longer forces a per-view or per-iteration GPU→CPU synchronization for loss/MSE scalars.
+- Implemented priority 1 from `docs/worklogs/15_training_bottleneck_audit.md`: the training loop no longer forces a per-view or per-iteration GPU→CPU synchronization for loss/MSE scalars.
 - MSE is accumulated as a device tensor, `mean_mse` feeds the uncertainty loss directly (no CPU→GPU round trip), and `state.last_loss`/`state.last_psnr` are only materialized to host floats when a progress log, stream snapshot, or file save reads them (`_needs_metric_scalars`).
 - State dataclass and checkpoint format are unchanged; loss/PSNR remain float fields. Tests (26) pass; a CPU smoke confirms metrics stay finite and correct when intermediate iterations skip materialization.
-- Bottleneck audit priorities 2 (ADC single shape transaction) and 3 (snapshot decouple + duplicate-final-snapshot removal) remain open. See `docs/worklogs/13_hot_path_metric_scalars.md`.
+- Bottleneck audit priorities 2 (ADC single shape transaction) and 3 (snapshot decouple + duplicate-final-snapshot removal) remain open. See `docs/worklogs/17_hot_path_metric_scalars.md`.
 
 ## 2026-07-15 NURBS Patch Aspect-Ratio Fix
 
@@ -352,35 +352,35 @@ The local Graphdeco notebook cells read/write patched Python sources with explic
 ## 2026-07-15 Renderer Multi-Patch Validation
 
 - Confirmed WebRenderer revision 88477a8 renders all valid NURBS patches, uses deterministic patch color, keeps iso-lines inside each patch, and includes all patches in camera bounds.
-- Node is unavailable in this environment, so the included smoke test was not run. Remaining renderer diagnostics, parity, and provenance work are recorded in docs/worklogs/19_renderer_multipatch_validation.md.
+- Node is unavailable in this environment, so the included smoke test was not run. Remaining renderer diagnostics, parity, and provenance work are recorded in docs/worklogs/24_renderer_multipatch_validation.md.
 
 ## 2026-07-15 Renderer Local-Test Handoff
 
-- Renderer Priority 0 test procedure and pass criteria were moved to docs/worklogs/20_renderer_local_test_handoff.md for execution on a WebGPU-capable local machine.
+- Renderer Priority 0 test procedure and pass criteria were moved to docs/worklogs/25_renderer_local_test_handoff.md for execution on a WebGPU-capable local machine.
 
 ## 2026-07-15 NURBS Constructor TODO Audit
 
-- Removed already implemented constructor benchmark baselines and metrics from TODO. Remaining NURBS work is recorded in docs/worklogs/21_nurbs_constructor_todo_audit.md.
+- Removed already implemented constructor benchmark baselines and metrics from TODO. Remaining NURBS work is recorded in docs/worklogs/26_nurbs_constructor_todo_audit.md.
 
 ## 2026-07-15 Support-Domain Constructor Benchmark
 
 - Added deterministic triangle, u_shape, crescent, and planar_hole scenes with analytic GT support predicates and in-domain Gaussian sampling.
 - report.json now includes shared-XY support precision/recall/IoU, coverage/unsupported/uncovered, components/holes/Euler topology mismatch, boundary Chamfer/Hausdorff, and artifact paths.
-- See docs/worklogs/24_support_domain_benchmark.md.
+- See docs/worklogs/29_support_domain_benchmark.md.
 
 ## 2026-07-16 Notebook Train MSVC Environment
 
 - The OSN-GS Train cell now captures vcvars64.bat into the train.py subprocess environment on Windows, including PATH, INCLUDE, and LIB. This fixes the CUDA rasterizer preflight failure where cl.exe was absent despite the notebook extension-build cell succeeding.
-- The subprocess environment is verified with where cl before training starts. See docs/worklogs/25_notebook_train_msvc_env.md.
+- The subprocess environment is verified with where cl before training starts. See docs/worklogs/30_notebook_train_msvc_env.md.
 
 ## 2026-07-16 Unified PowerShell CLI
 
 - After activating .venv, osn-gs --help lists train, benchmark, inspect-surface, and stream-server. The editable package install registers the console script; each subcommand delegates to the existing implementation and preserves its original options.
-- Install or refresh it with .venv\Scripts\python.exe -m pip install -e . --no-deps. See docs/worklogs/26_unified_cli.md.
+- Install or refresh it with .venv\Scripts\python.exe -m pip install -e . --no-deps. See docs/worklogs/31_unified_cli.md.
 
 ## 2026-07-16 Benchmark GT Renderer Folder Split
 
-- Constructor benchmark renderer exports now keep generated and GT NURBS in separate sibling folders: NURBS_output/scene and NURBS_output/scene_gt. Both use the renderer-standard filename nurbs_surface.json, so loading directories no longer combines two same-type surfaces in one snapshot. See docs/worklogs/27_benchmark_gt_folder_split.md.
+- Constructor benchmark renderer exports now keep generated and GT NURBS in separate sibling folders: NURBS_output/scene and NURBS_output/scene_gt. Both use the renderer-standard filename nurbs_surface.json, so loading directories no longer combines two same-type surfaces in one snapshot. See docs/worklogs/32_benchmark_gt_folder_split.md.
 
 ## 2026-07-20 Governing NURBS Construction Plan
 
@@ -389,11 +389,11 @@ The local Graphdeco notebook cells read/write patched Python sources with explic
 
 ## 2026-07-20 Phase 2 Component Boundary Baseline
 
-- Fake-hole handling is governed by the adaptive raw-Gaussian-count voxel hierarchy (large uniform root AABB, recursive split only above the maximum leaf count, inactive below the minimum), not by a fixed support-loop cell-size filter. Sparse density-gradient gaps remain calibration diagnostics. See docs/worklogs/29_phase2_component_boundary.md.
+- Fake-hole handling is governed by the adaptive raw-Gaussian-count voxel hierarchy (large uniform root AABB, recursive split only above the maximum leaf count, inactive below the minimum), not by a fixed support-loop cell-size filter. Sparse density-gradient gaps remain calibration diagnostics. See docs/worklogs/34_phase2_component_boundary.md.
 
 ## 2026-07-20 Phase 3 Trimmed Component Correctness Baseline
 
-- Phase 3 reuses the existing LSQ/foot-point fitter once per physical component and applies Phase 2 support as a trim mask. Plane, sine, and planar_hole pass the correctness baseline; density_gradient remains a sparse-support calibration risk. See docs/worklogs/30_phase3_trimmed_component_baseline.md.
+- Phase 3 reuses the existing LSQ/foot-point fitter once per physical component and applies Phase 2 support as a trim mask. Plane, sine, and planar_hole pass the correctness baseline; density_gradient remains a sparse-support calibration risk. See docs/worklogs/35_phase3_trimmed_component_baseline.md.
 
 ## 2026-07-20 Boundary-First End-State Decision
 

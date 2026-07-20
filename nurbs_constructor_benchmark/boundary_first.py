@@ -83,7 +83,7 @@ def construct_boundary_first(
 
     ``density_threshold=3.0`` (not Phase 2's own default of 2.0): tuned
     against the ACTUAL rendered/trimmed surface, not just the boundary's own
-    topology counts -- see ``docs/worklogs/30_phase3_trimmed_component_baseline.md``
+    topology counts -- see ``docs/worklogs/35_phase3_trimmed_component_baseline.md``
     for the sweep. Returns ``(state, payload_patches)`` so the caller can
     write the renderer export using the same convention as the other
     constructors.

@@ -4,7 +4,7 @@
 
 ## 배경
 
-`docs/worklogs/11_training_bottleneck_audit.md`의 우선순위 1: "hot-path host scalar 추출을 제거하고 MSE/loss 집계를 CUDA에 유지, metric은 progress/snapshot이 host 값을 요구할 때만 materialize한다." 감사만 기록돼 있었고 실제 구현은 착수 전이었다.
+`docs/worklogs/15_training_bottleneck_audit.md`의 우선순위 1: "hot-path host scalar 추출을 제거하고 MSE/loss 집계를 CUDA에 유지, metric은 progress/snapshot이 host 값을 요구할 때만 materialize한다." 감사만 기록돼 있었고 실제 구현은 착수 전이었다.
 
 ## 작업 (`osn_gs/core/torch_trainer.py`, `train()` 루프)
 
