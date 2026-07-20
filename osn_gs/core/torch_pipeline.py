@@ -16,6 +16,30 @@ from osn_gs.surface.torch_nurbs import (
     pca_extent_aspect_ratio,
     project_torch_points_to_nurbs,
 )
+from osn_gs.surface.torch_boundary_refinement import (
+    contour_length_uv,
+    density_grid,
+    kde_density,
+    marching_squares,
+    median_nn_spacing,
+    sample_nn_spacings,
+)
+from osn_gs.surface.torch_nurbs import uv_frame_from_axes
+from osn_gs.surface.torch_voxel_hierarchy import (
+    FACE_INTERIOR,
+    STATE_ACTIVE,
+    STATE_COMPLEX,
+    STATE_EMPTY,
+    STATE_INACTIVE,
+    STATE_SUBDIVIDED,
+    TorchVoxelGaussianHierarchy,
+    build_voxel_gaussian_hierarchy,
+    compute_leaf_face_adjacency,
+    hierarchy_payload,
+    plane_aabb_intersection_polygon,
+    rasterize_convex_polygon_uv,
+    validate_hierarchy_conservation,
+)
 from osn_gs.surface.torch_voxel_regions import TorchVoxelSurfaceRegions, build_torch_voxel_surface_regions
 from osn_gs.utils.torch_ops import require_torch
 
@@ -44,6 +68,40 @@ class TorchPipelineConfig:
     surface_fit_smoothness: float = 1e-4
     surface_fit_tikhonov: float = 1e-4
     surface_fit_rounds: int = 2
+    # NURBS constructor selector. "legacy" is the existing production path and
+    # must stay byte-identical; "voxel_patch_stage1" is the experimental
+    # voxel-per-patch architecture (one NURBS patch per active leaf voxel).
+    nurbs_constructor_mode: str = "legacy"
+    # Stage 1 recursive raw-count voxel hierarchy (voxel_patch_stage1 only).
+    voxel_min_gaussian_count: int = 10
+    voxel_max_gaussian_count: int = 150
+    voxel_max_depth: int = 6
+    voxel_min_size: float = 0.0
+    # Stage 1 patch policy: control budget from raw count, planarity gate, and
+    # the voxel-boundary support mask ("voxel" = exact plane-AABB intersection
+    # polygon rasterized into uv_support_mask; "none" = untrimmed charts).
+    stage1_observations_per_control: float = 2.0
+    stage1_complex_thickness_ratio: float = 0.35
+    stage1_subdivide_complex: bool = True
+    stage1_fit_complex_leaves: bool = True
+    # Support-mask mode: "voxel_density" (default) = plane-AABB polygon, plus
+    # density-refined boundary on exterior/unresolved faces only (Stage 1-F);
+    # "voxel" = exact polygon only; "none" = untrimmed charts.
+    stage1_support_mode: str = "voxel_density"
+    # Stage 1-F density-refined boundary (voxel_density mode). The KDE uses a
+    # per-sample adaptive bandwidth = multiplier x each sample's own UV NN
+    # spacing, which makes the density value an "effective neighbor count"
+    # invariant to local point density; the threshold is that absolute level.
+    # Cross-sweep (2026-07-19, planar_hole/plane/sine/density_gradient):
+    # bw 2.0 / th 2.0 keeps plane/sine byte-equal to polygon-only, cuts
+    # planar_hole false-fill 0.338 -> 0.210 (hole IoU 0.665), and only mildly
+    # retreats density_gradient sparse support (union IoU 0.824 -> 0.795).
+    # bw 1.5 / th 1.5 carves harder (false-fill 0.130) at a larger sparse cost
+    # (0.769); th <= 1 converges back to polygon-only.
+    stage1_boundary_refinement_enabled: bool = True
+    stage1_boundary_density_resolution: int = 32
+    stage1_boundary_density_bandwidth: float = 2.0
+    stage1_boundary_density_threshold: float = 2.0
     use_voxel_surface_regions: bool = True
     voxel_grid_resolution: int = 16
     adaptive_voxel_density: bool = True
@@ -91,6 +149,13 @@ class TorchPipelineState:
     surface_patches: list[TorchNURBSSurface]
     surface_fit_diagnostics: list[NURBSFitDiagnostics] = field(default_factory=list)
     voxel_regions: TorchVoxelSurfaceRegions | None = None
+    # Stage 1 (voxel_patch_stage1) provenance; None/empty on the legacy path.
+    voxel_hierarchy: TorchVoxelGaussianHierarchy | None = None
+    stage1_patch_provenance: list[dict[str, Any]] = field(default_factory=list)
+    # Stage 1-F: leaf face adjacency/classification, and each patch's coarse
+    # (polygon-only) mask so coarse-vs-refined metrics can compare both.
+    stage1_leaf_adjacency: dict[str, dict[str, Any]] | None = None
+    stage1_coarse_masks: list[Any | None] = field(default_factory=list)
     surface_optimizer: Any | None = None
     surface_patch_residuals: dict[int, float] = field(default_factory=dict)
     surface_bad_checks: dict[int, int] = field(default_factory=dict)
@@ -118,6 +183,12 @@ class TorchOSNGSPipeline:
         torch = require_torch()
         points = torch.as_tensor(points, dtype=torch.float32, device=self.device)
         colors = torch.as_tensor(colors, dtype=torch.float32, device=self.device)
+
+        mode = str(self.config.nurbs_constructor_mode).lower()
+        if mode == "voxel_patch_stage1":
+            return self._initialize_stage1(points, colors)
+        if mode != "legacy":
+            raise ValueError(f"Unknown nurbs_constructor_mode: {mode!r}")
 
         voxel_regions = self._build_voxel_regions(points)
         curve_points = self._curve_placement_points(points, voxel_regions)
@@ -166,6 +237,385 @@ class TorchOSNGSPipeline:
             voxel_regions=voxel_regions,
             surface_fit_diagnostics=surface_fit_diagnostics,
         )
+
+    def _initialize_stage1(self, points: Any, colors: Any) -> TorchPipelineState:
+        """Stage 1 voxel-per-patch construction: one NURBS patch per active leaf.
+
+        Differences from the legacy path, by design (migration plan §3):
+        - recursive raw-count voxel hierarchy instead of the 2-level density grid
+        - each patch is fitted to the raw Gaussian centers inside its leaf voxel
+          (the legacy path fits voxel centroids)
+        - UV comes from the leaf's local plane tangent frame, so the exact
+          plane-AABB intersection polygon can be rasterized into the same UV
+          domain as the patch's support mask
+        - Gaussians in inactive/skipped leaves stay unassigned (cluster_id -1)
+          and only receive a fallback patch-0 UV so the model stays consistent.
+        """
+
+        torch = require_torch()
+        config = self.config
+        hierarchy = build_voxel_gaussian_hierarchy(
+            points.detach(),
+            voxel_min_gaussian_count=int(config.voxel_min_gaussian_count),
+            voxel_max_gaussian_count=int(config.voxel_max_gaussian_count),
+            voxel_max_depth=int(config.voxel_max_depth),
+            voxel_min_size=float(config.voxel_min_size),
+            complex_thickness_ratio=float(config.stage1_complex_thickness_ratio),
+            subdivide_complex=bool(config.stage1_subdivide_complex),
+        )
+        validate_hierarchy_conservation(hierarchy)
+        state_counts = hierarchy.state_counts()
+        print(
+            "OSN-GS stage1 voxel hierarchy: "
+            f"nodes={len(hierarchy.nodes)} active={state_counts.get(STATE_ACTIVE, 0)} "
+            f"inactive={state_counts.get(STATE_INACTIVE, 0)} "
+            f"complex={state_counts.get(STATE_COMPLEX, 0)} "
+            f"empty={state_counts.get(STATE_EMPTY, 0)} "
+            f"subdivided={state_counts.get(STATE_SUBDIVIDED, 0)} "
+            f"max_depth={hierarchy.max_depth_reached()} "
+            f"min_count={int(config.voxel_min_gaussian_count)} "
+            f"max_count={int(config.voxel_max_gaussian_count)}",
+            flush=True,
+        )
+
+        fit_leaves = hierarchy.leaves_in_state(STATE_ACTIVE)
+        if bool(config.stage1_fit_complex_leaves):
+            fit_leaves = fit_leaves + hierarchy.leaves_in_state(STATE_COMPLEX)
+        fit_leaves.sort(key=lambda node: node.node_id)
+        if not fit_leaves:
+            raise ValueError(
+                "Stage 1 produced no fittable leaf voxels "
+                f"(states: {state_counts}); lower voxel_min_gaussian_count or "
+                "check the input point distribution."
+            )
+
+        base_u, base_v = self._visible_surface_resolution()
+        max_per_patch = base_u * base_v
+        count = int(points.shape[0])
+        cluster_ids = torch.full((count,), -1, dtype=torch.long, device=self.device)
+        surface_uv = torch.zeros((count, 2), dtype=torch.float32, device=self.device)
+        trim_resolution = int(config.surface_trim_resolution)
+        support_mode = str(config.stage1_support_mode).lower()
+        if support_mode not in {"voxel_density", "voxel", "none"}:
+            raise ValueError(f"Unknown stage1_support_mode: {support_mode!r}")
+        refine_boundaries = (
+            support_mode == "voxel_density"
+            and bool(config.stage1_boundary_refinement_enabled)
+        )
+        adjacency = (
+            compute_leaf_face_adjacency(
+                hierarchy, fit_complex_leaves=bool(config.stage1_fit_complex_leaves)
+            )
+            if support_mode in {"voxel_density", "voxel"}
+            else {}
+        )
+        node_by_id = {node.node_id: node for node in hierarchy.nodes}
+
+        patches: list[TorchNURBSSurface] = []
+        diagnostics: list[NURBSFitDiagnostics] = []
+        provenance: list[dict[str, Any]] = []
+        coarse_masks: list[Any | None] = []
+        underdetermined_count = 0
+        boundary_leaf_count = 0
+        for patch_id, leaf in enumerate(fit_leaves):
+            indices = leaf.gaussian_indices.to(self.device)
+            leaf_points = points[indices]
+            plane = leaf.plane
+            target = int(round(leaf.count / max(float(config.stage1_observations_per_control), 1e-6)))
+            target = max(4, min(max_per_patch, target))
+            resolution_u, resolution_v = self._target_resolution(leaf_points, target, base_u, base_v)
+            controls = resolution_u * resolution_v
+            underdetermined = leaf.count < controls
+            if underdetermined:
+                underdetermined_count += 1
+
+            frame = None
+            initial_uv = None
+            if plane is not None and not plane.degenerate:
+                frame = uv_frame_from_axes(
+                    leaf_points, plane.centroid.to(self.device),
+                    plane.tangent_u.to(self.device), plane.tangent_v.to(self.device),
+                )
+                initial_uv = frame.apply(leaf_points)
+            patch, patch_diagnostics = self._fit_visible_patch(
+                leaf_points, resolution_u, resolution_v, None, initial_uv=initial_uv
+            )
+            uv = self.project_points_to_surface(leaf_points, patch)
+            cluster_ids[indices] = patch_id
+            surface_uv[indices] = uv
+            fit_residual = (patch.evaluate(uv).detach() - leaf_points).norm(dim=1)
+
+            leaf_adjacency = adjacency.get(leaf.node_id, {})
+            is_boundary_leaf = bool(leaf_adjacency.get("is_boundary_leaf", False))
+            if is_boundary_leaf:
+                boundary_leaf_count += 1
+            polygon_world = None
+            polygon_uv = None
+            support_mask_empty = False
+            local_support_coverage = None
+            polygon_cells = None
+            supported_cells = None
+            coarse_mask = None
+            refinement: dict[str, Any] | None = None
+            if support_mode in {"voxel_density", "voxel"} and frame is not None and trim_resolution > 0:
+                polygon_world = plane_aabb_intersection_polygon(
+                    plane.centroid.to(self.device), plane.normal.to(self.device),
+                    leaf.aabb_min.to(self.device), leaf.aabb_max.to(self.device),
+                )
+                if int(polygon_world.shape[0]) >= 3:
+                    polygon_uv = frame.apply(polygon_world, clamp=False)
+                    mask = rasterize_convex_polygon_uv(polygon_uv, trim_resolution)
+                    coarse_mask = mask.clone()
+                    polygon_cells = int(mask.sum())
+                    if refine_boundaries and is_boundary_leaf:
+                        mask, refinement = self._refine_boundary_leaf_support(
+                            points, leaf, leaf_adjacency, node_by_id, frame,
+                            leaf_points, mask, trim_resolution,
+                        )
+                    supported_cells = int(mask.sum())
+                    support_mask_empty = not bool(mask.any())
+                    # An empty mask is a real failure signal (plan §5.4): keep it
+                    # visible in provenance instead of silently untrimming.
+                    patch.uv_support_mask = mask.to(self.device)
+                else:
+                    support_mask_empty = True
+            if patch.uv_support_mask is not None and not support_mask_empty:
+                mask = patch.uv_support_mask
+                res_u, res_v = int(mask.shape[0]), int(mask.shape[1])
+                cell_u = torch.clamp((uv[:, 0] * res_u).long(), 0, res_u - 1)
+                cell_v = torch.clamp((uv[:, 1] * res_v).long(), 0, res_v - 1)
+                occupied = torch.zeros_like(mask)
+                occupied[cell_u, cell_v] = True
+                supported_cells = int(mask.sum())
+                local_support_coverage = (
+                    float((occupied & mask).sum()) / supported_cells if supported_cells else 0.0
+                )
+
+            patch_diagnostics.final_gaussian_indices = indices.detach().clone()
+            patch_diagnostics.final_gaussian_uv = uv.detach().clone()
+            patches.append(patch)
+            diagnostics.append(patch_diagnostics)
+            provenance.append(
+                {
+                    "patch_id": patch_id,
+                    "source_leaf_voxel_id": leaf.node_id,
+                    "parent_voxel_path": hierarchy.nodes[leaf.parent].node_id if leaf.parent >= 0 else None,
+                    "voxel_aabb": {
+                        "min": leaf.aabb_min.detach().cpu().tolist(),
+                        "max": leaf.aabb_max.detach().cpu().tolist(),
+                    },
+                    "gaussian_count": int(leaf.count),
+                    "leaf_state": leaf.state,
+                    "control_grid_resolution": [int(resolution_u), int(resolution_v)],
+                    "observations_per_control": float(leaf.count) / float(controls),
+                    "underdetermined": bool(underdetermined),
+                    "complex_leaf": leaf.state == STATE_COMPLEX,
+                    "subdivision_blocked": leaf.subdivision_blocked,
+                    "local_plane": {
+                        "rms": plane.local_plane_rms,
+                        "max_error": plane.local_plane_max_error,
+                        "thickness_ratio": plane.thickness_ratio,
+                        "eigenvalue_ratio": plane.eigenvalue_ratio,
+                        "degenerate": plane.degenerate,
+                    }
+                    if plane is not None
+                    else None,
+                    "support_polygon_world": polygon_world.detach().cpu().tolist()
+                    if polygon_world is not None
+                    else None,
+                    "support_polygon_uv": polygon_uv.detach().cpu().tolist()
+                    if polygon_uv is not None
+                    else None,
+                    "support_mask_empty": bool(support_mask_empty),
+                    "support_polygon_cells": polygon_cells,
+                    "support_final_cells": supported_cells,
+                    "local_support_coverage": local_support_coverage,
+                    "is_boundary_leaf": is_boundary_leaf,
+                    "boundary_faces": list(leaf_adjacency.get("boundary_faces", [])),
+                    "face_contacts": list(leaf_adjacency.get("contacts", [])),
+                    "density_refinement": refinement,
+                    "fit_rms": float(fit_residual.square().mean().sqrt().cpu()),
+                    "fit_max": float(fit_residual.max().cpu()),
+                }
+            )
+            coarse_masks.append(coarse_mask)
+
+        total_controls = sum(
+            int(patch.control_grid.shape[0] * patch.control_grid.shape[1]) for patch in patches
+        )
+        print(
+            "OSN-GS stage1 voxel-per-patch: "
+            f"patches={len(patches)} controls={total_controls} "
+            f"underdetermined={underdetermined_count} "
+            f"support_mode={support_mode} trim_resolution={trim_resolution} "
+            f"boundary_leaves={boundary_leaf_count} "
+            f"refined={sum(1 for p in provenance if p['density_refinement'] is not None)}",
+            flush=True,
+        )
+
+        unassigned = cluster_ids < 0
+        if bool(unassigned.any()):
+            # Fallback UV so the Gaussian model stays consistent; cluster_id
+            # stays -1 so metrics can separate unassigned Gaussians.
+            surface_uv[unassigned] = self.project_points_to_surface(points[unassigned], patches[0])
+
+        uncertain_mask = torch.zeros((count,), dtype=torch.bool, device=self.device)
+        opacities = torch.full((count, 1), 0.12, dtype=torch.float32, device=self.device)
+        scales = self._initial_covariance_scales(points)
+        confidence = torch.ones((count, 1), dtype=torch.float32, device=self.device)
+        model = TorchGaussianModel(sh_degree=self.config.sh_degree, device=self.device)
+        model.initialize(
+            positions=points,
+            colors=colors,
+            opacities=opacities,
+            scales=scales,
+            uncertain_mask=uncertain_mask,
+            surface_uv=surface_uv,
+            cluster_ids=cluster_ids,
+            confidence=confidence,
+        )
+        return TorchPipelineState(
+            model=model,
+            base_curves=self._empty_occlusion_curves(points),
+            occlusion_curves=self._empty_occlusion_curves(points),
+            surface=patches[0],
+            surface_patches=patches,
+            surface_fit_diagnostics=diagnostics,
+            voxel_regions=None,
+            voxel_hierarchy=hierarchy,
+            stage1_patch_provenance=provenance,
+            stage1_leaf_adjacency=adjacency or None,
+            stage1_coarse_masks=coarse_masks,
+        )
+
+    def _refine_boundary_leaf_support(
+        self,
+        points: Any,
+        leaf: Any,
+        leaf_adjacency: dict[str, Any],
+        node_by_id: dict[str, Any],
+        frame: Any,
+        leaf_points: Any,
+        polygon_mask: Any,
+        trim_resolution: int,
+    ) -> tuple[Any, dict[str, Any]]:
+        """Stage 1-F: density-refine one boundary leaf's support mask.
+
+        The refined support is the exact voxel polygon AND the thresholded KDE
+        support field, with two safeguards for active-active interfaces:
+
+        - data borrowing: Gaussians of interior-face neighbors that lie within
+          a bandwidth-scaled margin of the shared face join the KDE sample set,
+          so the density does not artificially decay where the surface simply
+          continues into the next voxel;
+        - a deterministic protection strip: trim cells within a bandwidth-scaled
+          distance of an interior face keep their polygon support even if the
+          density dips, so the refinement can never erode a shared face into a
+          seam. Both are raw-count constructs — no weights, no morphology.
+        """
+
+        torch = require_torch()
+        config = self.config
+        own_uv = frame.apply(leaf_points, clamp=False)
+        spacing = median_nn_spacing(own_uv)
+        bandwidth_multiplier = float(config.stage1_boundary_density_bandwidth)
+        median_bandwidth = bandwidth_multiplier * spacing
+        world_scale = float(frame.span.mean())
+        borrow_margin = 2.0 * median_bandwidth * world_scale
+
+        interior_contacts = [
+            contact
+            for contact in leaf_adjacency.get("contacts", [])
+            if contact["classification"] == FACE_INTERIOR and contact["neighbor_id"] is not None
+        ]
+        borrowed = []
+        for contact in interior_contacts:
+            neighbor = node_by_id.get(contact["neighbor_id"])
+            if neighbor is None or neighbor.gaussian_indices is None:
+                continue
+            axis = contact["face"] // 2
+            side = contact["face"] % 2
+            face_coord = float((leaf.aabb_max if side else leaf.aabb_min)[axis])
+            neighbor_points = points[neighbor.gaussian_indices.to(self.device)]
+            near = (neighbor_points[:, axis] - face_coord).abs() <= borrow_margin
+            if bool(near.any()):
+                borrowed.append(neighbor_points[near])
+        borrowed_count = sum(int(part.shape[0]) for part in borrowed)
+        samples = own_uv
+        if borrowed:
+            samples = torch.cat(
+                [own_uv] + [frame.apply(part, clamp=False) for part in borrowed], dim=0
+            )
+        # Per-sample adaptive bandwidth (multiple of each sample's own NN
+        # spacing): keeps the density scale-invariant across mixed densities,
+        # so sparse-but-uniform support is not erased by a global threshold.
+        bandwidths = bandwidth_multiplier * sample_nn_spacings(samples)
+
+        density_resolution = max(4, int(config.stage1_boundary_density_resolution))
+        grid = density_grid(samples, density_resolution, bandwidths)
+        # With per-sample adaptive bandwidths and unnormalized kernels the
+        # density is measured in "effective neighbors", which is invariant to
+        # local point density, so the threshold is an absolute level rather
+        # than a fraction of a (density-skewed) per-leaf reference. The median
+        # density at the data points is kept as a diagnostic only.
+        reference = float(kde_density(own_uv, samples, bandwidths).median())
+        level = float(config.stage1_boundary_density_threshold)
+        contour = marching_squares(grid, level)
+
+        centers = (
+            torch.arange(trim_resolution, dtype=own_uv.dtype, device=own_uv.device) + 0.5
+        ) / trim_resolution
+        grid_u, grid_v = torch.meshgrid(centers, centers, indexing="ij")
+        cells_uv = torch.stack([grid_u.reshape(-1), grid_v.reshape(-1)], dim=1)
+        density_mask = (
+            kde_density(cells_uv, samples, bandwidths) >= level
+        ).reshape(trim_resolution, trim_resolution)
+
+        protected = torch.zeros_like(polygon_mask)
+        if interior_contacts:
+            cell_world = frame.to_world(cells_uv)
+            protect_margin = 1.5 * median_bandwidth * world_scale
+            protected_flat = torch.zeros(
+                (cells_uv.shape[0],), dtype=torch.bool, device=cells_uv.device
+            )
+            for contact in interior_contacts:
+                axis = contact["face"] // 2
+                side = contact["face"] % 2
+                face_coord = float((leaf.aabb_max if side else leaf.aabb_min)[axis])
+                protected_flat |= (cell_world[:, axis] - face_coord).abs() <= protect_margin
+            protected = protected_flat.reshape(trim_resolution, trim_resolution)
+
+        refined = polygon_mask & (density_mask | protected)
+        contour_world = [
+            [frame.to_world(torch.tensor([a], dtype=own_uv.dtype))[0].tolist(),
+             frame.to_world(torch.tensor([b], dtype=own_uv.dtype))[0].tolist()]
+            for a, b in contour
+        ]
+        length_world = sum(
+            sum((pa - pb) ** 2 for pa, pb in zip(seg[0], seg[1])) ** 0.5
+            for seg in contour_world
+        )
+        refinement = {
+            "spacing_uv": float(spacing),
+            "bandwidth_uv": float(median_bandwidth),
+            "bandwidth_adaptive": True,
+            "bandwidth_uv_p10": float(torch.quantile(bandwidths, 0.10)),
+            "bandwidth_uv_p90": float(torch.quantile(bandwidths, 0.90)),
+            "density_reference": reference,
+            "threshold_level": level,
+            "borrowed_points": borrowed_count,
+            "interior_face_count": len(interior_contacts),
+            "protected_cells": int((protected & polygon_mask).sum()),
+            "density_grid_resolution": density_resolution,
+            "density_grid": grid.detach().cpu().tolist(),
+            "contour_uv": [[list(a), list(b)] for a, b in contour],
+            "contour_world": contour_world,
+            "refined_boundary_length_uv": contour_length_uv(contour),
+            "refined_boundary_length_world": float(length_world),
+            "coarse_cells": int(polygon_mask.sum()),
+            "refined_cells": int(refined.sum()),
+        }
+        return refined, refinement
 
     def maintain_surface_from_certain(
         self,
@@ -461,6 +911,7 @@ class TorchOSNGSPipeline:
         resolution_u: int,
         resolution_v: int,
         point_weights: Any | None = None,
+        initial_uv: Any | None = None,
     ) -> tuple[TorchNURBSSurface, NURBSFitDiagnostics]:
         """Fit one visible NURBS chart in the configured fitting mode."""
 
@@ -482,6 +933,7 @@ class TorchOSNGSPipeline:
                 point_weights=point_weights,
                 projection_iterations=int(self.config.surface_projection_iterations),
                 collect_diagnostics=True,
+                initial_uv=initial_uv,
             )
         else:
             patch = fit_torch_visible_surface(
@@ -491,6 +943,7 @@ class TorchOSNGSPipeline:
                 chunk_size=chunk_size,
                 degree_u=int(self.config.surface_degree_u),
                 degree_v=int(self.config.surface_degree_v),
+                initial_uv=initial_uv,
             )
             initial_uv = __import__("osn_gs.surface.torch_nurbs", fromlist=["pca_parameterize_points"]).pca_parameterize_points(fit_points)
             diagnostics = NURBSFitDiagnostics(fit_points.detach().clone(), None, initial_uv.detach().clone(), patch.control_grid.detach().clone(), [], patch.control_grid.detach().clone(), patch.weights.detach().clone())
@@ -823,7 +1276,11 @@ def nurbs_intermediate_payload(state: TorchPipelineState) -> dict[str, Any]:
     """
 
     surface = state.surface
-    return {
+    stage1_provenance = {
+        entry["patch_id"]: entry for entry in getattr(state, "stage1_patch_provenance", [])
+    }
+    hierarchy = getattr(state, "voxel_hierarchy", None)
+    payload: dict[str, Any] = {
         "type": "visible_nurbs_intermediate",
         "iteration": int(state.iteration),
         "parameter_domain": {"u": [0.0, 1.0], "v": [0.0, 1.0]},
@@ -845,6 +1302,11 @@ def nurbs_intermediate_payload(state: TorchPipelineState) -> dict[str, Any]:
                 "degree_u": int(patch.degree_u),
                 "degree_v": int(patch.degree_v),
                 "uv_support": _uv_support_payload(patch),
+                **(
+                    {"stage1": stage1_provenance[patch_id]}
+                    if patch_id in stage1_provenance
+                    else {}
+                ),
             }
             for patch_id, patch in enumerate(state.surface_patches)
         ],
@@ -858,4 +1320,11 @@ def nurbs_intermediate_payload(state: TorchPipelineState) -> dict[str, Any]:
             "final_output_remains_gaussian": True,
         },
     }
+    if hierarchy is not None:
+        payload["voxel_hierarchy"] = hierarchy_payload(hierarchy)
+        adjacency = getattr(state, "stage1_leaf_adjacency", None)
+        if adjacency:
+            payload["voxel_hierarchy"]["leaf_adjacency"] = adjacency
+        payload["metadata"]["constructor_mode"] = "voxel_patch_stage1"
+    return payload
 

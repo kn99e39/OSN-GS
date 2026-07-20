@@ -18,6 +18,9 @@ def annulus(xy: torch.Tensor) -> torch.Tensor:
 def u_shape(xy: torch.Tensor) -> torch.Tensor:
     x, y = xy[:, 0], xy[:, 1]
     return ((x.abs() >= 0.55) & (y >= -0.9) & (y <= 0.9)) | ((y <= -0.45) & (x.abs() <= 0.9))
+def elongated_rect(xy: torch.Tensor) -> torch.Tensor:
+    x, y = xy[:, 0], xy[:, 1]
+    return (x.abs() <= 1.0) & (y.abs() <= 0.28)
 def mask_on_grid(predicate: SupportPredicate, resolution: int = 128) -> torch.Tensor:
     lin = torch.linspace(-1.0, 1.0, int(resolution))
     x, y = torch.meshgrid(lin, lin, indexing="ij")

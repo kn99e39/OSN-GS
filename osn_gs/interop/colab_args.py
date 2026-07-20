@@ -44,6 +44,63 @@ def surface_fit_config_kwargs(args: argparse.Namespace) -> dict:
     }
 
 
+def add_stage1_constructor_arguments(parser: argparse.ArgumentParser) -> None:
+    """Register Stage 1 voxel-per-patch constructor arguments (shared by both entrypoints).
+
+    The trainer still runs the legacy constructor by default; these exist so the
+    notebook and both CLIs stay recipe-identical once ``voxel_patch_stage1`` is
+    integrated into the training lifecycle (parity rule, docs/worklogs/14).
+    """
+
+    parser.add_argument(
+        "--nurbs_constructor_mode",
+        type=str,
+        default="legacy",
+        choices=("legacy", "voxel_patch_stage1"),
+        help="NURBS constructor architecture. 'legacy' is the production path; 'voxel_patch_stage1' is the experimental voxel-per-patch constructor.",
+    )
+    parser.add_argument("--voxel_min_gaussian_count", type=int, default=10, help="[stage1] Minimum raw Gaussian count for an active leaf voxel.")
+    parser.add_argument("--voxel_max_gaussian_count", type=int, default=150, help="[stage1] Raw count above which a leaf voxel subdivides.")
+    parser.add_argument("--voxel_max_depth", type=int, default=6, help="[stage1] Maximum recursive subdivision depth.")
+    parser.add_argument("--voxel_min_size", type=float, default=0.0, help="[stage1] Minimum voxel edge length; 0 disables the size stop.")
+    parser.add_argument("--stage1_observations_per_control", type=float, default=2.0, help="[stage1] Target observations per control point when sizing patch grids.")
+    parser.add_argument("--stage1_complex_thickness_ratio", type=float, default=0.35, help="[stage1] Smallest/mid PCA std ratio above which a leaf counts as complex.")
+    parser.add_argument("--no_stage1_subdivide_complex", action="store_true", help="[stage1] Do not subdivide complex leaves that still have depth/size margin.")
+    parser.add_argument("--no_stage1_fit_complex_leaves", action="store_true", help="[stage1] Skip fitting complex leaves instead of fitting and flagging them.")
+    parser.add_argument(
+        "--stage1_support_mode",
+        type=str,
+        default="voxel_density",
+        choices=("voxel_density", "voxel", "none"),
+        help="[stage1] Patch support: plane-AABB polygon + density-refined boundary, polygon only, or untrimmed.",
+    )
+    parser.add_argument("--no_stage1_boundary_refinement", action="store_true", help="[stage1-F] Disable the density boundary refinement inside voxel_density mode.")
+    parser.add_argument("--stage1_boundary_density_resolution", type=int, default=32, help="[stage1-F] Boundary-leaf density grid resolution.")
+    parser.add_argument("--stage1_boundary_density_bandwidth", type=float, default=2.0, help="[stage1-F] Adaptive KDE bandwidth as a multiple of each sample's own UV NN spacing.")
+    parser.add_argument("--stage1_boundary_density_threshold", type=float, default=2.0, help="[stage1-F] Absolute support level in effective-neighbor units.")
+
+
+def stage1_constructor_config_kwargs(args: argparse.Namespace) -> dict:
+    """Map Stage 1 constructor CLI arguments onto TorchPipelineConfig fields."""
+
+    return {
+        "nurbs_constructor_mode": str(args.nurbs_constructor_mode),
+        "voxel_min_gaussian_count": max(1, int(args.voxel_min_gaussian_count)),
+        "voxel_max_gaussian_count": max(1, int(args.voxel_max_gaussian_count)),
+        "voxel_max_depth": max(0, int(args.voxel_max_depth)),
+        "voxel_min_size": max(0.0, float(args.voxel_min_size)),
+        "stage1_observations_per_control": max(0.1, float(args.stage1_observations_per_control)),
+        "stage1_complex_thickness_ratio": max(0.0, float(args.stage1_complex_thickness_ratio)),
+        "stage1_subdivide_complex": not bool(args.no_stage1_subdivide_complex),
+        "stage1_fit_complex_leaves": not bool(args.no_stage1_fit_complex_leaves),
+        "stage1_support_mode": str(args.stage1_support_mode),
+        "stage1_boundary_refinement_enabled": not bool(args.no_stage1_boundary_refinement),
+        "stage1_boundary_density_resolution": max(4, int(args.stage1_boundary_density_resolution)),
+        "stage1_boundary_density_bandwidth": max(0.1, float(args.stage1_boundary_density_bandwidth)),
+        "stage1_boundary_density_threshold": max(0.0, float(args.stage1_boundary_density_threshold)),
+    }
+
+
 def build_osn_gs_train_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Train OSN-GS from notebook-compatible arguments.")
 
@@ -119,6 +176,7 @@ def build_osn_gs_train_parser() -> argparse.ArgumentParser:
     parser.add_argument("--voxel_boundary_angle_degrees", type=float, default=35.0, help="Normal-angle change used to mark voxel boundaries.")
     parser.add_argument("--voxel_min_points_per_region", type=int, default=1, help="Minimum Gaussians required to keep a voxel region.")
     parser.add_argument("--voxel_normal_chunk_size", type=int, default=4096, help="Regions processed per batched SVD/cdist chunk during voxel normal estimation.")
+    add_stage1_constructor_arguments(parser)
     parser.add_argument("--uncertain_samples_u", type=int, default=16)
     parser.add_argument("--uncertain_samples_v", type=int, default=3)
     parser.add_argument(

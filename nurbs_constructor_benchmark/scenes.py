@@ -7,7 +7,16 @@ from typing import Callable
 
 import torch
 
-from .support_domains import SupportPredicate, annulus, crescent, full_square, sample_in_domain, triangle, u_shape
+from .support_domains import (
+    SupportPredicate,
+    annulus,
+    crescent,
+    elongated_rect,
+    full_square,
+    sample_in_domain,
+    triangle,
+    u_shape,
+)
 
 
 Oracle = Callable[[torch.Tensor], tuple[torch.Tensor, torch.Tensor]]
@@ -44,6 +53,11 @@ class SyntheticGaussianScene:
     gt_patch_label: LabelFn
     support_predicate: SupportPredicate
     support_name: str
+    # Multi-sheet ground truth (e.g. two close parallel planes). ``None`` means
+    # the single ``surface_fn`` height field describes the whole true surface;
+    # otherwise each entry is one sheet's height field and GT samples are the
+    # union of all sheets. ``surface_fn`` stays equal to ``sheet_fns[0]``.
+    sheet_fns: tuple[HeightFn, ...] | None = None
 
 
 def _colors(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
@@ -65,6 +79,22 @@ def _crease_height(xy: torch.Tensor) -> torch.Tensor:
     return 0.45 * xy[:, 0].abs()
 
 
+def _mild_curved_height(xy: torch.Tensor) -> torch.Tensor:
+    # Gentle paraboloid: curved everywhere but nowhere near a crease.
+    return 0.12 * (xy[:, 0].square() + xy[:, 1].square())
+
+
+_SHEET_GAP = 0.12  # close_parallel_sheets: z = +/- gap / 2
+
+
+def _upper_sheet_height(xy: torch.Tensor) -> torch.Tensor:
+    return torch.full((xy.shape[0],), _SHEET_GAP * 0.5, dtype=xy.dtype, device=xy.device)
+
+
+def _lower_sheet_height(xy: torch.Tensor) -> torch.Tensor:
+    return torch.full((xy.shape[0],), -_SHEET_GAP * 0.5, dtype=xy.dtype, device=xy.device)
+
+
 # --- Ground-truth patch labels (topology). ---
 
 def _single_patch_label(xy: torch.Tensor) -> torch.Tensor:
@@ -74,6 +104,13 @@ def _single_patch_label(xy: torch.Tensor) -> torch.Tensor:
 def _crease_patch_label(xy: torch.Tensor) -> torch.Tensor:
     # Two planes meeting at the ridge x = 0.
     return (xy[:, 0] >= 0.0).long()
+
+
+def _sheet_patch_label(points: torch.Tensor) -> torch.Tensor:
+    # Label by sheet (z sign); expects (N, 3) points, unlike the xy-only labels.
+    if points.shape[1] < 3:
+        return torch.zeros(points.shape[0], dtype=torch.long, device=points.device)
+    return (points[:, 2] >= 0.0).long()
 
 
 def _plane_oracle(points: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
@@ -101,6 +138,23 @@ def _crease_oracle(points: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     return residual, torch.nn.functional.normalize(normals, dim=1)
 
 
+def _mild_curved_oracle(points: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    x, y = points[:, 0], points[:, 1]
+    residual = points[:, 2] - 0.12 * (x.square() + y.square())
+    normals = torch.stack([-0.24 * x, -0.24 * y, torch.ones_like(x)], dim=1)
+    return residual, torch.nn.functional.normalize(normals, dim=1)
+
+
+def _parallel_sheets_oracle(points: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    z = points[:, 2]
+    upper = z - _SHEET_GAP * 0.5
+    lower = z + _SHEET_GAP * 0.5
+    residual = torch.where(upper.abs() <= lower.abs(), upper, lower)
+    normals = torch.zeros_like(points)
+    normals[:, 2] = 1.0
+    return residual, normals
+
+
 def _density_gradient_xy(count: int, generator: torch.Generator) -> torch.Tensor:
     """Non-uniform point density: most samples cluster near the origin.
 
@@ -120,7 +174,7 @@ def _density_gradient_xy(count: int, generator: torch.Generator) -> torch.Tensor
 
 
 def make_scene(name: str, count: int, seed: int = 0, noise_std: float = 0.0) -> SyntheticGaussianScene:
-    """Create one named scene: ``plane``, ``sine``, ``crease``, or ``density_gradient``."""
+    """Create one named synthetic scene (see ``SCENE_NAMES``)."""
 
     if name not in SCENE_NAMES:
         raise ValueError(f"Unknown synthetic scene: {name}")
@@ -130,16 +184,19 @@ def make_scene(name: str, count: int, seed: int = 0, noise_std: float = 0.0) -> 
     support_name = "square"
     if name == "density_gradient":
         xy = _density_gradient_xy(count, generator)
-    elif name in {"triangle", "u_shape", "crescent", "planar_hole"}:
+    elif name in {"triangle", "u_shape", "crescent", "planar_hole", "elongated_plane"}:
         support_predicate, support_name = {
             "triangle": (triangle, "triangle"), "u_shape": (u_shape, "u_shape"),
             "crescent": (crescent, "crescent"), "planar_hole": (annulus, "annulus"),
+            "elongated_plane": (elongated_rect, "elongated_rect"),
         }[name]
         xy = sample_in_domain(support_predicate, count, generator)
     else:
         xy = torch.rand((count, 2), generator=generator) * 2.0 - 1.0
     x, y = xy[:, 0], xy[:, 1]
     gt_patch_count, gt_patch_label = 1, _single_patch_label
+    sheet_fns: tuple[HeightFn, ...] | None = None
+    z_override: torch.Tensor | None = None
     if name == "plane":
         surface_fn, oracle = _plane_height, _plane_oracle
         description = "Flat chart: baseline fitting and normal stability."
@@ -161,11 +218,25 @@ def make_scene(name: str, count: int, seed: int = 0, noise_std: float = 0.0) -> 
     elif name == "planar_hole":
         surface_fn, oracle = _plane_height, _plane_oracle
         description = "Planar annular support: hole preservation and Euler-equivalent topology."
+    elif name == "elongated_plane":
+        surface_fn, oracle = _plane_height, _plane_oracle
+        description = "Planar thin elongated support: anisotropic extent and aspect-ratio allocation."
+    elif name == "mild_curved_sheet":
+        surface_fn, oracle = _mild_curved_height, _mild_curved_oracle
+        description = "Gently curved paraboloid sheet: curvature fidelity without creases."
+    elif name == "close_parallel_sheets":
+        surface_fn, oracle = _upper_sheet_height, _parallel_sheets_oracle
+        sheet_fns = (_upper_sheet_height, _lower_sheet_height)
+        gt_patch_count, gt_patch_label = 2, _sheet_patch_label
+        # Alternate sheets by index so both sheets are spatially interleaved.
+        sheet_pick = torch.arange(count) % 2 == 0
+        z_override = torch.where(sheet_pick, _SHEET_GAP * 0.5, -_SHEET_GAP * 0.5)
+        description = "Two close parallel planar sheets: layer separation vs. mid-plane merging."
     else:
         surface_fn, oracle = _crease_height, _crease_oracle
         gt_patch_count, gt_patch_label = 2, _crease_patch_label
         description = "Two planes with a sharp crease: voxel-boundary and multi-patch behavior."
-    z = surface_fn(xy)
+    z = surface_fn(xy) if z_override is None else z_override
     points = torch.stack([x, y, z], dim=1)
     if noise_std > 0.0:
         points = points + torch.randn(points.shape, generator=generator) * float(noise_std)
@@ -180,7 +251,11 @@ def make_scene(name: str, count: int, seed: int = 0, noise_std: float = 0.0) -> 
         gt_patch_label=gt_patch_label,
         support_predicate=support_predicate,
         support_name=support_name,
+        sheet_fns=sheet_fns,
     )
 
 
-SCENE_NAMES = ("plane", "sine", "crease", "density_gradient", "triangle", "u_shape", "crescent", "planar_hole")
+SCENE_NAMES = (
+    "plane", "sine", "crease", "density_gradient", "triangle", "u_shape", "crescent", "planar_hole",
+    "elongated_plane", "mild_curved_sheet", "close_parallel_sheets",
+)

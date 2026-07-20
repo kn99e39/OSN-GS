@@ -14,7 +14,12 @@ from osn_gs.core.torch_pipeline import TorchOSNGSPipeline, TorchPipelineConfig, 
 
 from .diagnostics import export as export_construction_diagnostics
 from .ground_truth import gt_nurbs_payload
-from .metrics import ground_truth_metrics, patch_union_metrics
+from .metrics import (
+    contour_vs_gt_boundary,
+    ground_truth_metrics,
+    patch_union_metrics,
+    support_boundary_conformality,
+)
 from .scenes import SCENE_NAMES, SyntheticGaussianScene, make_scene
 
 
@@ -33,6 +38,10 @@ def export_renderer_output(scene: SyntheticGaussianScene, state: Any, output_dir
     Also writes ``nurbs_surface_gt.json`` -- the ground-truth NURBS in the same
     format -- so the true and reconstructed surfaces can be overlaid in the
     renderer for a direct visual comparison.
+
+    ``<scene>_gt/`` gets the same ``point_cloud.ply`` as ``<scene>/`` so it is
+    a self-contained renderer input directory (point cloud + one NURBS JSON),
+    loadable on its own instead of only alongside the reconstruction.
     """
 
     scene_dir = output_dir / scene.name
@@ -40,6 +49,7 @@ def export_renderer_output(scene: SyntheticGaussianScene, state: Any, output_dir
     scene_dir.mkdir(parents=True, exist_ok=True)
     gt_dir.mkdir(parents=True, exist_ok=True)
     state.model.save_ply(scene_dir / "point_cloud.ply")
+    state.model.save_ply(gt_dir / "point_cloud.ply")
     payload = nurbs_intermediate_payload(state)
     (scene_dir / "nurbs_surface.json").write_text(
         json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
@@ -84,6 +94,7 @@ def _export_union_artifact(raster: dict[str, Any], output_dir: Path) -> dict[str
         ("gt_hole_mask", "#e0b13c", "gt holes"),
         ("union_hole_mask", "#d84a3c", "union holes"),
         ("overlap_mask", "#7a3cd8", "overlap>=2"),
+        ("seam_mask", "#1fbf6b", "seams"),
     ]
     for index, (key, color, label) in enumerate(layers):
         mask = raster[key]
@@ -124,6 +135,18 @@ def _stage1_scene_metrics(scene: SyntheticGaussianScene, state: Any, union_raste
         if bool(gt_holes[int(cell[0]), int(cell[1])]):
             inactive_enclosed += 1
     provenance = getattr(state, "stage1_patch_provenance", [])
+    refinements = [p["density_refinement"] for p in provenance if p.get("density_refinement")]
+    contour_points = [
+        endpoint[:2]
+        for refinement in refinements
+        for segment in refinement["contour_world"]
+        for endpoint in segment
+    ]
+    contour_chamfer, contour_hausdorff = contour_vs_gt_boundary(
+        scene,
+        _torch.tensor(contour_points) if contour_points else _torch.empty((0, 2)),
+        resolution,
+    )
     return {
         "leaf_state_counts": hierarchy.state_counts(),
         "hierarchy_max_depth": hierarchy.max_depth_reached(),
@@ -132,7 +155,97 @@ def _stage1_scene_metrics(scene: SyntheticGaussianScene, state: Any, union_raste
         "empty_support_mask_count": sum(1 for p in provenance if p["support_mask_empty"]),
         "observations_per_control_min": min((p["observations_per_control"] for p in provenance), default=None),
         "observations_per_control_median": sorted(p["observations_per_control"] for p in provenance)[len(provenance) // 2] if provenance else None,
+        # Stage 1-F boundary refinement summary.
+        "boundary_leaf_count": sum(1 for p in provenance if p.get("is_boundary_leaf")),
+        "refined_patch_count": len(refinements),
+        "refined_boundary_length_world": sum(r["refined_boundary_length_world"] for r in refinements),
+        "density_contour_gt_chamfer": contour_chamfer,
+        "density_contour_gt_hausdorff": contour_hausdorff,
         "patches": provenance,
+    }
+
+
+def _export_boundary_refinement_artifact(state: Any, output_dir: Path, max_panels: int = 16) -> dict[str, str]:
+    """Per-boundary-leaf SVG: density heatmap + threshold contour + coarse polygon
+    + refined mask, so the refinement is verifiable without a browser viewer."""
+
+    provenance = [p for p in getattr(state, "stage1_patch_provenance", []) if p.get("density_refinement")]
+    if not provenance:
+        return {}
+    output_dir.mkdir(parents=True, exist_ok=True)
+    size, pad = 140, 26
+    panels = []
+    for slot, patch_provenance in enumerate(provenance[:max_panels]):
+        refinement = patch_provenance["density_refinement"]
+        origin_x = slot * (size + pad) + pad
+        grid = refinement["density_grid"]
+        grid_resolution = len(grid)
+        level = refinement["threshold_level"]
+        peak = max((max(row) for row in grid), default=1.0) or 1.0
+        cell = size / grid_resolution
+        rects = []
+        for i, row in enumerate(grid):
+            for j, value in enumerate(row):
+                shade = int(235 - 195 * min(1.0, value / peak))
+                rects.append(
+                    f'<rect x="{origin_x + i * cell:.1f}" y="{pad + (grid_resolution - 1 - j) * cell:.1f}" '
+                    f'width="{cell:.2f}" height="{cell:.2f}" fill="rgb({shade},{shade},{shade})"/>'
+                )
+        contour_lines = "".join(
+            f'<line x1="{origin_x + a[0] * size:.1f}" y1="{pad + (1 - a[1]) * size:.1f}" '
+            f'x2="{origin_x + b[0] * size:.1f}" y2="{pad + (1 - b[1]) * size:.1f}" '
+            'stroke="#d8402f" stroke-width="1.2"/>'
+            for a, b in refinement["contour_uv"]
+        )
+        polygon_uv = patch_provenance.get("support_polygon_uv") or []
+        polygon_points = " ".join(
+            f"{origin_x + p[0] * size:.1f},{pad + (1 - p[1]) * size:.1f}" for p in polygon_uv
+        )
+        polygon_svg = (
+            f'<polygon points="{polygon_points}" fill="none" stroke="#2b7bd8" stroke-width="1.2"/>'
+            if polygon_uv else ""
+        )
+        label = (
+            f'{patch_provenance["source_leaf_voxel_id"]}: '
+            f'{refinement["coarse_cells"]}→{refinement["refined_cells"]} cells, '
+            f'protected={refinement["protected_cells"]}, borrowed={refinement["borrowed_points"]}'
+        )
+        panels.append(
+            "".join(rects) + contour_lines + polygon_svg
+            + f'<text x="{origin_x}" y="{pad + size + 14}" fill="#222" font-size="9">{label}</text>'
+        )
+    width = min(len(provenance), max_panels) * (size + pad) + pad
+    svg = (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{size + 2 * pad + 20}" '
+        f'viewBox="0 0 {width} {size + 2 * pad + 20}"><rect width="100%" height="100%" fill="white"/>'
+        '<text x="8" y="14" fill="#222" font-size="10">density heatmap (gray) + threshold contour (red) + coarse voxel polygon (blue)</text>'
+        + "".join(panels)
+        + "</svg>"
+    )
+    svg_path = output_dir / "boundary_refinement.svg"
+    svg_path.write_text(svg, encoding="utf-8")
+    json_path = output_dir / "boundary_refinement.json"
+    json_path.write_text(
+        json.dumps(
+            {
+                "patches": [
+                    {
+                        "patch_id": p["patch_id"],
+                        "source_leaf_voxel_id": p["source_leaf_voxel_id"],
+                        "boundary_faces": p["boundary_faces"],
+                        "density_refinement": p["density_refinement"],
+                        "support_polygon_uv": p["support_polygon_uv"],
+                    }
+                    for p in provenance
+                ]
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    return {
+        "boundary_refinement_svg": str(svg_path),
+        "boundary_refinement_json": str(json_path),
     }
 
 
@@ -179,10 +292,24 @@ def evaluate_scene(
     controls = sum(int(patch.control_grid.shape[0] * patch.control_grid.shape[1]) for patch in state.surface_patches)
     gt, support_raster = ground_truth_metrics(scene, state)
     union_metrics, union_raster = patch_union_metrics(scene, state)
+    # Stage 1-F: score the coarse polygon-only support with the same union
+    # machinery so the density refinement's effect is directly comparable.
+    coarse_union = None
+    coarse_vs_refined_iou = None
+    coarse_masks = getattr(state, "stage1_coarse_masks", [])
+    if any(mask is not None for mask in coarse_masks):
+        coarse_union, coarse_raster = patch_union_metrics(scene, state, mask_override=coarse_masks)
+        refined_mask = torch.tensor(union_raster["union_mask"], dtype=torch.bool)
+        coarse_mask = torch.tensor(coarse_raster["union_mask"], dtype=torch.bool)
+        union_cells = int((refined_mask | coarse_mask).sum())
+        coarse_vs_refined_iou = (
+            int((refined_mask & coarse_mask).sum()) / union_cells if union_cells else 1.0
+        )
     support_artifact_dir = export_dir.parent / "NURBS_diagnostics" / scene.name if export_dir is not None else None
     support_artifacts = _export_support_artifact(support_raster, support_artifact_dir) if support_artifact_dir is not None else {}
     if support_artifact_dir is not None:
         support_artifacts.update(_export_union_artifact(union_raster, support_artifact_dir))
+        support_artifacts.update(_export_boundary_refinement_artifact(state, support_artifact_dir))
     if diagnostics_dir is not None:
         support_artifacts.update({"uv_occupancy_json": str(diagnostics_dir / "uv_support.json"), "uv_occupancy_svg": str(diagnostics_dir / "uv_support.svg")})
     assigned = state.model.cluster_ids >= 0
@@ -206,8 +333,14 @@ def evaluate_scene(
         "normal_p95_degrees": float(torch.quantile(normal_degrees, 0.95).cpu()),
         # Ground-truth NURBS surface metrics, split by construction concern.
         "ground_truth": gt,
+        # Boundary-conformal topology ideal: how much of the support boundary
+        # is realized as chart edges (GT conformal charts score 1.0).
+        "support_conformality": support_boundary_conformality(state),
         # Stage 1-D: support topology on the world-space union of all patches.
         "patch_union": union_metrics,
+        # Stage 1-F: same union metrics for the coarse polygon-only masks.
+        "patch_union_coarse": coarse_union,
+        "coarse_vs_refined_support_iou": coarse_vs_refined_iou,
         "stage1": _stage1_scene_metrics(scene, state, union_raster),
         "finite": bool(
             torch.isfinite(anchors).all()
@@ -244,11 +377,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--voxel-min-size", type=float, default=0.0, help="[stage1] Minimum voxel edge length (0 disables).")
     parser.add_argument(
         "--stage1-support",
-        choices=("voxel", "none"),
-        default="voxel",
-        help="[stage1] Patch support mask: exact plane-AABB polygon ('voxel') or untrimmed ('none').",
+        choices=("voxel_density", "voxel", "none"),
+        default="voxel_density",
+        help="[stage1] Patch support mask: plane-AABB polygon + density-refined boundary ('voxel_density'), polygon only ('voxel'), or untrimmed ('none').",
     )
     parser.add_argument("--stage1-obs-per-control", type=float, default=2.0, help="[stage1] Target observations per control point when sizing patch grids.")
+    parser.add_argument("--stage1-density-resolution", type=int, default=32, help="[stage1-F] Boundary-leaf density grid resolution.")
+    parser.add_argument("--stage1-density-bandwidth", type=float, default=2.0, help="[stage1-F] Adaptive KDE bandwidth as a multiple of each sample's own UV NN spacing.")
+    parser.add_argument("--stage1-density-threshold", type=float, default=2.0, help="[stage1-F] Absolute support level in effective-neighbor units.")
+    parser.add_argument("--no-stage1-boundary-refinement", action="store_true", help="[stage1-F] Disable density boundary refinement (voxel_density falls back to polygon-only).")
     parser.add_argument("--resolution-u", type=int, default=8)
     parser.add_argument("--resolution-v", type=int, default=4)
     parser.add_argument("--fit-mode", choices=("lsq", "idw"), default="lsq")
@@ -290,6 +427,10 @@ def main(argv: list[str] | None = None) -> int:
         voxel_min_size=max(0.0, args.voxel_min_size),
         stage1_support_mode=args.stage1_support,
         stage1_observations_per_control=max(0.1, args.stage1_obs_per_control),
+        stage1_boundary_refinement_enabled=not args.no_stage1_boundary_refinement,
+        stage1_boundary_density_resolution=max(4, args.stage1_density_resolution),
+        stage1_boundary_density_bandwidth=max(0.1, args.stage1_density_bandwidth),
+        stage1_boundary_density_threshold=max(0.0, args.stage1_density_threshold),
         **({"surface_trim_resolution": args.trim_resolution} if args.trim_resolution is not None else {}),
         **({"surface_trim_dilation": args.trim_dilation} if args.trim_dilation is not None else {}),
     )

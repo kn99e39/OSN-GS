@@ -380,3 +380,8 @@ The local Graphdeco notebook cells read/write patched Python sources with explic
 ## 2026-07-16 Benchmark GT Renderer Folder Split
 
 - Constructor benchmark renderer exports now keep generated and GT NURBS in separate sibling folders: NURBS_output/scene and NURBS_output/scene_gt. Both use the renderer-standard filename nurbs_surface.json, so loading directories no longer combines two same-type surfaces in one snapshot. See docs/worklogs/27_benchmark_gt_folder_split.md.
+
+## 2026-07-20 Governing NURBS Construction Plan
+
+- [OSN_GS_Final_Boundary_First_NURBS_Direction.md](../OSN_GS_Final_Boundary_First_NURBS_Direction.md) is the governing plan for future NURBS construction work. It requires boundary-first topology, component-level Gaussian geometry fitting, topology-aware chart generation, benchmark-only phased implementation, and an explicit user approval gate after every phase.
+- [OSN_GS_Voxel_Driven_NURBS_Migration_Plan.md](../OSN_GS_Voxel_Driven_NURBS_Migration_Plan.md) is retained only as the historical Stage 1 migration record.

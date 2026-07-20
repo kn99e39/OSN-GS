@@ -28,6 +28,8 @@
 
 # OSN-GS NURBS Construction — 안정화 로드맵
 
+> **Planning status:** this section is retained as a backlog and evidence index, not as the authoritative implementation sequence. For all new NURBS construction work, follow the phase gates and constraints in [OSN_GS_Final_Boundary_First_NURBS_Direction.md](OSN_GS_Final_Boundary_First_NURBS_Direction.md). The historical voxel-driven migration plan is not a substitute for that governing plan.
+
 ## 범위와 문제 분리
 
 현재 단계의 목표는 **clean synthetic Gaussian을 oracle input으로 사용해 NURBS constructor 자체의 정확성·support·topology를 검증하는 것**이다. 실전 COLMAP/3DGS에서 발생하는 floating/invalid Gaussian 문제는 constructor 안정화 이후 별도의 input-eligibility 계층에서 처리한다.

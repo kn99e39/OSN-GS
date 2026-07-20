@@ -342,6 +342,54 @@ def fit_torch_base_curves(points: Any, curve_count: int = 4, patch_ids: Any | No
     )
 
 
+@dataclass
+class UVFrame:
+    """Affine 3D->UV chart: project onto two axes, then min-max normalize.
+
+    Matches the parameterization convention of :func:`pca_parameterize_points`
+    so a polygon mapped through the same frame lands in the same UV domain the
+    fitted chart uses. Stage 1 builds this from each voxel's local plane
+    tangents; the origin is the point set's mean/centroid.
+    """
+
+    origin: Any  # (3,)
+    axis_u: Any  # (3,)
+    axis_v: Any  # (3,)
+    coord_min: Any  # (2,)
+    span: Any  # (2,)
+
+    def apply(self, points: Any, clamp: bool = True) -> Any:
+        torch = require_torch()
+        points = torch.as_tensor(points, dtype=self.origin.dtype, device=self.origin.device)
+        coords = (points - self.origin) @ torch.stack([self.axis_u, self.axis_v], dim=1)
+        uv = (coords - self.coord_min) / self.span
+        return torch.clamp(uv, 0.0, 1.0) if clamp else uv
+
+    def to_world(self, uv: Any) -> Any:
+        """Map ``(Q, 2)`` UV back to 3D points on the frame's tangent plane."""
+
+        torch = require_torch()
+        uv = torch.as_tensor(uv, dtype=self.origin.dtype, device=self.origin.device)
+        coords = uv * self.span + self.coord_min
+        return (
+            self.origin
+            + coords[:, 0:1] * self.axis_u[None, :]
+            + coords[:, 1:2] * self.axis_v[None, :]
+        )
+
+
+def uv_frame_from_axes(points: Any, origin: Any, axis_u: Any, axis_v: Any) -> UVFrame:
+    """UV frame over the given tangent axes, normalized to the points' extent."""
+
+    torch = require_torch()
+    points = torch.as_tensor(points, dtype=torch.float32, device=points.device if hasattr(points, "device") else None)
+    axes = torch.stack([axis_u, axis_v], dim=1).to(points.dtype)
+    coords = (points - origin) @ axes
+    coord_min = coords.min(dim=0).values
+    span = torch.clamp(coords.max(dim=0).values - coord_min, min=1e-6)
+    return UVFrame(origin=origin, axis_u=axes[:, 0], axis_v=axes[:, 1], coord_min=coord_min, span=span)
+
+
 def pca_parameterize_points(points: Any) -> Any:
     """Unroll points into a normalized ``[0, 1]^2`` PCA parameter domain.
 
@@ -393,6 +441,7 @@ def fit_torch_visible_surface(
     chunk_size: int = 4096,
     degree_u: int = 2,
     degree_v: int = 2,
+    initial_uv: Any | None = None,
 ) -> TorchNURBSSurface:
     """관측 Gaussian center만 사용해 visible surface parameter grid를 만든다.
 
@@ -419,7 +468,9 @@ def fit_torch_visible_surface(
             control_grid=grid, weights=weights, degree_u=degree_u, degree_v=degree_v, observed_v_max=1.0
         )
 
-    uv_points = pca_parameterize_points(points)
+    uv_points = pca_parameterize_points(points) if initial_uv is None else torch.as_tensor(
+        initial_uv, dtype=dtype, device=device
+    )
 
     u = torch.linspace(0.0, 1.0, resolution_u, dtype=dtype, device=device)
     v = torch.linspace(0.0, 1.0, resolution_v, dtype=dtype, device=device)
@@ -544,6 +595,7 @@ def fit_torch_visible_surface_lsq(
     point_weights: Any | None = None,
     projection_iterations: int = 4,
     collect_diagnostics: bool = False,
+    initial_uv: Any | None = None,
 ) -> tuple[TorchNURBSSurface, Any] | tuple[TorchNURBSSurface, Any, NURBSFitDiagnostics]:
     """Least-squares visible NURBS fit with foot-point parameter correction.
 
@@ -555,6 +607,8 @@ def fit_torch_visible_surface_lsq(
 
     torch = require_torch()
     points = torch.as_tensor(points, dtype=torch.float32, device=points.device if hasattr(points, "device") else None)
+    if initial_uv is not None:
+        initial_uv = torch.as_tensor(initial_uv, dtype=torch.float32, device=points.device)
     surface = fit_torch_visible_surface(
         points,
         resolution_u=resolution_u,
@@ -562,8 +616,10 @@ def fit_torch_visible_surface_lsq(
         chunk_size=chunk_size,
         degree_u=degree_u,
         degree_v=degree_v,
+        initial_uv=initial_uv,
     )
-    initial_uv = pca_parameterize_points(points)
+    if initial_uv is None:
+        initial_uv = pca_parameterize_points(points)
     diagnostics = NURBSFitDiagnostics(points.detach().clone(), None, initial_uv.detach().clone(), surface.control_grid.detach().clone(), [], surface.control_grid.detach().clone(), surface.weights.detach().clone()) if collect_diagnostics else None
     if int(points.shape[0]) <= 1:
         return (surface, initial_uv, diagnostics) if diagnostics is not None else (surface, initial_uv)

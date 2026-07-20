@@ -47,9 +47,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--base_curve_count", type=int, default=8)
     parser.add_argument("--visible_surface_resolution_u", type=int, default=8)
     parser.add_argument("--visible_surface_resolution_v", type=int, default=4)
-    parser.add_argument("--visible_surface_resolution_scale", type=float, default=1.0)
+    parser.add_argument("--visible_surface_resolution_scale", type=float, default=4.0, help="Notebook Train default: 4.0.")
     parser.add_argument("--max_surface_control_points", type=int, default=65536)
-    parser.add_argument("--visible_surface_fit_device", type=str, default="cpu", choices=("cpu", "cuda", "auto"))
+    parser.add_argument("--visible_surface_fit_device", type=str, default=default_device(prefer_cuda=True), choices=("cpu", "cuda", "auto"), help="Notebook Train default: active training device.")
     parser.add_argument("--visible_surface_fit_chunk_size", type=int, default=0)
     add_surface_fit_arguments(parser)
 

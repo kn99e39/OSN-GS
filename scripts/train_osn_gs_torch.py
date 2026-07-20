@@ -12,7 +12,12 @@ from osn_gs.core.torch_pipeline import TorchPipelineConfig
 from osn_gs.core.torch_trainer import TorchOSNGSTrainer, TorchTrainingConfig
 from osn_gs.data.colmap_scene import load_colmap_scene
 from osn_gs.gaussian.torch_density_control import TorchDensityControlConfig
-from osn_gs.interop.colab_args import add_surface_fit_arguments, surface_fit_config_kwargs
+from osn_gs.interop.colab_args import (
+    add_stage1_constructor_arguments,
+    add_surface_fit_arguments,
+    stage1_constructor_config_kwargs,
+    surface_fit_config_kwargs,
+)
 from osn_gs.render.diff_gaussian_loader import validate_diff_gaussian_build_environment
 from osn_gs.render.gaussian_rasterizer import GaussianRasterizerConfig
 from osn_gs.utils.torch_ops import default_device
@@ -59,6 +64,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="NURBS grid samples per fitting chunk. 0 auto-selects once from available VRAM at startup.",
     )
     add_surface_fit_arguments(parser)
+    add_stage1_constructor_arguments(parser)
     parser.add_argument("--disable_voxel_surface_regions", action="store_true", help="Bypass pre-NURBS voxel surface-region placement.")
     parser.add_argument("--voxel_grid_resolution", type=int, default=16, help="Coarse voxel grid resolution per axis before NURBS fitting.")
     parser.add_argument("--disable_adaptive_voxel_density", action="store_true", help="Keep all occupied voxel cells at the coarse resolution.")
@@ -193,6 +199,7 @@ def main() -> None:
         uncertain_samples_v=uncertain_samples_v,
         max_uncertain_gaussians=max_uncertain_gaussians,
         **surface_fit_config_kwargs(args),
+        **stage1_constructor_config_kwargs(args),
     )
     training_config = TorchTrainingConfig(
         iterations=args.iterations,

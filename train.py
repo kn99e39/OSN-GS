@@ -21,6 +21,7 @@ from osn_gs.interop.colab_args import (
     output_dir_from_args,
     save_interval_from_args,
     save_iterations_from_args,
+    stage1_constructor_config_kwargs,
     surface_fit_config_kwargs,
 )
 from osn_gs.render.diff_gaussian_loader import validate_diff_gaussian_build_environment
@@ -102,6 +103,7 @@ def main() -> None:
         uncertain_samples_v=uncertain_samples_v,
         max_uncertain_gaussians=max_uncertain_gaussians,
         **surface_fit_config_kwargs(args),
+        **stage1_constructor_config_kwargs(args),
     )
     training_config = TorchTrainingConfig(
         iterations=args.iterations,
