@@ -1,6 +1,6 @@
 # Phase 4 Hardening Plan: seam continuity, iso-line quality, Jacobian gating, boundary conformance
 
-Status: **Steps 1-3 complete. Step 4-A/4-B/4-C all tried; none produced a clean win (see each section below). Step 4-D (chart-layout optimization) requires checking in with the user before starting — paused here.** 108/108 tests passing. See `docs/worklogs/39_phase4_hardening_step1_3.md`, `40_phase4_hardening_step4_arc_length_rejected.md`, `41_phase4_hardening_step4a_4b.md`, and the Step 4-C writeup for full detail.
+Status: **Steps 1-3 complete. Step 4-D (worst-wedge coordinate-descent optimizer) implemented and A/B tested — best result so far (priority target scene improved on both Jacobian and accuracy), one secondary-scene regression. Not yet adopted as default — awaiting user decision.** 111/111 tests passing. See `docs/worklogs/39_phase4_hardening_step1_3.md`, `40_phase4_hardening_step4_arc_length_rejected.md`, `41_phase4_hardening_step4a_4b.md`, `42_phase4_hardening_step4c_hermite_seed.md`, and the Step 4-D writeup for full detail.
 Governing document: `OSN_GS_Final_Boundary_First_NURBS_Direction.md` (this is a hardening pass on the already-approved Phase 4, not a new phase number; Phase 5 stays gated on explicit user approval per that document's §14, independent of this plan).
 
 ## Context
@@ -131,7 +131,31 @@ A/B tested on all 4 baseline scenes: effect is small and mixed. `planar_hole_off
 
 **Step 4 conclusion so far: all three low-risk seed-level candidates from the original plan (equal-arc-length placement, seam-phase offset, Hermite seed) have now been tried and none produced a clean, broad win.** This is itself a meaningful, consistent finding across three independent mechanisms -- reinforcing that the inner-corner degeneracy and outer-boundary-conformance gap are not resolvable by any FIXED, scene-independent seed adjustment, and that a genuinely data-adaptive approach (Step 4-D) is the remaining credible direction. Per the plan, 4-D is separately gated and requires checking in with the user before starting, given its larger scope (chart-layout optimization, not a seed tweak).
 
-**Step 4-D — Deferred, separately gated.** Constrained seam-angle optimizer minimizing a worst-wedge condition-number proxy (`kappa_k = max(d_k, w_k_inner) / (min(d_k, w_k_inner) + eps)`, subject to minimum angular width / minimum points-per-slice / seam ordering). Only attempted if 4-B and 4-C together don't close the gap on `planar_hole_offcenter`, and only after checking in with the user first -- bigger scope, own approval gate, not bundled into "Step 4" implicitly.
+**Step 4-D — Constrained worst-wedge seam-angle optimizer. User confirmed proceeding, 2026-07-21. IN PROGRESS.**
+
+All three of 4-B/4-C's fixed, scene-independent seed/placement rules failed to produce a clean win -- reinforcing that a genuinely data-adaptive, per-scene seam placement is the remaining credible direction. Real objective (per the plan review that shaped this): bound the worst wedge's inner-corner collapse (tangential width at the inner edge, `w_k_inner ≈ r_inner(theta_k) * Δtheta_k` -- the direct driver of the Step 1 root cause, `Su -> 0`) and aspect-ratio distortion, via `kappa_k = max(d_k, w_k_inner) / (min(d_k, w_k_inner) + eps)` where `d_k` is radial width.
+
+**Approach: local coordinate-descent, not a global DP.** An exact global optimizer (dynamic programming over a fine angular discretization) was considered and rejected as disproportionate: `O(bins^3 * segments)` for a useful resolution is tens of millions of operations for an 8-wedge problem where Step 4-B/C's evidence suggests gains here are generally modest regardless of exactness. Instead: starting from `uniform_angle`'s boundary angles, run a fixed number of passes (default 3) visiting each boundary index in order; moving boundary `k` only affects its two adjacent wedges, so evaluate a small set of candidate angles in a bounded window (respecting a minimum angular width so no wedge collapses) using the SAME cell-based radius-window lookup `build_annulus_chart` already uses for `inner_boundary`/`outer_boundary`, and keep whichever candidate minimizes `max(kappa_{k-1}, kappa_k)`. Cheap (`O(passes * segments * candidates)`), reuses existing machinery, easy to test and reason about -- a genuinely bounded Step 4-D experiment, not a production-grade solver.
+
+**Implementation:**
+- New `_optimize_worst_wedge_seam_angles(...)` in `osn_gs/surface/torch_annulus_chart.py`, next to `_outer_radius_weighted_boundary_angles` (same radius-lookup style). Returns adjusted `boundary_angles`.
+- New `segment_placement` choice `"worst_wedge_optimized"`: runs the same `uniform_angle` initialization, then applies the optimizer on top (a refinement of uniform_angle, not a fourth unrelated rule). Default stays `"uniform_angle"`, byte-identical, unaffected -- extends the existing `if/elif/else` branch and the `--bf-annulus-segment-placement` choices tuple (no new CLI flag).
+- `kappa_k` stays internal to the optimizer, not a new standalone diagnostic field -- evaluation of whether the result is actually better uses the EXISTING Step 1 diagnostics (`orientation_flip_count`, `near_degenerate_count`, `max_jacobian_condition`, `phase2_boundary_conformance`), exactly like every prior Step 4 candidate.
+
+**Verification (same discipline as every prior candidate, including the lexicographic-then-no-regression check that caught Step 4-B's premature Jacobian-only selection):**
+1. Unit tests: `WorstWedgeOptimizerUnitTest` -- a hand-built profile with an artificially narrow inner corner at angle 0 confirms the optimizer moves that boundary meaningfully away (before: 0.0 rad from the corner; after: >0.15 rad), plus a no-op sanity check on a uniform profile (boundaries shouldn't drift from noise alone), plus an integration smoke test (`segment_placement="worst_wedge_optimized"` on the real `_annulus()` fixture: finite healthy fit, partition invariant preserved). Full suite 111/111.
+2. A/B benchmark across all 4 baseline scenes. **RESULT: the best candidate tried so far, though not a fully clean sweep.**
+
+| scene | flips (base→4D) | cond_p95 (base→4D) | chamfer (base→4D) | false_fill (base→4D) |
+|---|---|---|---|---|
+| planar_hole | 5→3 | 3.38→3.27 | 0.005800→0.005911 (+0.0001, noise-level) | 0.167→0.173 (+0.006, noise-level) |
+| planar_hole_offcenter (**priority target**) | 20→**12** | 8.64→**6.54** | 0.006482→**0.006098** (improved) | 0.333→**0.324** (improved) |
+| planar_hole_elliptical | 2→3 | 3.56→4.04 | 0.004968→0.004928 (~same) | 0.112→0.137 (**regressed, +22% relative**) |
+| planar_hole_density_gradient | 0→0 | 2.73→2.73 | identical | identical |
+
+`planar_hole_offcenter` -- the scene identified back in Step 3 as the worst-case stressor, and the one every prior candidate (4-B, 4-C) failed to help without hurting something else -- improved on BOTH Jacobian health AND accuracy simultaneously, the first candidate to do so. `planar_hole_density_gradient` is untouched (the local search found nothing worth moving there). The one real cost is `planar_hole_elliptical`'s false_fill regressing 22% relative -- `outer` boundary conformance (a separate, still-unresolved Step 3 finding) is also essentially unchanged everywhere (this optimizer targets the inner-corner/aspect-ratio mechanism, not the outer-boundary-conformance gap, exactly as scoped).
+
+**Not yet adopted as default -- awaiting an explicit decision from the user given the elliptical tradeoff** (kept behind `--bf-annulus-segment-placement worst_wedge_optimized`, default stays `uniform_angle`, verified unaffected).
 
 **Step 5 — Post-fit continuity check, not assumed (not yet started).** Verify with Step 1/2 metrics whether each Step 4 seed change's continuity survives the independent per-slice LSQ fit. Only if seam metrics remain bad does this proceed to a **soft** seam regularization penalty (position+tangent+normal, small weight sweep) — never the previously-rejected hard shared-control-point constraint. Flagged as the largest architectural change in the plan; confirm with the user before implementing if Step 4 alone doesn't close the gap.
 

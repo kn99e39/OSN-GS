@@ -170,6 +170,21 @@ class AnnulusOGridChartTest(unittest.TestCase):
             self.assertGreater(s.fit_metrics["min_area_jacobian"], 0.0)
             self.assertTrue(math.isfinite(s.fit_metrics["point_to_surface_rms"]))
 
+    def test_worst_wedge_optimized_placement_produces_finite_healthy_fit(self):
+        # Smoke test: Step 4-D's local optimizer must not introduce
+        # NaN/degenerate slices on a normal scene.
+        result = self._build(_annulus(), segment_placement="worst_wedge_optimized")
+        self.assertEqual(len(result.slices), 8)
+        for s in result.slices:
+            self.assertGreater(s.fit_metrics["min_area_jacobian"], 0.0)
+            self.assertTrue(math.isfinite(s.fit_metrics["point_to_surface_rms"]))
+        # Angle ranges must still partition [0, 2pi) with no gaps/overlaps,
+        # exactly like uniform_angle (the optimizer only moves boundaries,
+        # never removes the partition invariant).
+        ranges = sorted(s.angle_range for s in result.slices)
+        for (_, hi), (lo2, _) in zip(ranges, ranges[1:]):
+            self.assertAlmostEqual(hi, lo2, places=4)
+
     def test_payload_serializes(self):
         import json
 
@@ -269,6 +284,66 @@ def _flat_grid_surface(nu=4, nv=4, degree_u=1, degree_v=1, v_scale=1.0):
         for j in range(nv):
             cg[i, j] = torch.tensor([i / (nu - 1), (j / (nv - 1)) * v_scale, 0.0])
     return TorchNURBSSurface(control_grid=cg, weights=torch.ones((nu, nv)), degree_u=degree_u, degree_v=degree_v)
+
+
+@unittest.skipUnless(torch is not None, "PyTorch is required")
+class WorstWedgeOptimizerUnitTest(unittest.TestCase):
+    """White-box test on ``_optimize_worst_wedge_seam_angles`` (Step 4-D):
+    given a synthetic radius profile with one artificially narrow inner
+    corner at angle 0, the optimizer must move the boundary AWAY from that
+    corner, not just return the uniform-angle input unchanged."""
+
+    def test_moves_boundary_away_from_a_narrow_corner(self):
+        from osn_gs.surface.torch_annulus_chart import _optimize_worst_wedge_seam_angles
+
+        segments = 8
+        two_pi = 2.0 * torch.pi
+        angle_step = two_pi / segments
+        boundary_angles = torch.remainder(torch.arange(segments, dtype=torch.float32) * angle_step, two_pi)
+
+        # Inner radius collapses to ~0.05 in a narrow window around angle=0
+        # (mimicking the off-center-hole inner corner); 0.3 everywhere else.
+        # Outer radius is uniform. A uniform-angle boundary sits exactly at
+        # angle=0, i.e. exactly in the narrow corner.
+        sample_angle = torch.rand(4000) * two_pi
+        delta = torch.remainder(sample_angle + torch.pi, two_pi) - torch.pi
+        inner_r = torch.where(delta.abs() < 0.3, 0.05 + 0.5 * delta.abs(), torch.full_like(delta, 0.3))
+        outer_r = torch.full_like(sample_angle, 0.8)
+        frac = torch.rand(sample_angle.shape[0])
+        cell_radius = inner_r + frac * (outer_r - inner_r)
+        cell_supported = torch.ones_like(sample_angle, dtype=torch.bool)
+
+        optimized = _optimize_worst_wedge_seam_angles(
+            boundary_angles, sample_angle, cell_radius, cell_supported, sample_angle, cell_radius, segments,
+        )
+
+        def _distance_to_zero(theta: float) -> float:
+            return min(theta, two_pi - theta)
+
+        before = min(_distance_to_zero(float(a)) for a in boundary_angles)
+        after = min(_distance_to_zero(float(a)) for a in optimized)
+        self.assertAlmostEqual(before, 0.0, places=4)
+        self.assertGreater(after, 0.15)  # moved meaningfully away from the corner
+
+    def test_no_op_on_a_perfectly_uniform_profile(self):
+        # Sanity check: nothing to improve -> boundaries should not move
+        # meaningfully (no spurious drift from noise alone on a symmetric case).
+        from osn_gs.surface.torch_annulus_chart import _optimize_worst_wedge_seam_angles
+
+        segments = 8
+        two_pi = 2.0 * torch.pi
+        angle_step = two_pi / segments
+        boundary_angles = torch.remainder(torch.arange(segments, dtype=torch.float32) * angle_step, two_pi)
+
+        sample_angle = torch.rand(4000) * two_pi
+        cell_radius = 0.3 + torch.rand(sample_angle.shape[0]) * 0.5
+        cell_supported = torch.ones_like(sample_angle, dtype=torch.bool)
+
+        optimized = _optimize_worst_wedge_seam_angles(
+            boundary_angles, sample_angle, cell_radius, cell_supported, sample_angle, cell_radius, segments,
+        )
+        for original, moved in zip(boundary_angles.tolist(), optimized.tolist()):
+            self.assertLess(abs(original - moved), angle_step * 0.5)
 
 
 @unittest.skipUnless(torch is not None, "PyTorch is required")

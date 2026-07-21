@@ -432,6 +432,102 @@ def _outer_radius_weighted_boundary_angles(
     return centers[idx]
 
 
+def _optimize_worst_wedge_seam_angles(
+    boundary_angles: Any,
+    cell_angle_wrapped: Any,
+    cell_radius: Any,
+    cell_supported: Any,
+    point_angle_wrapped: Any,
+    point_radius: Any,
+    segments: int,
+    passes: int = 3,
+    candidates_per_boundary: int = 9,
+    min_angular_width_fraction: float = 0.3,
+    eps: float = _EPS,
+) -> Any:
+    """Phase 4 hardening Step 4-D: local coordinate-descent refinement of
+    ``boundary_angles`` minimizing a worst-wedge distortion proxy, instead
+    of a fixed rule (equal angle or equal arc length).
+
+    Real objective (not "equal arc length", per the plan review that scoped
+    this): bound each wedge's inner-corner tangential collapse (``w_inner ~=
+    r_inner(theta) * angular_width`` -- the direct driver of the Step 1 root
+    cause, ``Su -> 0``) and its radial/tangential aspect-ratio distortion,
+    via ``kappa = max(d, w_inner) / (min(d, w_inner) + eps)`` where ``d`` is
+    radial width. A large ``kappa`` in either direction predicts poor
+    Jacobian conditioning.
+
+    NOT a global optimum: an exact discretized cyclic-partition DP was
+    considered and rejected as disproportionate for an 8-wedge problem where
+    prior Step 4 candidates' evidence suggests gains here are generally
+    modest. This is intentionally a bounded local search: starting from
+    ``boundary_angles`` (typically ``uniform_angle``'s), for ``passes``
+    rounds, visit each boundary index and search a small window of candidate
+    positions (respecting ``min_angular_width_fraction`` of the nominal
+    wedge width so no wedge collapses), evaluating ONLY the two wedges that
+    moving that boundary actually affects, using the same cell/point radius-
+    window lookup ``build_annulus_chart`` already uses for
+    ``inner_boundary``/``outer_boundary``.
+    """
+
+    torch = require_torch()
+    two_pi = 2.0 * torch.pi
+    angles = boundary_angles.clone()
+    base_width = two_pi / segments
+    min_width = base_width * min_angular_width_fraction
+
+    def _radius_window(theta: float, window: float) -> tuple[float, float]:
+        delta = torch.remainder(cell_angle_wrapped - theta + torch.pi, two_pi) - torch.pi
+        near = (delta.abs() <= window) & cell_supported
+        if bool(near.any()):
+            return float(cell_radius[near].min()), float(cell_radius[near].max())
+        delta_p = torch.remainder(point_angle_wrapped - theta + torch.pi, two_pi) - torch.pi
+        near_p = delta_p.abs() <= window
+        if bool(near_p.any()):
+            return float(point_radius[near_p].min()), float(point_radius[near_p].max())
+        return 0.0, 1.0
+
+    def _wedge_kappa(theta_lo: float, theta_hi: float) -> float:
+        if theta_hi <= theta_lo:
+            theta_hi += two_pi
+        width = theta_hi - theta_lo
+        window = max(0.25 * width, eps)
+        inner_lo, outer_lo = _radius_window(theta_lo, window)
+        inner_hi, outer_hi = _radius_window(theta_hi, window)
+        inner_r = min(inner_lo, inner_hi)
+        outer_r = max(outer_lo, outer_hi)
+        d = max(outer_r - inner_r, eps)
+        w_inner = max(inner_r * width, eps)
+        return max(d, w_inner) / (min(d, w_inner) + eps)
+
+    for _ in range(passes):
+        for k in range(segments):
+            prev_idx = (k - 1) % segments
+            next_idx = (k + 1) % segments
+            theta_prev = float(angles[prev_idx])
+            theta_current = float(angles[k])
+            theta_next = float(angles[next_idx])
+            # Local frame anchored at theta_prev (fixed this round), unwrapped
+            # forward so both neighbors compare on a single increasing scale.
+            cur_local = float(torch.remainder(torch.tensor(theta_current - theta_prev), two_pi))
+            next_local = cur_local + float(torch.remainder(torch.tensor(theta_next - theta_current), two_pi))
+            lo_bound, hi_bound = min_width, next_local - min_width
+            if hi_bound <= lo_bound:
+                continue  # not enough room to move safely this round
+            best_local, best_score = cur_local, float("inf")
+            for cand_local in torch.linspace(lo_bound, hi_bound, candidates_per_boundary).tolist():
+                theta_b = theta_prev + cand_local
+                score = max(
+                    _wedge_kappa(theta_prev, theta_b),
+                    _wedge_kappa(theta_b, theta_prev + next_local),
+                )
+                if score < best_score:
+                    best_score, best_local = score, cand_local
+            angles[k] = float(theta_prev + best_local)
+
+    return torch.remainder(angles, two_pi)
+
+
 def build_annulus_chart(
     component: SurfaceComponent,
     points: Any,
@@ -558,10 +654,17 @@ def build_annulus_chart(
         boundary_angles = _outer_radius_weighted_boundary_angles(
             cell_angle_wrapped, cell_radius, cell_supported, point_angle_wrapped, point_radius, segments
         )
-    elif segment_placement == "uniform_angle":
+    elif segment_placement in ("uniform_angle", "worst_wedge_optimized"):
         boundary_angles = torch.remainder(
             torch.arange(segments, dtype=own_uv.dtype, device=own_uv.device) * angle_step + seam_phase_offset, two_pi
         )
+        if segment_placement == "worst_wedge_optimized":
+            # Step 4-D: refine the uniform_angle starting point via local
+            # coordinate descent -- see _optimize_worst_wedge_seam_angles.
+            boundary_angles = _optimize_worst_wedge_seam_angles(
+                boundary_angles, cell_angle_wrapped, cell_radius, cell_supported,
+                point_angle_wrapped, point_radius, segments,
+            )
     else:
         raise ValueError(f"Unknown segment_placement: {segment_placement!r}")
     # Local angular spacing AT each boundary index (average of the segment

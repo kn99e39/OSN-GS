@@ -479,8 +479,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--bf-coarse-gap-closing-cells", type=int, default=2, help="[boundary_first] Phase 2 curved-component polygon-reprojection seam-closing dilation.")
     parser.add_argument("--bf-annulus-segments", type=int, default=8, help="[boundary_first] Phase 4 O-grid wedge count for annulus-topology components.")
     parser.add_argument(
-        "--bf-annulus-segment-placement", choices=("uniform_angle", "outer_radius_weighted_segment_placement"), default="uniform_angle",
-        help="[boundary_first] Phase 4 hardening Step 4: 'uniform_angle' (original) or 'outer_radius_weighted_segment_placement' (equal arc length along the outer boundary -- see OSN_GS_Phase4_Hardening_Plan.md).",
+        "--bf-annulus-segment-placement",
+        choices=("uniform_angle", "outer_radius_weighted_segment_placement", "worst_wedge_optimized"),
+        default="uniform_angle",
+        help="[boundary_first] Phase 4 hardening Step 4: 'uniform_angle' (original), 'outer_radius_weighted_segment_placement' (equal arc length along the outer boundary), or 'worst_wedge_optimized' (Step 4-D local coordinate-descent refinement) -- see OSN_GS_Phase4_Hardening_Plan.md.",
     )
     parser.add_argument(
         "--bf-seam-phase-offset", type=float, default=0.0,
