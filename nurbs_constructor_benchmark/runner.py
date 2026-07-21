@@ -295,6 +295,7 @@ def evaluate_scene_boundary_first(
         coarse_gap_closing_cells=args.bf_coarse_gap_closing_cells,
         annulus_segments=args.bf_annulus_segments,
         annulus_segment_placement=args.bf_annulus_segment_placement,
+        annulus_seam_phase_offset=args.bf_seam_phase_offset,
         export_dir=export_dir,
     )
     construct_seconds = time.perf_counter() - construct_start
@@ -477,8 +478,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--bf-coarse-gap-closing-cells", type=int, default=2, help="[boundary_first] Phase 2 curved-component polygon-reprojection seam-closing dilation.")
     parser.add_argument("--bf-annulus-segments", type=int, default=8, help="[boundary_first] Phase 4 O-grid wedge count for annulus-topology components.")
     parser.add_argument(
-        "--bf-annulus-segment-placement", choices=("uniform_angle", "arc_length_outer"), default="uniform_angle",
-        help="[boundary_first] Phase 4 hardening Step 4: 'uniform_angle' (original) or 'arc_length_outer' (equal arc length along the outer boundary -- see OSN_GS_Phase4_Hardening_Plan.md).",
+        "--bf-annulus-segment-placement", choices=("uniform_angle", "outer_radius_weighted_segment_placement"), default="uniform_angle",
+        help="[boundary_first] Phase 4 hardening Step 4: 'uniform_angle' (original) or 'outer_radius_weighted_segment_placement' (equal arc length along the outer boundary -- see OSN_GS_Phase4_Hardening_Plan.md).",
+    )
+    parser.add_argument(
+        "--bf-seam-phase-offset", type=float, default=0.0,
+        help="[boundary_first] Phase 4 hardening Step 4-B: rotates all uniform_angle seam angles by this many radians, wedge width unchanged (see OSN_GS_Phase4_Hardening_Plan.md).",
     )
     parser.add_argument("--resolution-u", type=int, default=8)
     parser.add_argument("--resolution-v", type=int, default=4)

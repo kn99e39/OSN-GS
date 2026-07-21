@@ -76,6 +76,7 @@ def construct_boundary_first(
     coarse_gap_closing_cells: int = 2,
     annulus_segments: int = 8,
     annulus_segment_placement: str = "uniform_angle",
+    annulus_seam_phase_offset: float = 0.0,
     fallback_resolution_u: int = 12,
     fallback_resolution_v: int = 12,
     export_dir: Path | None = None,
@@ -126,6 +127,7 @@ def construct_boundary_first(
                 boundary.hole_loops[0].boundary_world_points, segments=annulus_segments,
                 outer_boundary_world_points=boundary.outer_loops[0].boundary_world_points if boundary.outer_loops else None,
                 segment_placement=annulus_segment_placement,
+                seam_phase_offset=annulus_seam_phase_offset,
             )
             for sl in chart.slices:
                 patch_id = len(all_surfaces)

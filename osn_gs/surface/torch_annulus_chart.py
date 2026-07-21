@@ -120,7 +120,13 @@ class AnnulusChartResult:
     chart_quality: dict[str, Any]
 
 
-def _jacobian_diagnostics(surface: TorchNURBSSurface, resolution: int = 12, eps: float = _EPS) -> dict[str, Any]:
+def _jacobian_diagnostics(
+    surface: TorchNURBSSurface,
+    resolution: int = 12,
+    eps: float = _EPS,
+    characteristic_length: float = 1.0,
+    collect_samples: bool = False,
+) -> dict[str, Any]:
     """Per-sample singular values of ``J = [Su Sv] in R^{3x2}``, plus orientation.
 
     ``sigma_min``/``sigma_max`` are the true parameterization singular
@@ -133,6 +139,16 @@ def _jacobian_diagnostics(surface: TorchNURBSSurface, resolution: int = 12, eps:
     patch can have a "healthy" mid-sized area with a terrible condition
     number).
 
+    ``characteristic_length`` (Phase 4 hardening Step 4-A, per plan review
+    2026-07-21 point 3.2): ``min_jacobian_singular_value`` alone is in
+    absolute physical units, so it isn't comparable across components/scenes
+    of different scale. ``min_jacobian_singular_value_normalized = sigma_min
+    / (characteristic_length + eps)`` is reported alongside it (not instead
+    of it). Defaults to ``1.0`` (i.e. normalized == absolute) so this
+    function stays usable standalone/in unit tests without a caller having
+    to supply a real scale; ``build_annulus_chart`` passes each component's
+    own median radial width.
+
     Orientation reference: computed PER SLICE from that slice's OWN normal
     field (median-sign self-consistency, seeded from the slice's own
     central sample and majority-aligned), not one fixed global vector for
@@ -140,7 +156,19 @@ def _jacobian_diagnostics(surface: TorchNURBSSurface, resolution: int = 12, eps:
     its true normal around the ring, so a single global reference would
     misfire. This catches orientation reversal / fold-over WITHIN one
     patch; reversal BETWEEN adjacent patches is a distinct condition,
-    already covered by ``SeamDiagnostic.seam_normal_angle_deg_*``.
+    already covered by ``SeamDiagnostic.seam_normal_angle_deg_*`` AND (Step
+    4-A addition) the component-level holonomy check in
+    ``_orientation_holonomy`` -- verified NOT to hide real flips: the
+    ``orientation_dot`` test below uses ``normal_unit`` (the RAW, never
+    sign-corrected per-sample normal), never the sign-aligned ``aligned``
+    array, which exists only to compute ``reference``'s mean direction.
+
+    ``collect_samples`` (Step 4-A): when true, also returns the full
+    per-sample ``(u, v, sigma_min, condition, orientation_dot, norm_su,
+    norm_sv)`` grid under ``"samples"`` (default false -- no effect on any
+    existing call site's output shape/performance) so a spatial heatmap can
+    be exported/compared across seed-change candidates instead of only
+    aggregate counts.
     """
 
     torch = require_torch()
@@ -168,10 +196,13 @@ def _jacobian_diagnostics(surface: TorchNURBSSurface, resolution: int = 12, eps:
     orientation_dot = normal_unit @ reference
 
     condition = sigma_max / sigma_min.clamp_min(eps)
+    sigma_min_normalized = sigma_min / (characteristic_length + eps)
 
-    return {
+    result = {
         "min_area_jacobian": float(area.min().cpu()),
         "min_jacobian_singular_value": float(sigma_min.min().cpu()),
+        "min_jacobian_singular_value_normalized": float(sigma_min_normalized.min().cpu()),
+        "characteristic_length": float(characteristic_length),
         "jacobian_condition_mean": float(condition.mean().cpu()),
         "jacobian_condition_p95": float(condition.quantile(0.95).cpu()),
         "max_jacobian_condition": float(condition.max().cpu()),
@@ -179,6 +210,67 @@ def _jacobian_diagnostics(surface: TorchNURBSSurface, resolution: int = 12, eps:
         "near_degenerate_count": int((sigma_min < eps).sum()),
         "sample_count": int(area.shape[0]),
         "reference_normal": reference.detach().cpu().tolist(),
+    }
+    if collect_samples:
+        result["samples"] = {
+            "u": u.reshape(-1).detach().cpu().tolist(),
+            "v": v.reshape(-1).detach().cpu().tolist(),
+            "sigma_min": sigma_min.detach().cpu().tolist(),
+            "condition": condition.detach().cpu().tolist(),
+            "orientation_dot": orientation_dot.detach().cpu().tolist(),
+            "norm_su": du.norm(dim=1).detach().cpu().tolist(),
+            "norm_sv": dv.norm(dim=1).detach().cpu().tolist(),
+        }
+    return result
+
+
+def _orientation_holonomy(slices: list["AnnulusChartSlice"]) -> dict[str, Any]:
+    """Component-level check (Phase 4 hardening Step 4-A, plan review point
+    3.1/C): do the per-slice orientation references stay mutually consistent
+    all the way around the closed ring?
+
+    Each slice's ``reference_normal`` (``_jacobian_diagnostics``) is seeded
+    and sign-aligned independently from that slice's OWN samples -- there is
+    no guarantee two non-adjacent slices, or the ring as a whole, agree on
+    which way is "up". A per-seam pairwise normal-angle number alone
+    (``SeamDiagnostic.seam_normal_angle_deg_*``, always unsigned in
+    ``[0, 180]``) cannot by itself reveal a genuine GLOBAL (topological)
+    inconsistency, since it never sees more than two neighbors at once.
+
+    Implementation: the sign of ``dot(reference_k, reference_{k+1 mod n})``
+    for every adjacent pair around the ring (including the closing
+    n-1 -> 0 pair). ``holonomy_consistent`` is the PRODUCT of these n signs
+    being positive -- the standard parity invariant for a closed cyclic
+    sequence of sign labels (a cyclic sequence of two states always has an
+    EVEN number of state changes, a basic combinatorial fact, unless the
+    underlying field is genuinely non-orientable at some point).
+
+    **Known, deliberate limitation, not a false sense of coverage:** for
+    this specific per-slice reference (effectively a single discrete +/-
+    direction per slice, not a continuously rotating field), any isolated
+    "flipped" slice necessarily produces exactly TWO local sign
+    disagreements (entering and leaving it) -- an EVEN count, so a lone
+    flipped slice is mathematically guaranteed to read as
+    ``holonomy_consistent=True`` here (it is a real local anomaly, already
+    caught by ``near_degenerate_count``/``orientation_flip_count`` on that
+    slice and by the adjacent seam's own ``seam_normal_angle_deg``, just not
+    by this check). This function exists as a general-purpose safety net
+    for a genuinely non-orientable construction bug (e.g. an even/odd
+    seam-count defect producing a real net twist around the ring), not as
+    an additional detector for the single/paired-flip failure mode already
+    covered elsewhere.
+    """
+
+    torch = require_torch()
+    n = len(slices)
+    refs = [torch.tensor(s.fit_metrics["reference_normal"]) for s in slices]
+    pairwise_signs = [1 if float(refs[k] @ refs[(k + 1) % n]) >= 0.0 else -1 for k in range(n)]
+    total_sign = 1
+    for sign in pairwise_signs:
+        total_sign *= sign
+    return {
+        "holonomy_consistent": bool(total_sign > 0),
+        "holonomy_local_disagreement_count": sum(1 for sign in pairwise_signs if sign < 0),
     }
 
 
@@ -269,7 +361,7 @@ def _boundary_conformance(chart_edge_world: Any, reference_world: Any, coverage_
     }
 
 
-def _equal_arc_length_boundary_angles(
+def _outer_radius_weighted_boundary_angles(
     cell_angle_wrapped: Any, cell_radius: Any, cell_supported: Any,
     point_angle_wrapped: Any, point_radius: Any,
     segments: int, bins: int = 72,
@@ -356,6 +448,8 @@ def build_annulus_chart(
     outer_boundary_world_points: list[list[float]] | None = None,
     boundary_conformance_tolerance: float = 0.05,
     segment_placement: str = "uniform_angle",
+    collect_diagnostic_samples: bool = False,
+    seam_phase_offset: float = 0.0,
 ) -> AnnulusChartResult:
     """Build an O-grid of ``segments`` radial NURBS charts for one annulus component.
 
@@ -381,10 +475,27 @@ def build_annulus_chart(
 
     ``segment_placement`` (Phase 4 hardening Step 4, opt-in, default
     ``"uniform_angle"`` byte-identical to the original Phase 4 behavior):
-    ``"arc_length_outer"`` places the ``segments`` seam angles at equal arc
-    length along the outer boundary instead of equal angle from the hole's
-    centroid -- see ``_equal_arc_length_boundary_angles`` and
-    ``OSN_GS_Phase4_Hardening_Plan.md``.
+    ``"outer_radius_weighted_segment_placement"`` RELOCATES the ``segments``
+    seam angles (i.e. changes the chart decomposition itself -- which
+    Gaussians each wedge owns) so consecutive seams span equal arc length
+    along the outer boundary, instead of equal angle from the hole's
+    centroid. This is NOT a boundary-curve reparameterization (that would
+    change sample correspondence along a FIXED curve without moving the
+    seams themselves) -- it changes where the seams are, a bigger-regression
+    -risk change than that name would suggest, which is why it is named for
+    what it actually does. A/B tested against the Step 3 baseline scenes and
+    REJECTED as the default (see ``OSN_GS_Phase4_Hardening_Plan.md`` Step 4
+    candidate 1) -- kept only as a documented, tested ablation tool via
+    ``--bf-annulus-segment-placement``.
+
+    ``seam_phase_offset`` (Phase 4 hardening Step 4-B, only meaningful for
+    ``segment_placement="uniform_angle"``, default ``0.0`` byte-identical to
+    before): rotates all ``segments`` seam angles by this constant, keeping
+    every wedge's angular WIDTH and the topology/point-assignment mechanism
+    otherwise identical -- unlike ``outer_radius_weighted_segment_placement``,
+    this cannot change wedge count or create unequal widths, so it carries
+    much less regression risk while still letting the narrow off-center
+    inner corner NOT necessarily land exactly on a seam.
     """
 
     torch = require_torch()
@@ -433,18 +544,20 @@ def build_annulus_chart(
     # its own radius range from only its own interior cells (which measurably
     # disagreed: pre-fix seam gaps were ~0.03-0.08 on a flat unit-scale plane
     # purely from this radius-bound mismatch, not from the LSQ fit itself).
-    if segment_placement == "arc_length_outer":
-        boundary_angles = _equal_arc_length_boundary_angles(
+    if segment_placement == "outer_radius_weighted_segment_placement":
+        boundary_angles = _outer_radius_weighted_boundary_angles(
             cell_angle_wrapped, cell_radius, cell_supported, point_angle_wrapped, point_radius, segments
         )
     elif segment_placement == "uniform_angle":
-        boundary_angles = torch.remainder(torch.arange(segments, dtype=own_uv.dtype, device=own_uv.device) * angle_step, two_pi)
+        boundary_angles = torch.remainder(
+            torch.arange(segments, dtype=own_uv.dtype, device=own_uv.device) * angle_step + seam_phase_offset, two_pi
+        )
     else:
         raise ValueError(f"Unknown segment_placement: {segment_placement!r}")
     # Local angular spacing AT each boundary index (average of the segment
     # widths on either side) -- reduces to exactly ``angle_step`` for
     # ``uniform_angle`` (byte-identical to the pre-Step-4 window), and
-    # adapts per-boundary for ``arc_length_outer``'s non-uniform spacing.
+    # adapts per-boundary for ``outer_radius_weighted_segment_placement``'s non-uniform spacing.
     spacing_next = torch.remainder(boundary_angles.roll(-1) - boundary_angles, two_pi)
     spacing_next = torch.where(spacing_next == 0.0, torch.full_like(spacing_next, two_pi), spacing_next)
     spacing_prev = spacing_next.roll(1)
@@ -465,6 +578,11 @@ def build_annulus_chart(
             inner_boundary[k] = point_radius[near_p].min() if bool(near_p.any()) else 0.0
             outer_boundary[k] = point_radius[near_p].max() if bool(near_p.any()) else 1.0
 
+    # Step 4-A: component-level characteristic length for scale-normalized
+    # Jacobian singular values (median radial width across all boundary
+    # samples) -- computed once, shared by every slice's diagnostics call.
+    characteristic_length = float((outer_boundary - inner_boundary).median())
+
     slices: list[AnnulusChartSlice] = []
     inner_edges_world: list[Any] = []
     outer_edges_world: list[Any] = []
@@ -482,7 +600,7 @@ def build_annulus_chart(
 
         # Shift point angles into [theta_lo, theta_lo + two_pi) before
         # comparing against theta_hi -- theta_hi can exceed two_pi for the
-        # wrap-around segment (or, for non-uniform ``arc_length_outer``
+        # wrap-around segment (or, for non-uniform ``outer_radius_weighted_segment_placement``
         # placement, any segment could in principle straddle the 0/two_pi
         # seam depending on where the first boundary angle falls). For
         # ``uniform_angle`` this reduces to the original unshifted
@@ -562,7 +680,9 @@ def build_annulus_chart(
         ), dim=0)
         boundary_error = (surface.evaluate(boundary_uv).detach() - torch.cat((inner_edge, outer_edge), dim=0)).norm(dim=1)
 
-        jacobian_diag = _jacobian_diagnostics(surface)
+        jacobian_diag = _jacobian_diagnostics(
+            surface, characteristic_length=characteristic_length, collect_samples=collect_diagnostic_samples
+        )
         parameter_quality = _parameter_quality(surface)
         fit_metrics = {
             "point_to_surface_rms": float(residual.square().mean().sqrt().cpu()),
@@ -611,6 +731,8 @@ def build_annulus_chart(
         "jacobian": {
             "min_area_jacobian": min(s.fit_metrics["min_area_jacobian"] for s in slices),
             "min_jacobian_singular_value": topology_checks["min_jacobian_singular_value"],
+            "min_jacobian_singular_value_normalized": min(s.fit_metrics["min_jacobian_singular_value_normalized"] for s in slices),
+            "characteristic_length": characteristic_length,
             # Component-level rollup of already-per-slice-aggregated
             # mean/p95/max (slice -> sample rollup happens inside
             # ``_jacobian_diagnostics``); this is a coarser second-level
@@ -620,6 +742,7 @@ def build_annulus_chart(
             "max_jacobian_condition": topology_checks["max_jacobian_condition"],
             "total_orientation_flip_samples": topology_checks["total_orientation_flip_samples"],
             "total_near_degenerate_samples": sum(s.fit_metrics["near_degenerate_count"] for s in slices),
+            **_orientation_holonomy(slices),
         },
         "seams": {
             "position_gap_mean": sum(s.mean_gap for s in seams) / len(seams) if seams else 0.0,

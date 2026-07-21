@@ -421,5 +421,120 @@ class BoundaryConformanceUnitTest(unittest.TestCase):
         self.assertLess(d["boundary_coverage_ratio"], 0.2)
 
 
+@unittest.skipUnless(torch is not None, "PyTorch is required")
+class OrientationHolonomyUnitTest(unittest.TestCase):
+    """White-box tests on ``_orientation_holonomy`` (Step 4-A, plan review
+    point 3.1/C: per-slice references are independently seeded/aligned, so a
+    global consistency check walking the whole ring is needed -- no single
+    pairwise seam-normal-angle number can reveal an odd-parity drift)."""
+
+    @staticmethod
+    def _dummy_slice(reference_normal):
+        from osn_gs.surface.torch_annulus_chart import AnnulusChartSlice
+
+        return AnnulusChartSlice(
+            slice_index=0, angle_range=(0.0, 1.0), inner_radius=0.0, outer_radius=1.0,
+            gaussian_indices=None, surface=None, uv=None, diagnostics=None,
+            fit_metrics={"reference_normal": reference_normal},
+        )
+
+    def test_consistent_ring(self):
+        from osn_gs.surface.torch_annulus_chart import _orientation_holonomy
+
+        slices = [self._dummy_slice([0.0, 0.0, 1.0]) for _ in range(8)]
+        result = _orientation_holonomy(slices)
+        self.assertTrue(result["holonomy_consistent"])
+        self.assertEqual(result["holonomy_local_disagreement_count"], 0)
+
+    def test_single_flipped_slice_is_an_even_disagreement_not_flagged(self):
+        # A lone flipped slice creates exactly TWO local sign disagreements
+        # (entering it and leaving it) -- an EVEN count. This is the
+        # documented, deliberate limitation of a parity-only check: a lone
+        # flip is a real local anomaly, but it is already caught by
+        # orientation_flip_count/near_degenerate_count on that slice and by
+        # the adjacent seam's own seam_normal_angle_deg -- NOT by this
+        # check, which exists for a different (genuinely non-orientable)
+        # failure mode. Asserting this documents the limitation as tested
+        # behavior instead of an unstated assumption.
+        from osn_gs.surface.torch_annulus_chart import _orientation_holonomy
+
+        slices = [self._dummy_slice([0.0, 0.0, 1.0]) for _ in range(8)]
+        slices[4] = self._dummy_slice([0.0, 0.0, -1.0])
+        result = _orientation_holonomy(slices)
+        self.assertTrue(result["holonomy_consistent"])
+        self.assertEqual(result["holonomy_local_disagreement_count"], 2)
+
+    def test_two_independent_flipped_slices_also_even(self):
+        # Two separate lone flips: 4 local disagreements, still even.
+        from osn_gs.surface.torch_annulus_chart import _orientation_holonomy
+
+        slices = [self._dummy_slice([0.0, 0.0, 1.0]) for _ in range(8)]
+        slices[2] = self._dummy_slice([0.0, 0.0, -1.0])
+        slices[5] = self._dummy_slice([0.0, 0.0, -1.0])
+        result = _orientation_holonomy(slices)
+        self.assertTrue(result["holonomy_consistent"])
+        self.assertEqual(result["holonomy_local_disagreement_count"], 4)
+
+    def test_real_annulus_build_is_holonomy_consistent(self):
+        # Integration check: the flat planar_hole-style fixture (no genuine
+        # curvature to legitimately rotate the normal) should have zero
+        # walking flips and a perfectly closed ring.
+        from osn_gs.surface.torch_annulus_chart import build_annulus_chart
+        from osn_gs.surface.torch_chart_topology import classify_boundary_result
+        from osn_gs.surface.torch_component_boundary import extract_component_boundary
+        from osn_gs.surface.torch_surface_components import build_surface_components
+        from osn_gs.surface.torch_voxel_hierarchy import build_voxel_gaussian_hierarchy
+
+        points = _annulus()
+        hierarchy = build_voxel_gaussian_hierarchy(
+            points, voxel_min_gaussian_count=10, voxel_max_gaussian_count=150, voxel_max_depth=6
+        )
+        component_set = build_surface_components(hierarchy, points)
+        component = component_set.components[0]
+        boundary = extract_component_boundary(component, hierarchy, points, resolution=64, density_threshold=3.0)
+        self.assertEqual(classify_boundary_result(boundary), "annulus")
+        result = build_annulus_chart(
+            component, points, boundary.frame, boundary.refined_mask,
+            boundary.hole_loops[0].boundary_world_points, segments=8,
+        )
+        self.assertTrue(result.chart_quality["jacobian"]["holonomy_consistent"])
+
+
+@unittest.skipUnless(torch is not None, "PyTorch is required")
+class ScaleNormalizedJacobianUnitTest(unittest.TestCase):
+    """Step 4-A, plan review point 3.2: min_jacobian_singular_value alone is
+    scale-dependent; the normalized companion must actually change with
+    component scale while the absolute value stays governed by geometry."""
+
+    def test_normalized_sigma_scales_with_characteristic_length(self):
+        from osn_gs.surface.torch_annulus_chart import _jacobian_diagnostics
+
+        surface = _flat_grid_surface()
+        small = _jacobian_diagnostics(surface, characteristic_length=0.1)
+        large = _jacobian_diagnostics(surface, characteristic_length=10.0)
+        # Absolute value is identical (same surface) ...
+        self.assertAlmostEqual(
+            small["min_jacobian_singular_value"], large["min_jacobian_singular_value"], places=5
+        )
+        # ... but the normalized value must differ, inversely with scale.
+        self.assertGreater(small["min_jacobian_singular_value_normalized"], large["min_jacobian_singular_value_normalized"])
+
+    def test_default_characteristic_length_is_identity(self):
+        from osn_gs.surface.torch_annulus_chart import _jacobian_diagnostics
+
+        d = _jacobian_diagnostics(_flat_grid_surface())
+        self.assertAlmostEqual(d["min_jacobian_singular_value"], d["min_jacobian_singular_value_normalized"], places=5)
+
+    def test_collect_samples_returns_per_sample_heatmap(self):
+        from osn_gs.surface.torch_annulus_chart import _jacobian_diagnostics
+
+        d = _jacobian_diagnostics(_flat_grid_surface(), resolution=6, collect_samples=True)
+        self.assertIn("samples", d)
+        for key in ("u", "v", "sigma_min", "condition", "orientation_dot", "norm_su", "norm_sv"):
+            self.assertEqual(len(d["samples"][key]), 36)
+        d_off = _jacobian_diagnostics(_flat_grid_surface(), resolution=6)
+        self.assertNotIn("samples", d_off)
+
+
 if __name__ == "__main__":
     unittest.main()
