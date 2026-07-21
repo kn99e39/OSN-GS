@@ -3,6 +3,7 @@ from __future__ import annotations
 """Phase 4 Boundary-Conforming Chart Generator unit tests
 (OSN_GS_Final_Boundary_First_NURBS_Direction.md §Phase 4)."""
 
+import math
 import unittest
 
 try:
@@ -148,6 +149,26 @@ class AnnulusOGridChartTest(unittest.TestCase):
         result = self._build(_annulus())
         for s in result.slices:
             self.assertGreaterEqual(s.fit_metrics["point_count"], 4)
+
+    def test_hermite_boundary_seed_default_off_is_unchanged(self):
+        # Step 4-C: hermite_boundary_seed=False (default) must stay
+        # byte-identical to the pre-Step-4-C linear Coons seed.
+        baseline = self._build(_annulus())
+        explicit_off = self._build(_annulus(), hermite_boundary_seed=False)
+        self.assertEqual(
+            [s.fit_metrics["point_to_surface_rms"] for s in baseline.slices],
+            [s.fit_metrics["point_to_surface_rms"] for s in explicit_off.slices],
+        )
+
+    def test_hermite_boundary_seed_on_produces_finite_healthy_fit(self):
+        # Smoke test: turning it on must not introduce NaN/degenerate slices
+        # on a normal scene (the seed only changes initial_uv, not point
+        # selection or the fitter itself).
+        result = self._build(_annulus(), hermite_boundary_seed=True)
+        self.assertEqual(len(result.slices), 8)
+        for s in result.slices:
+            self.assertGreater(s.fit_metrics["min_area_jacobian"], 0.0)
+            self.assertTrue(math.isfinite(s.fit_metrics["point_to_surface_rms"]))
 
     def test_payload_serializes(self):
         import json

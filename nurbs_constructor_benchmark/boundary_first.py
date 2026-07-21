@@ -77,6 +77,7 @@ def construct_boundary_first(
     annulus_segments: int = 8,
     annulus_segment_placement: str = "uniform_angle",
     annulus_seam_phase_offset: float = 0.0,
+    annulus_hermite_boundary_seed: bool = False,
     fallback_resolution_u: int = 12,
     fallback_resolution_v: int = 12,
     export_dir: Path | None = None,
@@ -128,6 +129,7 @@ def construct_boundary_first(
                 outer_boundary_world_points=boundary.outer_loops[0].boundary_world_points if boundary.outer_loops else None,
                 segment_placement=annulus_segment_placement,
                 seam_phase_offset=annulus_seam_phase_offset,
+                hermite_boundary_seed=annulus_hermite_boundary_seed,
             )
             for sl in chart.slices:
                 patch_id = len(all_surfaces)

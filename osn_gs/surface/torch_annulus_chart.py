@@ -450,6 +450,7 @@ def build_annulus_chart(
     segment_placement: str = "uniform_angle",
     collect_diagnostic_samples: bool = False,
     seam_phase_offset: float = 0.0,
+    hermite_boundary_seed: bool = False,
 ) -> AnnulusChartResult:
     """Build an O-grid of ``segments`` radial NURBS charts for one annulus component.
 
@@ -496,6 +497,15 @@ def build_annulus_chart(
     this cannot change wedge count or create unequal widths, so it carries
     much less regression risk while still letting the narrow off-center
     inner corner NOT necessarily land exactly on a seam.
+
+    ``hermite_boundary_seed`` (Phase 4 hardening Step 4-C, default
+    ``False`` byte-identical to before): replaces the bilinear Coons seed's
+    linear radius interpolation with a cubic Hermite blend using a SHARED
+    (central-difference) boundary slope, so adjacent slices' seeds start
+    from matching d(radius)/d(local_s) at the shared boundary, not just a
+    matching radius value. Explicitly scoped to seam CONTINUITY only --
+    it does not address the inner-corner Jacobian collapse mechanism
+    (``Su -> 0``), which a smoother seed does not change.
     """
 
     torch = require_torch()
@@ -583,6 +593,18 @@ def build_annulus_chart(
     # samples) -- computed once, shared by every slice's diagnostics call.
     characteristic_length = float((outer_boundary - inner_boundary).median())
 
+    # Step 4-C (Hermite/derivative-aware Coons seed, opt-in via
+    # ``hermite_boundary_seed``): a SHARED d(radius)/d(theta) slope at each
+    # boundary index, via central difference -- shared because it depends
+    # only on ``inner_boundary``/``outer_boundary``/``boundary_angles``,
+    # never on which slice is asking, so slice k's local_s=1 edge and slice
+    # k+1's local_s=0 edge always reference the exact same slope value.
+    # Denominator uses the SAME ``local_spacing`` already computed above
+    # (half of prev+next boundary spacing), so this reduces to the standard
+    # central-difference formula for uniform_angle spacing.
+    inner_slope = (inner_boundary.roll(-1) - inner_boundary.roll(1)) / (2.0 * local_spacing)
+    outer_slope = (outer_boundary.roll(-1) - outer_boundary.roll(1)) / (2.0 * local_spacing)
+
     slices: list[AnnulusChartSlice] = []
     inner_edges_world: list[Any] = []
     outer_edges_world: list[Any] = []
@@ -629,8 +651,32 @@ def build_annulus_chart(
         # linearly across the slice's angular extent, tying s=0/s=1 exactly
         # to the shared boundary radii computed above.
         local_s = torch.clamp((slice_angle - theta_lo) / slice_width, 0.0, 1.0)
-        radius_lo_at_s = inner_lo + local_s * (inner_hi - inner_lo)
-        radius_hi_at_s = outer_lo + local_s * (outer_hi - outer_lo)
+        if hermite_boundary_seed:
+            # Step 4-C: cubic Hermite blend using the SHARED boundary slopes
+            # (inner_slope/outer_slope, computed once above from central
+            # differences, identical for both slices meeting at a boundary)
+            # instead of pure linear interpolation -- matches d(radius)/
+            # d(local_s) at both edges, not just the radius value itself.
+            # Reduces to the exact linear formula when both slopes are
+            # equal (e.g. a perfectly circular boundary), since h10+h11
+            # then contribute a term proportional to (t^3-t^2)+(t^3-2t^2+t)
+            # ... this is NOT claimed to fix inner-corner collapse (that
+            # failure is ``Su`` magnitude going to zero, untouched by a
+            # smoother seed) -- only measured against seam CONTINUITY.
+            t = local_s
+            h00 = 2.0 * t**3 - 3.0 * t**2 + 1.0
+            h10 = t**3 - 2.0 * t**2 + t
+            h01 = -2.0 * t**3 + 3.0 * t**2
+            h11 = t**3 - t**2
+            m_inner_lo = float(inner_slope[k]) * slice_width
+            m_inner_hi = float(inner_slope[(k + 1) % segments]) * slice_width
+            m_outer_lo = float(outer_slope[k]) * slice_width
+            m_outer_hi = float(outer_slope[(k + 1) % segments]) * slice_width
+            radius_lo_at_s = h00 * inner_lo + h10 * m_inner_lo + h01 * inner_hi + h11 * m_inner_hi
+            radius_hi_at_s = h00 * outer_lo + h10 * m_outer_lo + h01 * outer_hi + h11 * m_outer_hi
+        else:
+            radius_lo_at_s = inner_lo + local_s * (inner_hi - inner_lo)
+            radius_hi_at_s = outer_lo + local_s * (outer_hi - outer_lo)
         local_t = torch.clamp(
             (slice_radius - radius_lo_at_s) / (radius_hi_at_s - radius_lo_at_s).clamp_min(1e-6), 0.0, 1.0
         )

@@ -296,6 +296,7 @@ def evaluate_scene_boundary_first(
         annulus_segments=args.bf_annulus_segments,
         annulus_segment_placement=args.bf_annulus_segment_placement,
         annulus_seam_phase_offset=args.bf_seam_phase_offset,
+        annulus_hermite_boundary_seed=args.bf_hermite_boundary_seed,
         export_dir=export_dir,
     )
     construct_seconds = time.perf_counter() - construct_start
@@ -484,6 +485,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--bf-seam-phase-offset", type=float, default=0.0,
         help="[boundary_first] Phase 4 hardening Step 4-B: rotates all uniform_angle seam angles by this many radians, wedge width unchanged (see OSN_GS_Phase4_Hardening_Plan.md).",
+    )
+    parser.add_argument(
+        "--bf-hermite-boundary-seed", action="store_true",
+        help="[boundary_first] Phase 4 hardening Step 4-C: cubic-Hermite (shared-slope) Coons boundary seed instead of pure linear -- targets seam continuity only (see OSN_GS_Phase4_Hardening_Plan.md).",
     )
     parser.add_argument("--resolution-u", type=int, default=8)
     parser.add_argument("--resolution-v", type=int, default=4)
