@@ -23,6 +23,37 @@ def annulus_elliptical(xy: torch.Tensor) -> torch.Tensor:
     x, y = xy[:, 0], xy[:, 1]
     r = ((x / 0.95).square() + (y / 0.55).square()).sqrt()
     return (r <= 1.0) & (r >= 0.4)
+def ellipse_radius_at_angle(theta: torch.Tensor, a: float, b: float) -> torch.Tensor:
+    """Analytic polar radius ``r(theta)`` of an axis-aligned ellipse with
+    semi-axes ``a`` (x) / ``b`` (y), centered at its own local origin.
+    Reduces to the constant ``a`` (== ``b``) for a circle. Used as ground
+    truth by ``nurbs_constructor_benchmark/boundary_bias_analysis.py``.
+    """
+
+    return (a * b) / torch.sqrt((b * torch.cos(theta)).square() + (a * torch.sin(theta)).square())
+
+
+def circle(xy: torch.Tensor) -> torch.Tensor:
+    r = xy.square().sum(1).sqrt()
+    return r <= 0.75
+
+
+def ellipse(xy: torch.Tensor) -> torch.Tensor:
+    x, y = xy[:, 0], xy[:, 1]
+    return ((x / 0.85).square() + (y / 0.5).square()) <= 1.0
+
+
+def ellipse_high_eccentricity(xy: torch.Tensor) -> torch.Tensor:
+    x, y = xy[:, 0], xy[:, 1]
+    return ((x / 0.9).square() + (y / 0.22).square()) <= 1.0
+
+
+def ellipse_off_center(xy: torch.Tensor) -> torch.Tensor:
+    center = torch.tensor([0.2, 0.15], dtype=xy.dtype, device=xy.device)
+    x, y = (xy - center)[:, 0], (xy - center)[:, 1]
+    return ((x / 0.65).square() + (y / 0.42).square()) <= 1.0
+
+
 def u_shape(xy: torch.Tensor) -> torch.Tensor:
     x, y = xy[:, 0], xy[:, 1]
     return ((x.abs() >= 0.55) & (y >= -0.9) & (y <= 0.9)) | ((y <= -0.45) & (x.abs() <= 0.9))
