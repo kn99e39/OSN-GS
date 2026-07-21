@@ -10,6 +10,8 @@ import torch
 from .support_domains import (
     SupportPredicate,
     annulus,
+    annulus_elliptical,
+    annulus_off_center,
     crescent,
     elongated_rect,
     full_square,
@@ -173,6 +175,23 @@ def _density_gradient_xy(count: int, generator: torch.Generator) -> torch.Tensor
     return torch.cat([dense, sparse], dim=0)
 
 
+def _annulus_density_gradient_xy(
+    count: int, generator: torch.Generator, inner: float = 0.32, outer: float = 0.9, power: float = 2.5
+) -> torch.Tensor:
+    """Points restricted to the same ``annulus`` domain as ``planar_hole``, but
+    with a radial density gradient (denser near the inner/hole boundary)
+    instead of uniform. Unlike ``planar_hole``, per-O-grid-slice point counts
+    are now systematically uneven -- exercises the Phase 4 hardening plan's
+    Step 3 concern that gate thresholds must not be fit to a single,
+    uniformly-sampled scene.
+    """
+
+    theta = torch.rand(count, generator=generator) * (2.0 * torch.pi)
+    u = torch.rand(count, generator=generator)
+    r = inner + (outer - inner) * u.pow(power)
+    return torch.stack([r * torch.cos(theta), r * torch.sin(theta)], dim=1)
+
+
 def make_scene(name: str, count: int, seed: int = 0, noise_std: float = 0.0) -> SyntheticGaussianScene:
     """Create one named synthetic scene (see ``SCENE_NAMES``)."""
 
@@ -184,11 +203,20 @@ def make_scene(name: str, count: int, seed: int = 0, noise_std: float = 0.0) -> 
     support_name = "square"
     if name == "density_gradient":
         xy = _density_gradient_xy(count, generator)
-    elif name in {"triangle", "u_shape", "crescent", "planar_hole", "elongated_plane"}:
+    elif name == "planar_hole_density_gradient":
+        support_predicate, support_name = annulus, "annulus"
+        xy = _annulus_density_gradient_xy(count, generator)
+    elif name in {
+        "triangle", "u_shape", "crescent", "planar_hole", "elongated_plane",
+        "planar_hole_offcenter", "planar_hole_elliptical", "curved_annulus",
+    }:
         support_predicate, support_name = {
             "triangle": (triangle, "triangle"), "u_shape": (u_shape, "u_shape"),
             "crescent": (crescent, "crescent"), "planar_hole": (annulus, "annulus"),
             "elongated_plane": (elongated_rect, "elongated_rect"),
+            "planar_hole_offcenter": (annulus_off_center, "annulus_offcenter"),
+            "planar_hole_elliptical": (annulus_elliptical, "annulus_elliptical"),
+            "curved_annulus": (annulus, "annulus"),
         }[name]
         xy = sample_in_domain(support_predicate, count, generator)
     else:
@@ -218,6 +246,18 @@ def make_scene(name: str, count: int, seed: int = 0, noise_std: float = 0.0) -> 
     elif name == "planar_hole":
         surface_fn, oracle = _plane_height, _plane_oracle
         description = "Planar annular support: hole preservation and Euler-equivalent topology."
+    elif name == "planar_hole_offcenter":
+        surface_fn, oracle = _plane_height, _plane_oracle
+        description = "Planar annular support, hole off-center: annulus O-grid with a non-origin-centered hole."
+    elif name == "planar_hole_elliptical":
+        surface_fn, oracle = _plane_height, _plane_oracle
+        description = "Planar annular support, elliptical inner/outer boundary: annulus O-grid on a non-circular ring."
+    elif name == "planar_hole_density_gradient":
+        surface_fn, oracle = _plane_height, _plane_oracle
+        description = "Planar annular support with radially non-uniform (inner-biased) point density: uneven per-slice point counts in the annulus O-grid."
+    elif name == "curved_annulus":
+        surface_fn, oracle = _sine_height, _sine_oracle
+        description = "Curved (sine) annular support: annulus O-grid on a non-planar surface, where the true normal legitimately rotates around the ring."
     elif name == "elongated_plane":
         surface_fn, oracle = _plane_height, _plane_oracle
         description = "Planar thin elongated support: anisotropic extent and aspect-ratio allocation."
@@ -258,4 +298,5 @@ def make_scene(name: str, count: int, seed: int = 0, noise_std: float = 0.0) -> 
 SCENE_NAMES = (
     "plane", "sine", "crease", "density_gradient", "triangle", "u_shape", "crescent", "planar_hole",
     "elongated_plane", "mild_curved_sheet", "close_parallel_sheets",
+    "planar_hole_offcenter", "planar_hole_elliptical", "planar_hole_density_gradient", "curved_annulus",
 )

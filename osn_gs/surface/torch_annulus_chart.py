@@ -30,6 +30,25 @@ validated against are rotationally close to uniform, so there is no
 distinguished low-curvature location to prefer -- the seam is placed at a
 fixed angle=0 (documented simplification; curvature/confidence-driven seam
 placement is deferred, not implemented).
+
+**Coordinate convention (load-bearing for every diagnostic below, verified
+by ``tests/test_annulus_chart.py``'s orientation-invariant tests, not just
+asserted here):** ``u`` (``local_s``) is tangential/angular, ``v``
+(``local_t``) is radial, for EVERY slice. Two consequences follow directly
+from the construction below and are relied on by the seam metrics:
+
+1. ``local_s`` increases with global angle for every slice (``local_s =
+   (angle - theta_lo) / angle_step``), so ``Su = dS/d(local_s)`` points in
+   the SAME physical rotational direction on both sides of every seam. No
+   sign correction is needed when comparing slice A's ``Su`` at
+   ``local_s=1`` against slice B's ``Su`` at ``local_s=0``.
+2. ``local_t`` increases from the inner boundary (0) to the outer boundary
+   (1) for every slice identically, so ``Sv`` is likewise directly
+   comparable with no sign correction.
+
+This is specific to this O-grid's own construction (every slice shares one
+global angle/radius orientation) -- it is not a general NURBS-continuity
+assumption and would not hold for arbitrarily-oriented independent charts.
 """
 
 from dataclasses import dataclass
@@ -42,6 +61,8 @@ from osn_gs.surface.torch_nurbs import (
 )
 from osn_gs.surface.torch_surface_components import SurfaceComponent
 from osn_gs.utils.torch_ops import require_torch
+
+_EPS = 1e-8
 
 
 @dataclass
@@ -59,11 +80,32 @@ class AnnulusChartSlice:
 
 @dataclass
 class SeamDiagnostic:
+    """Continuity between adjacent slices A (``local_s=1`` edge) and B (``local_s=0`` edge).
+
+    Two independent metric families, kept separate because they diagnose
+    different failure modes (§ plan review, 2026-07-20):
+
+    - Along-seam continuity: does the shared curve itself agree between the
+      two independently-fit patches (position gap, ``Sv`` tangent angle --
+      both slices parameterize the seam curve by ``v``/radius identically).
+    - Across-seam continuity: does the surface behave consistently crossing
+      the seam (``Su`` cross-boundary derivative angle, normal angle,
+      derivative magnitude ratio).
+    """
+
     slice_a: int
     slice_b: int
+    sample_count: int
     mean_gap: float
     max_gap: float
-    sample_count: int
+    seam_tangent_angle_deg_mean: float
+    seam_tangent_angle_deg_max: float
+    seam_cross_derivative_angle_deg_mean: float
+    seam_cross_derivative_angle_deg_max: float
+    seam_normal_angle_deg_mean: float
+    seam_normal_angle_deg_max: float
+    seam_derivative_ratio_mean: float
+    seam_derivative_ratio_max: float
 
 
 @dataclass
@@ -75,15 +117,227 @@ class AnnulusChartResult:
     slices: list[AnnulusChartSlice]
     seams: list[SeamDiagnostic]
     topology_checks: dict[str, Any]
+    chart_quality: dict[str, Any]
 
 
-def _jacobian_min(surface: TorchNURBSSurface, resolution: int = 12) -> float:
+def _jacobian_diagnostics(surface: TorchNURBSSurface, resolution: int = 12, eps: float = _EPS) -> dict[str, Any]:
+    """Per-sample singular values of ``J = [Su Sv] in R^{3x2}``, plus orientation.
+
+    ``sigma_min``/``sigma_max`` are the true parameterization singular
+    values (via the closed-form eigenvalues of the 2x2 ``J^T J``), NOT
+    ``||Su x Sv||`` (the local area scale, which equals ``sigma_min *
+    sigma_max`` exactly for a 3x2 matrix -- kept separately as
+    ``min_area_jacobian``). ``sigma_min -> 0`` is local collapse/compression;
+    a large ``sigma_max/sigma_min`` ratio is anisotropic distortion; neither
+    is visible from the area product alone (e.g. a very long, very thin
+    patch can have a "healthy" mid-sized area with a terrible condition
+    number).
+
+    Orientation reference: computed PER SLICE from that slice's OWN normal
+    field (median-sign self-consistency, seeded from the slice's own
+    central sample and majority-aligned), not one fixed global vector for
+    the whole component -- a genuinely curved annulus legitimately rotates
+    its true normal around the ring, so a single global reference would
+    misfire. This catches orientation reversal / fold-over WITHIN one
+    patch; reversal BETWEEN adjacent patches is a distinct condition,
+    already covered by ``SeamDiagnostic.seam_normal_angle_deg_*``.
+    """
+
     torch = require_torch()
     t = torch.linspace(0.0, 1.0, resolution, device=surface.control_grid.device)
     u, v = torch.meshgrid(t, t, indexing="ij")
-    _, du, dv = surface.evaluate_with_derivatives(torch.stack((u.flatten(), v.flatten()), dim=1))
-    return float(torch.cross(du, dv, dim=1).norm(dim=1).min().cpu())
+    uv = torch.stack((u.reshape(-1), v.reshape(-1)), dim=1)
+    _, du, dv = surface.evaluate_with_derivatives(uv)
+    du, dv = du.detach(), dv.detach()
 
+    a = (du * du).sum(dim=1)
+    d = (dv * dv).sum(dim=1)
+    b = (du * dv).sum(dim=1)
+    trace = a + d
+    disc = (trace.square() - 4.0 * (a * d - b * b)).clamp_min(0.0).sqrt()
+    sigma_max = ((trace + disc).clamp_min(0.0) * 0.5).sqrt()
+    sigma_min = ((trace - disc).clamp_min(0.0) * 0.5).sqrt()
+
+    normal = torch.cross(du, dv, dim=1)
+    area = normal.norm(dim=1)
+    normal_unit = normal / area.clamp_min(eps)[:, None]
+    seed = normal_unit[normal_unit.shape[0] // 2]
+    aligned = torch.where((normal_unit @ seed < 0.0)[:, None], -normal_unit, normal_unit)
+    reference = aligned.mean(dim=0)
+    reference = reference / reference.norm().clamp_min(eps)
+    orientation_dot = normal_unit @ reference
+
+    condition = sigma_max / sigma_min.clamp_min(eps)
+
+    return {
+        "min_area_jacobian": float(area.min().cpu()),
+        "min_jacobian_singular_value": float(sigma_min.min().cpu()),
+        "jacobian_condition_mean": float(condition.mean().cpu()),
+        "jacobian_condition_p95": float(condition.quantile(0.95).cpu()),
+        "max_jacobian_condition": float(condition.max().cpu()),
+        "orientation_flip_count": int((orientation_dot < 0.0).sum()),
+        "near_degenerate_count": int((sigma_min < eps).sum()),
+        "sample_count": int(area.shape[0]),
+        "reference_normal": reference.detach().cpu().tolist(),
+    }
+
+
+def _parameter_quality(surface: TorchNURBSSurface, resolution: int = 12, line_samples: int = 9) -> dict[str, Any]:
+    """Chart parameterization quality: iso-line spacing uniformity, directional
+    stretch, anisotropy, and orthogonality -- NOT just visual iso-line spacing.
+
+    ``cv_u``/``cv_v`` (coefficient of variation of consecutive world-space
+    point spacing along constant-v/constant-u lines) are reported as raw
+    diagnostics only; a polar O-grid has an EXPECTED radial contraction
+    near the inner (small-circumference) edge that raw CV cannot by itself
+    distinguish from genuine crowding/collapse -- a detrended version is a
+    candidate refinement, deferred until Step 3's real multi-scene numbers
+    show it is actually needed.
+    """
+
+    torch = require_torch()
+    device = surface.control_grid.device
+    t_lines = torch.linspace(0.0, 1.0, resolution, device=device)
+    t_samples = torch.linspace(0.0, 1.0, line_samples, device=device)
+
+    def _cv(points: Any) -> float:
+        seg = (points[1:] - points[:-1]).norm(dim=1)
+        mean = seg.mean().clamp_min(_EPS)
+        return float((seg.std(unbiased=False) / mean).cpu())
+
+    cv_v_per_u_line = []
+    for uc in t_lines:
+        uv = torch.stack((torch.full_like(t_samples, float(uc)), t_samples), dim=1)
+        cv_v_per_u_line.append(_cv(surface.evaluate(uv).detach()))
+    cv_u_per_v_line = []
+    for vc in t_lines:
+        uv = torch.stack((t_samples, torch.full_like(t_samples, float(vc))), dim=1)
+        cv_u_per_v_line.append(_cv(surface.evaluate(uv).detach()))
+
+    grid_u, grid_v = torch.meshgrid(t_lines, t_lines, indexing="ij")
+    uv = torch.stack((grid_u.reshape(-1), grid_v.reshape(-1)), dim=1)
+    _, du, dv = surface.evaluate_with_derivatives(uv)
+    du, dv = du.detach(), dv.detach()
+    norm_u, norm_v = du.norm(dim=1), dv.norm(dim=1)
+    anisotropy = torch.minimum(norm_u, norm_v) / torch.maximum(norm_u, norm_v).clamp_min(_EPS)
+    orthogonality = (du * dv).sum(dim=1).abs() / (norm_u * norm_v).clamp_min(_EPS)
+
+    return {
+        "cv_v_along_u_line_mean": float(sum(cv_v_per_u_line) / len(cv_v_per_u_line)),
+        "cv_u_along_v_line_mean": float(sum(cv_u_per_v_line) / len(cv_u_per_v_line)),
+        "stretch_u_mean": float(norm_u.mean().cpu()),
+        "stretch_u_min": float(norm_u.min().cpu()),
+        "stretch_u_max": float(norm_u.max().cpu()),
+        "stretch_v_mean": float(norm_v.mean().cpu()),
+        "stretch_v_min": float(norm_v.min().cpu()),
+        "stretch_v_max": float(norm_v.max().cpu()),
+        "anisotropy_mean": float(anisotropy.mean().cpu()),
+        "anisotropy_min": float(anisotropy.min().cpu()),
+        "orthogonality_mean": float(orthogonality.mean().cpu()),
+        "orthogonality_max": float(orthogonality.max().cpu()),
+    }
+
+
+def _boundary_conformance(chart_edge_world: Any, reference_world: Any, coverage_tolerance: float) -> dict[str, Any] | None:
+    """Symmetric distance between a chart edge and Phase 2's OBSERVED-SUPPORT
+    boundary for the corresponding loop (not ground truth -- Phase 2's own
+    contour is itself density-threshold + marching-squares estimated).
+
+    One-directional nearest-point distance alone can look perfect even if
+    the chart edge has collapsed onto a small sub-arc of the true boundary
+    (every chart sample near SOME reference point), so both directions are
+    reported plus a coverage ratio that would catch exactly that failure.
+    """
+
+    torch = require_torch()
+    if reference_world is None or int(reference_world.shape[0]) == 0 or int(chart_edge_world.shape[0]) == 0:
+        return None
+    d = torch.cdist(chart_edge_world, reference_world)
+    edge_to_ref = d.min(dim=1).values
+    ref_to_edge = d.min(dim=0).values
+    coverage = float((ref_to_edge <= coverage_tolerance).float().mean().cpu())
+    return {
+        "edge_to_reference_mean": float(edge_to_ref.mean().cpu()),
+        "edge_to_reference_max": float(edge_to_ref.max().cpu()),
+        "reference_to_edge_mean": float(ref_to_edge.mean().cpu()),
+        "reference_to_edge_max": float(ref_to_edge.max().cpu()),
+        "symmetric_chamfer": float(0.5 * (edge_to_ref.mean() + ref_to_edge.mean()).cpu()),
+        "hausdorff": float(torch.maximum(edge_to_ref.max(), ref_to_edge.max()).cpu()),
+        "boundary_coverage_ratio": coverage,
+        "coverage_tolerance": coverage_tolerance,
+        "reference_point_count": int(reference_world.shape[0]),
+    }
+
+
+def _equal_arc_length_boundary_angles(
+    cell_angle_wrapped: Any, cell_radius: Any, cell_supported: Any,
+    point_angle_wrapped: Any, point_radius: Any,
+    segments: int, bins: int = 72,
+) -> Any:
+    """Phase 4 hardening Step 4 (arc-length reparameterization, low-risk seed
+    change per ``OSN_GS_Phase4_Hardening_Plan.md``): place the ``segments``
+    O-grid seam angles so each wedge spans roughly EQUAL ARC LENGTH along the
+    OUTER boundary, instead of equal ANGLE from the hole's centroid.
+
+    Motivation (Step 3 baseline finding): equal-angle segments produced 4x
+    the orientation-flip count and 3x the Jacobian condition number on
+    ``planar_hole_offcenter`` versus the centered case -- an off-center (or
+    elliptical) hole makes equal-angle wedges wildly unequal in physical
+    size, with the worst wedge's inner corner becoming the near-degenerate
+    corner documented in the Step 1 root-cause finding. Equalizing arc
+    length directly targets this without touching the free-LSQ-fit
+    mechanism at all (still a seed-only change, per the plan's discipline).
+
+    Builds a coarse (``bins``-bucket) histogram of the OUTER radius as a
+    function of angle from the same refined-mask cell data the uniform-angle
+    path already uses (falls back to the raw point cloud for any bucket with
+    no supported cells), then treats ``ds/dtheta ~= r_outer(theta)`` to get a
+    cumulative arc-length function of angle, and inverts it at ``segments``
+    equally-spaced arc-length fractions.
+    """
+
+    torch = require_torch()
+    two_pi = 2.0 * torch.pi
+    dtype, device = cell_angle_wrapped.dtype, cell_angle_wrapped.device
+    edges = torch.linspace(0.0, two_pi, bins + 1, dtype=dtype, device=device)
+    centers = 0.5 * (edges[:-1] + edges[1:])
+    outer_per_bin = torch.full((bins,), float("nan"), dtype=dtype, device=device)
+    bin_width = two_pi / bins
+    for i in range(bins):
+        lo, hi = float(edges[i]), float(edges[i + 1])
+        in_bin = (cell_angle_wrapped >= lo) & (cell_angle_wrapped < hi) & cell_supported
+        if bool(in_bin.any()):
+            outer_per_bin[i] = cell_radius[in_bin].max()
+        else:
+            in_bin_p = (point_angle_wrapped >= lo) & (point_angle_wrapped < hi)
+            if bool(in_bin_p.any()):
+                outer_per_bin[i] = point_radius[in_bin_p].max()
+    # Fill any still-empty bins (sparse data) from the nearest filled
+    # neighbor -- a plain scan is fine at this small bin count.
+    values = outer_per_bin.tolist()
+    if all(v != v for v in values):  # every bin empty: nothing to place from
+        return torch.remainder(torch.arange(segments, dtype=dtype, device=device) * (two_pi / segments), two_pi)
+    n = len(values)
+    for i in range(n):
+        if values[i] != values[i]:
+            for d in range(1, n):
+                lo_idx, hi_idx = (i - d) % n, (i + d) % n
+                if values[lo_idx] == values[lo_idx]:
+                    values[i] = values[lo_idx]
+                    break
+                if values[hi_idx] == values[hi_idx]:
+                    values[i] = values[hi_idx]
+                    break
+    outer_per_bin = torch.tensor(values, dtype=dtype, device=device)
+
+    ds = outer_per_bin * bin_width
+    cumulative = torch.cumsum(ds, dim=0)
+    cumulative = cumulative / cumulative[-1]
+    targets = torch.arange(segments, dtype=dtype, device=device) / segments
+    # searchsorted needs a leading zero so fraction 0 maps to bin 0's start.
+    cumulative_padded = torch.cat((torch.zeros(1, dtype=dtype, device=device), cumulative))
+    idx = torch.searchsorted(cumulative_padded, targets, right=False).clamp(1, bins) - 1
+    return centers[idx]
 
 
 def build_annulus_chart(
@@ -99,8 +353,20 @@ def build_annulus_chart(
     degree_v: int = 1,
     angular_overlap_fraction: float = 0.0,
     seam_sample_count: int = 9,
+    outer_boundary_world_points: list[list[float]] | None = None,
+    boundary_conformance_tolerance: float = 0.05,
+    segment_placement: str = "uniform_angle",
 ) -> AnnulusChartResult:
     """Build an O-grid of ``segments`` radial NURBS charts for one annulus component.
+
+    ``outer_boundary_world_points`` (from ``boundary_result.outer_loops[0]``,
+    optional): if provided, enables the outer-edge Phase-2 boundary
+    conformance check alongside the inner (hole) one, which is always
+    available via ``hole_boundary_world_points``. ``boundary_conformance_
+    tolerance`` is a provisional diagnostic default (domain-scale-relative,
+    not yet derived from a multi-scene distribution -- see Step 3 of the
+    Phase 4 hardening plan) and is reported alongside the coverage ratio it
+    produces so it is never opaque in the output.
 
     ``angular_overlap_fraction`` defaults to 0 (no overlap between adjacent
     slices' point-selection windows). This was NOT the original design: an
@@ -112,6 +378,13 @@ def build_annulus_chart(
     planar_hole. The Coons-style shared boundary radius (computed once per
     slice-boundary angle below, §4.3) turned out to be what actually matters
     for continuity; overlap was actively counterproductive and is disabled.
+
+    ``segment_placement`` (Phase 4 hardening Step 4, opt-in, default
+    ``"uniform_angle"`` byte-identical to the original Phase 4 behavior):
+    ``"arc_length_outer"`` places the ``segments`` seam angles at equal arc
+    length along the outer boundary instead of equal angle from the hole's
+    centroid -- see ``_equal_arc_length_boundary_angles`` and
+    ``OSN_GS_Phase4_Hardening_Plan.md``.
     """
 
     torch = require_torch()
@@ -149,7 +422,6 @@ def build_annulus_chart(
     point_angle_wrapped = torch.remainder(point_angle, two_pi)
     cell_angle_wrapped = torch.remainder(cell_angle, two_pi)
     angle_step = two_pi / segments
-    overlap = angular_overlap_fraction * angle_step
 
     # Coons-style shared boundary values (§4.3 "Seed: Coons patch 또는
     # transfinite interpolation"): compute inner/outer radius ONCE per slice
@@ -161,12 +433,27 @@ def build_annulus_chart(
     # its own radius range from only its own interior cells (which measurably
     # disagreed: pre-fix seam gaps were ~0.03-0.08 on a flat unit-scale plane
     # purely from this radius-bound mismatch, not from the LSQ fit itself).
-    boundary_angles = torch.remainder(torch.arange(segments, dtype=own_uv.dtype, device=own_uv.device) * angle_step, two_pi)
-    boundary_window = 0.5 * angle_step * max(angular_overlap_fraction * 4.0, 0.25)
+    if segment_placement == "arc_length_outer":
+        boundary_angles = _equal_arc_length_boundary_angles(
+            cell_angle_wrapped, cell_radius, cell_supported, point_angle_wrapped, point_radius, segments
+        )
+    elif segment_placement == "uniform_angle":
+        boundary_angles = torch.remainder(torch.arange(segments, dtype=own_uv.dtype, device=own_uv.device) * angle_step, two_pi)
+    else:
+        raise ValueError(f"Unknown segment_placement: {segment_placement!r}")
+    # Local angular spacing AT each boundary index (average of the segment
+    # widths on either side) -- reduces to exactly ``angle_step`` for
+    # ``uniform_angle`` (byte-identical to the pre-Step-4 window), and
+    # adapts per-boundary for ``arc_length_outer``'s non-uniform spacing.
+    spacing_next = torch.remainder(boundary_angles.roll(-1) - boundary_angles, two_pi)
+    spacing_next = torch.where(spacing_next == 0.0, torch.full_like(spacing_next, two_pi), spacing_next)
+    spacing_prev = spacing_next.roll(1)
+    local_spacing = 0.5 * (spacing_prev + spacing_next)
     inner_boundary = torch.empty((segments,), dtype=own_uv.dtype, device=own_uv.device)
     outer_boundary = torch.empty((segments,), dtype=own_uv.dtype, device=own_uv.device)
     for k in range(segments):
         theta = float(boundary_angles[k])
+        boundary_window = 0.5 * float(local_spacing[k]) * max(angular_overlap_fraction * 4.0, 0.25)
         delta = torch.remainder(cell_angle_wrapped - theta + torch.pi, two_pi) - torch.pi
         near = (delta.abs() <= boundary_window) & cell_supported
         if bool(near.any()):
@@ -179,20 +466,34 @@ def build_annulus_chart(
             outer_boundary[k] = point_radius[near_p].max() if bool(near_p.any()) else 1.0
 
     slices: list[AnnulusChartSlice] = []
+    inner_edges_world: list[Any] = []
+    outer_edges_world: list[Any] = []
     for k in range(segments):
-        theta_lo = k * angle_step
-        theta_hi = (k + 1) * angle_step
+        theta_lo = float(boundary_angles[k])
+        theta_hi = float(boundary_angles[(k + 1) % segments])
+        if theta_hi <= theta_lo:
+            theta_hi += two_pi  # wrap-around segment (last -> first boundary angle)
+        slice_width = theta_hi - theta_lo
         inner_lo, inner_hi = float(inner_boundary[k]), float(inner_boundary[(k + 1) % segments])
         outer_lo, outer_hi = float(outer_boundary[k]), float(outer_boundary[(k + 1) % segments])
         inner_radius = min(inner_lo, inner_hi)  # reported/diagnostic summary only
         outer_radius = max(outer_lo, outer_hi)
         radius_span = max(outer_radius - inner_radius, 1e-6)
 
+        # Shift point angles into [theta_lo, theta_lo + two_pi) before
+        # comparing against theta_hi -- theta_hi can exceed two_pi for the
+        # wrap-around segment (or, for non-uniform ``arc_length_outer``
+        # placement, any segment could in principle straddle the 0/two_pi
+        # seam depending on where the first boundary angle falls). For
+        # ``uniform_angle`` this reduces to the original unshifted
+        # comparison exactly (verified byte-identical numbers).
+        shifted_point_angle = theta_lo + torch.remainder(point_angle_wrapped - theta_lo, two_pi)
+        overlap_k = angular_overlap_fraction * slice_width
         # angular_overlap_fraction is 0 by default (see the function
         # docstring); kept as a parameter in case a future scene needs it,
         # but each slice's own point-selection window is exactly its angular
         # range unless explicitly widened.
-        selected = (point_angle_wrapped >= theta_lo - overlap) & (point_angle_wrapped < theta_hi + overlap)
+        selected = (shifted_point_angle >= theta_lo - overlap_k) & (shifted_point_angle < theta_hi + overlap_k)
         indices = torch.nonzero(selected, as_tuple=False).reshape(-1)
         if int(indices.numel()) < 4:
             # Too few points to fit a wedge (only possible on pathologically
@@ -204,12 +505,12 @@ def build_annulus_chart(
             indices = torch.nonzero(selected, as_tuple=False).reshape(-1)
 
         slice_points = component_points[indices]
-        slice_angle = point_angle_wrapped[indices]
+        slice_angle = shifted_point_angle[indices]
         slice_radius = point_radius[indices]
         # Bilinear (Coons) local_s/local_t: the radius bounds themselves vary
         # linearly across the slice's angular extent, tying s=0/s=1 exactly
         # to the shared boundary radii computed above.
-        local_s = torch.clamp((slice_angle - theta_lo) / angle_step, 0.0, 1.0)
+        local_s = torch.clamp((slice_angle - theta_lo) / slice_width, 0.0, 1.0)
         radius_lo_at_s = inner_lo + local_s * (inner_hi - inner_lo)
         radius_hi_at_s = outer_lo + local_s * (outer_hi - outer_lo)
         local_t = torch.clamp(
@@ -242,7 +543,7 @@ def build_annulus_chart(
         # and the plan (§4.5) explicitly scopes v1 as "measure, don't force,
         # C0" with continuity as later refinement, this stays a FREE fit; the
         # Coons-seeded ``initial_uv`` above is the only continuity mechanism.
-        # ``boundary_anchor_max_error`` is kept as a diagnostic (how far the
+        # ``seed_boundary_anchor_error`` is kept as a diagnostic (how far the
         # free fit's own boundary drifted from the Coons chord seed) without
         # being enforced.
         edge_angles = torch.linspace(theta_lo, theta_hi, slice_resolution_u, dtype=own_uv.dtype, device=own_uv.device)
@@ -252,17 +553,23 @@ def build_annulus_chart(
         direction = torch.stack((torch.cos(edge_angles), torch.sin(edge_angles)), dim=1)
         inner_edge = boundary_frame.to_world(origin_uv.unsqueeze(0) + direction * inner_radius_edge[:, None])
         outer_edge = boundary_frame.to_world(origin_uv.unsqueeze(0) + direction * outer_radius_edge[:, None])
+        inner_edges_world.append(inner_edge.detach())
+        outer_edges_world.append(outer_edge.detach())
         residual = (surface.evaluate(uv).detach() - slice_points).norm(dim=1)
         boundary_uv = torch.cat((
             torch.stack((torch.linspace(0.0, 1.0, slice_resolution_u, device=own_uv.device), torch.zeros(slice_resolution_u, device=own_uv.device)), dim=1),
             torch.stack((torch.linspace(0.0, 1.0, slice_resolution_u, device=own_uv.device), torch.ones(slice_resolution_u, device=own_uv.device)), dim=1),
         ), dim=0)
         boundary_error = (surface.evaluate(boundary_uv).detach() - torch.cat((inner_edge, outer_edge), dim=0)).norm(dim=1)
+
+        jacobian_diag = _jacobian_diagnostics(surface)
+        parameter_quality = _parameter_quality(surface)
         fit_metrics = {
             "point_to_surface_rms": float(residual.square().mean().sqrt().cpu()),
             "point_count": int(slice_points.shape[0]),
-            "jacobian_min": _jacobian_min(surface),
-            "boundary_anchor_max_error": float(boundary_error.max().cpu()),
+            "seed_boundary_anchor_error": float(boundary_error.max().cpu()),
+            **jacobian_diag,
+            "parameter_quality": parameter_quality,
         }
 
         slices.append(
@@ -280,14 +587,64 @@ def build_annulus_chart(
         )
 
     seams = _measure_seams(slices, seam_sample_count)
+
     topology_checks = {
         "uv_overlap": False,  # true by construction: angle ranges partition [0, 2pi) exactly
-        "jacobian_fold_count": sum(1 for s in slices if s.fit_metrics["jacobian_min"] <= 0.0),
+        "near_degenerate_slice_count": sum(1 for s in slices if s.fit_metrics["near_degenerate_count"] > 0),
+        "min_jacobian_singular_value": min(s.fit_metrics["min_jacobian_singular_value"] for s in slices),
+        "max_jacobian_condition": max(s.fit_metrics["max_jacobian_condition"] for s in slices),
+        "total_orientation_flip_samples": sum(s.fit_metrics["orientation_flip_count"] for s in slices),
         "min_slice_point_count": min(s.fit_metrics["point_count"] for s in slices),
-        "boundary_anchor_max_error": max(s.fit_metrics["boundary_anchor_max_error"] for s in slices),
+        "seed_boundary_anchor_max_error": max(s.fit_metrics["seed_boundary_anchor_error"] for s in slices),
         # NOT hard-enforced (see the free-fit vs. hard-constraint comparison
         # in the per-slice loop above); C0 is measured via `seams`, not forced.
         "shared_boundary_constraint": False,
+    }
+
+    inner_reference = hole_boundary_world if hole_boundary_world.numel() else None
+    outer_reference = (
+        torch.tensor(outer_boundary_world_points, dtype=component_points.dtype, device=component_points.device)
+        if outer_boundary_world_points
+        else None
+    )
+    chart_quality = {
+        "jacobian": {
+            "min_area_jacobian": min(s.fit_metrics["min_area_jacobian"] for s in slices),
+            "min_jacobian_singular_value": topology_checks["min_jacobian_singular_value"],
+            # Component-level rollup of already-per-slice-aggregated
+            # mean/p95/max (slice -> sample rollup happens inside
+            # ``_jacobian_diagnostics``); this is a coarser second-level
+            # rollup, not a re-aggregation over raw per-sample values.
+            "jacobian_condition_mean_of_slice_means": sum(s.fit_metrics["jacobian_condition_mean"] for s in slices) / len(slices),
+            "jacobian_condition_max_of_slice_p95": max(s.fit_metrics["jacobian_condition_p95"] for s in slices),
+            "max_jacobian_condition": topology_checks["max_jacobian_condition"],
+            "total_orientation_flip_samples": topology_checks["total_orientation_flip_samples"],
+            "total_near_degenerate_samples": sum(s.fit_metrics["near_degenerate_count"] for s in slices),
+        },
+        "seams": {
+            "position_gap_mean": sum(s.mean_gap for s in seams) / len(seams) if seams else 0.0,
+            "position_gap_max": max((s.max_gap for s in seams), default=0.0),
+            "tangent_angle_deg_mean": sum(s.seam_tangent_angle_deg_mean for s in seams) / len(seams) if seams else 0.0,
+            "tangent_angle_deg_max": max((s.seam_tangent_angle_deg_max for s in seams), default=0.0),
+            "cross_derivative_angle_deg_mean": sum(s.seam_cross_derivative_angle_deg_mean for s in seams) / len(seams) if seams else 0.0,
+            "cross_derivative_angle_deg_max": max((s.seam_cross_derivative_angle_deg_max for s in seams), default=0.0),
+            "normal_angle_deg_mean": sum(s.seam_normal_angle_deg_mean for s in seams) / len(seams) if seams else 0.0,
+            "normal_angle_deg_max": max((s.seam_normal_angle_deg_max for s in seams), default=0.0),
+            "derivative_ratio_mean": sum(s.seam_derivative_ratio_mean for s in seams) / len(seams) if seams else 1.0,
+            "derivative_ratio_max": max((s.seam_derivative_ratio_max for s in seams), default=1.0),
+        },
+        "parameter_quality": {
+            "cv_v_along_u_line_mean": sum(s.fit_metrics["parameter_quality"]["cv_v_along_u_line_mean"] for s in slices) / len(slices),
+            "cv_u_along_v_line_mean": sum(s.fit_metrics["parameter_quality"]["cv_u_along_v_line_mean"] for s in slices) / len(slices),
+            "anisotropy_mean": sum(s.fit_metrics["parameter_quality"]["anisotropy_mean"] for s in slices) / len(slices),
+            "anisotropy_min": min(s.fit_metrics["parameter_quality"]["anisotropy_min"] for s in slices),
+            "orthogonality_mean": sum(s.fit_metrics["parameter_quality"]["orthogonality_mean"] for s in slices) / len(slices),
+            "orthogonality_max": max(s.fit_metrics["parameter_quality"]["orthogonality_max"] for s in slices),
+        },
+        "phase2_boundary_conformance": {
+            "inner": _boundary_conformance(torch.cat(inner_edges_world, dim=0), inner_reference, boundary_conformance_tolerance),
+            "outer": _boundary_conformance(torch.cat(outer_edges_world, dim=0), outer_reference, boundary_conformance_tolerance),
+        },
     }
 
     return AnnulusChartResult(
@@ -298,37 +655,68 @@ def build_annulus_chart(
         slices=slices,
         seams=seams,
         topology_checks=topology_checks,
+        chart_quality=chart_quality,
     )
 
 
 def _measure_seams(slices: list[AnnulusChartSlice], sample_count: int) -> list[SeamDiagnostic]:
-    """World-space gap between adjacent slices' shared boundary (§4.4 seam metric).
+    """Along-seam and across-seam continuity between adjacent slices (§4.4 seam metric).
 
-    Slice ``k``'s local_s=1 edge and slice ``k+1``'s local_s=0 edge are
-    nominally the same physical curve (both parameterized over the same
-    inner->outer radius range at the shared angle); sampled independently
-    from each patch's own fit, so the reported gap directly measures the
-    continuity this v1 implementation does NOT enforce by construction.
+    Slice ``k``'s ``local_s=1`` edge and slice ``k+1``'s ``local_s=0`` edge
+    are nominally the same physical curve; sampled independently from each
+    patch's own fit, so every reported angle/gap directly measures
+    continuity this v1 implementation does NOT enforce by construction
+    (see the module docstring for why no orientation sign correction is
+    needed for either ``Su`` or ``Sv`` in this specific O-grid).
     """
 
     torch = require_torch()
     t = torch.linspace(0.0, 1.0, sample_count, device=slices[0].surface.control_grid.device)
     seams = []
     n = len(slices)
+
+    def _angle_deg(x: Any, y: Any, eps: float = _EPS) -> Any:
+        xn = x / x.norm(dim=1, keepdim=True).clamp_min(eps)
+        yn = y / y.norm(dim=1, keepdim=True).clamp_min(eps)
+        cos = (xn * yn).sum(dim=1).clamp(-1.0, 1.0)
+        return torch.rad2deg(torch.acos(cos))
+
     for k in range(n):
         a, b = slices[k], slices[(k + 1) % n]
         edge_a = torch.stack([torch.ones_like(t), t], dim=1)  # a's local_s=1 edge
         edge_b = torch.stack([torch.zeros_like(t), t], dim=1)  # b's local_s=0 edge
-        points_a = a.surface.evaluate(edge_a).detach()
-        points_b = b.surface.evaluate(edge_b).detach()
+        points_a, su_a, sv_a = a.surface.evaluate_with_derivatives(edge_a)
+        points_b, su_b, sv_b = b.surface.evaluate_with_derivatives(edge_b)
+        points_a, points_b = points_a.detach(), points_b.detach()
+        su_a, sv_a, su_b, sv_b = su_a.detach(), sv_a.detach(), su_b.detach(), sv_b.detach()
+
         gap = (points_a - points_b).norm(dim=1)
+        # Along-seam: Sv is the seam curve's own tangent on both sides.
+        tangent_angle = _angle_deg(sv_a, sv_b)
+        # Across-seam: Su is the cross-boundary derivative on both sides.
+        cross_angle = _angle_deg(su_a, su_b)
+        normal_a = torch.cross(su_a, sv_a, dim=1)
+        normal_b = torch.cross(su_b, sv_b, dim=1)
+        normal_angle = _angle_deg(normal_a, normal_b)
+        mag_a, mag_b = su_a.norm(dim=1), su_b.norm(dim=1)
+        ratio = mag_a / mag_b.clamp_min(_EPS)
+        ratio = torch.maximum(ratio, 1.0 / ratio.clamp_min(_EPS))
+
         seams.append(
             SeamDiagnostic(
                 slice_a=a.slice_index,
                 slice_b=b.slice_index,
+                sample_count=sample_count,
                 mean_gap=float(gap.mean().cpu()),
                 max_gap=float(gap.max().cpu()),
-                sample_count=sample_count,
+                seam_tangent_angle_deg_mean=float(tangent_angle.mean().cpu()),
+                seam_tangent_angle_deg_max=float(tangent_angle.max().cpu()),
+                seam_cross_derivative_angle_deg_mean=float(cross_angle.mean().cpu()),
+                seam_cross_derivative_angle_deg_max=float(cross_angle.max().cpu()),
+                seam_normal_angle_deg_mean=float(normal_angle.mean().cpu()),
+                seam_normal_angle_deg_max=float(normal_angle.max().cpu()),
+                seam_derivative_ratio_mean=float(ratio.mean().cpu()),
+                seam_derivative_ratio_max=float(ratio.max().cpu()),
             )
         )
     return seams
@@ -387,11 +775,20 @@ def annulus_chart_payload(result: AnnulusChartResult) -> dict[str, Any]:
         "origin_uv": result.origin_uv.detach().cpu().tolist(),
         "segments": result.segments,
         "topology_checks": result.topology_checks,
+        "chart_quality": result.chart_quality,
         "iso_lines": annulus_iso_line_payload(result),
         "seams": [
             {
-                "slice_a": s.slice_a, "slice_b": s.slice_b,
-                "mean_gap": s.mean_gap, "max_gap": s.max_gap, "sample_count": s.sample_count,
+                "slice_a": s.slice_a, "slice_b": s.slice_b, "sample_count": s.sample_count,
+                "mean_gap": s.mean_gap, "max_gap": s.max_gap,
+                "seam_tangent_angle_deg_mean": s.seam_tangent_angle_deg_mean,
+                "seam_tangent_angle_deg_max": s.seam_tangent_angle_deg_max,
+                "seam_cross_derivative_angle_deg_mean": s.seam_cross_derivative_angle_deg_mean,
+                "seam_cross_derivative_angle_deg_max": s.seam_cross_derivative_angle_deg_max,
+                "seam_normal_angle_deg_mean": s.seam_normal_angle_deg_mean,
+                "seam_normal_angle_deg_max": s.seam_normal_angle_deg_max,
+                "seam_derivative_ratio_mean": s.seam_derivative_ratio_mean,
+                "seam_derivative_ratio_max": s.seam_derivative_ratio_max,
             }
             for s in result.seams
         ],

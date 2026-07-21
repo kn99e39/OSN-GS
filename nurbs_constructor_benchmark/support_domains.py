@@ -15,6 +15,14 @@ def crescent(xy: torch.Tensor) -> torch.Tensor:
 def annulus(xy: torch.Tensor) -> torch.Tensor:
     r = xy.square().sum(1).sqrt()
     return (r <= 0.9) & (r >= 0.32)
+def annulus_off_center(xy: torch.Tensor) -> torch.Tensor:
+    center = torch.tensor([0.25, 0.15], dtype=xy.dtype, device=xy.device)
+    r = (xy - center).square().sum(1).sqrt()
+    return (r <= 0.62) & (r >= 0.18)
+def annulus_elliptical(xy: torch.Tensor) -> torch.Tensor:
+    x, y = xy[:, 0], xy[:, 1]
+    r = ((x / 0.95).square() + (y / 0.55).square()).sqrt()
+    return (r <= 1.0) & (r >= 0.4)
 def u_shape(xy: torch.Tensor) -> torch.Tensor:
     x, y = xy[:, 0], xy[:, 1]
     return ((x.abs() >= 0.55) & (y >= -0.9) & (y <= 0.9)) | ((y <= -0.45) & (x.abs() <= 0.9))

@@ -75,6 +75,7 @@ def construct_boundary_first(
     density_threshold: float = 3.0,
     coarse_gap_closing_cells: int = 2,
     annulus_segments: int = 8,
+    annulus_segment_placement: str = "uniform_angle",
     fallback_resolution_u: int = 12,
     fallback_resolution_v: int = 12,
     export_dir: Path | None = None,
@@ -123,6 +124,8 @@ def construct_boundary_first(
             chart = build_annulus_chart(
                 component, scene.points, boundary.frame, boundary.refined_mask,
                 boundary.hole_loops[0].boundary_world_points, segments=annulus_segments,
+                outer_boundary_world_points=boundary.outer_loops[0].boundary_world_points if boundary.outer_loops else None,
+                segment_placement=annulus_segment_placement,
             )
             for sl in chart.slices:
                 patch_id = len(all_surfaces)
@@ -151,6 +154,7 @@ def construct_boundary_first(
                     "mean_seam_gap": sum(seam_gaps) / len(seam_gaps) if seam_gaps else 0.0,
                     "max_seam_gap": max((s.max_gap for s in chart.seams), default=0.0),
                     "topology_checks": chart.topology_checks,
+                    "chart_quality": chart.chart_quality,
                     "chart_export": annulus_chart_payload(chart) if export_dir is not None else None,
                 }
             )

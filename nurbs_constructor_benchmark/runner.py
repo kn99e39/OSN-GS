@@ -294,6 +294,7 @@ def evaluate_scene_boundary_first(
         density_threshold=args.bf_density_threshold,
         coarse_gap_closing_cells=args.bf_coarse_gap_closing_cells,
         annulus_segments=args.bf_annulus_segments,
+        annulus_segment_placement=args.bf_annulus_segment_placement,
         export_dir=export_dir,
     )
     construct_seconds = time.perf_counter() - construct_start
@@ -475,6 +476,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--bf-density-threshold", type=float, default=3.0, help="[boundary_first] Phase 2/3 KDE support threshold, tuned against the rendered/trimmed surface (see docs/worklogs/30).")
     parser.add_argument("--bf-coarse-gap-closing-cells", type=int, default=2, help="[boundary_first] Phase 2 curved-component polygon-reprojection seam-closing dilation.")
     parser.add_argument("--bf-annulus-segments", type=int, default=8, help="[boundary_first] Phase 4 O-grid wedge count for annulus-topology components.")
+    parser.add_argument(
+        "--bf-annulus-segment-placement", choices=("uniform_angle", "arc_length_outer"), default="uniform_angle",
+        help="[boundary_first] Phase 4 hardening Step 4: 'uniform_angle' (original) or 'arc_length_outer' (equal arc length along the outer boundary -- see OSN_GS_Phase4_Hardening_Plan.md).",
+    )
     parser.add_argument("--resolution-u", type=int, default=8)
     parser.add_argument("--resolution-v", type=int, default=4)
     parser.add_argument("--fit-mode", choices=("lsq", "idw"), default="lsq")
@@ -583,10 +588,15 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  boundary_first: components={bf['component_count']} topologies={topologies}")
             for c in bf["per_component"]:
                 if c["chart"] == "o_grid":
+                    cq = c["chart_quality"]
                     print(
                         f"    c{c['component_id']} [o_grid x{c['segments']}]: "
                         f"mean_seam_gap={c['mean_seam_gap']:.5f} max_seam_gap={c['max_seam_gap']:.5f} "
-                        f"jacobian_fold={c['topology_checks']['jacobian_fold_count']}"
+                        f"near_degenerate={c['topology_checks']['near_degenerate_slice_count']} "
+                        f"seam_tangent_deg={cq['seams']['tangent_angle_deg_mean']:.2f} "
+                        f"seam_normal_deg={cq['seams']['normal_angle_deg_mean']:.2f} "
+                        f"jacobian_cond_p95~{cq['jacobian']['jacobian_condition_max_of_slice_p95']:.2f} "
+                        f"orientation_flips={cq['jacobian']['total_orientation_flip_samples']}"
                     )
                 else:
                     fm = c["fit_metrics"]
