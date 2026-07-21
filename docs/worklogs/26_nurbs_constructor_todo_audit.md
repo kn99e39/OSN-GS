@@ -1,30 +1,31 @@
-# 26. NURBS Constructor TODO Audit
+# 26. NURBS Constructor TODO 감사
 
-Date: 2026-07-15
+날짜: 2026-07-15
 
-## Evidence reviewed
+## 검토 근거
 
-Reviewed all prior construction worklogs (01 through 20) and current benchmark code:
-nurbs_constructor_benchmark/metrics.py, diagnostics.py, scenes.py, and runner.py.
+이전 construction worklog 01~20과 현재 benchmark code를 검토했다.
 
-## Confirmed and removed from TODO
+- nurbs_constructor_benchmark/metrics.py
+- diagnostics.py
+- scenes.py
+- runner.py
 
-- Synthetic rectangular plane, sine, and density-gradient scenes.
-- Input Gaussian to fitted-surface RMS.
-- Ground-truth accuracy, completeness, and bidirectional Chamfer RMS.
-- Jacobian area-degeneracy and fold-over diagnostics.
-- Expected/generated patch-count and label-ARI metrics.
+## 확인 후 TODO에서 제거한 항목
 
-These are implemented in the production constructor benchmark and have recorded
-worklog evidence. The metric ownership is separated into fitting accuracy,
-support, and topology.
+- synthetic rectangular plane, sine, density-gradient scene.
+- input Gaussian-to-fitted-surface RMS.
+- ground-truth accuracy, completeness, bidirectional Chamfer RMS.
+- Jacobian area-degeneracy 및 fold-over diagnostics.
+- expected/generated patch-count와 label-ARI metric.
 
-## Still open
+위 항목은 production constructor benchmark에 구현되어 있으며 worklog 근거도 기록되어 있다. metric ownership은 fitting accuracy, support, topology로 분리돼 있다.
 
-- Elongated plane and mild-curved-sheet coverage.
-- Jacobian condition number and seed/config stability sweeps.
-- Local-density-adaptive support threshold, occupancy artifact, non-rectangular
-  support scenes/metrics, and support-mask lifecycle refresh.
-- Chartability, topology boundary scoring, and multi-patch improvements.
+## 계속 열려 있는 항목
 
-No NURBS fitting or training code changed in this audit.
+- elongated plane과 mild-curved-sheet coverage.
+- Jacobian condition number 및 seed/config stability sweep.
+- local-density-adaptive support threshold, occupancy artifact, non-rectangular support scene/metric, support-mask lifecycle refresh.
+- chartability, topology boundary scoring, multi-patch 개선.
+
+이 감사는 NURBS fitting이나 training code를 변경하지 않았다.

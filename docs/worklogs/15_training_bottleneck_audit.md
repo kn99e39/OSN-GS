@@ -1,52 +1,50 @@
-# Training Bottleneck Audit
+# 15. 학습 병목 감사
 
-Date: 2026-07-14
+날짜: 2026-07-14
 
-## Evidence
+## 근거
 
-The notebook's completed 10,000-iteration run already reports the current split timings:
+notebook에서 완료된 10,000 iteration 실행은 현재의 분리 timing을 이미 기록한다.
 
-```text
-iteration=10000 ... render_loss=0.013s surface_loss=0.056s backward=0.123s
-optim=0.002s density=4.644s save=0.032s log=0.001s total=4.893s avg_iter=0.188s
-```
+    iteration=10000 ... render_loss=0.013s surface_loss=0.056s backward=0.123s
+    optim=0.002s density=4.644s save=0.032s log=0.001s total=4.893s avg_iter=0.188s
 
-Earlier stored output did not split `surface_loss` from `backward`, so its approximately 0.33 s normal iteration cannot be used to evaluate the current patch-minibatch path.
+과거 저장 출력은 surface_loss와 backward를 분리하지 않았으므로, 약 0.33초의 normal iteration 수치로 현재 patch-minibatch 경로를 평가할 수 없다.
 
-## Bottlenecks
+## 병목
 
-1. Surface loss remains the largest steady OSN-GS-specific cost.
-   - It samples up to 8,192 certain Gaussians, filters them by active patch, evaluates up to 16 rational patches, and backpropagates through their control grids every iteration.
-   - The current 16-patch round-robin budget bounds this cost, but `surface_loss=0.056s` plus its contribution to `backward=0.123s` remains substantial. It is intentional structural work, not renderer work.
+1. Surface loss는 계속해서 가장 큰 정상 상태의 OSN-GS 고유 비용이다.
+   - 최대 8,192개의 certain Gaussian을 sample하고, active patch로 분류한 뒤 최대 16개의 rational patch를 평가하고 control grid를 거쳐 매 iteration backward한다.
+   - 16-patch round-robin budget이 비용을 제한하지만 surface_loss=0.056초와 backward=0.123초에 대한 기여는 여전히 크다. renderer 비용이 아니라 의도적인 구조 비용이다.
 
-2. Per-iteration CUDA-to-CPU metric extraction serializes the hot path.
-   - Each view performs `float(mse.detach().cpu())`.
-   - Every iteration also performs `float(total.detach().cpu())`.
-   - These force the CPU to wait for queued CUDA kernels, preventing useful overlap and also feed the uncertainty loss through a recreated CPU scalar. Metrics should remain device tensors until a logging cadence requires host values.
+2. iteration별 CUDA-to-CPU metric 추출이 hot path를 직렬화한다.
+   - 각 view가 float(mse.detach().cpu())를 수행한다.
+   - 매 iteration마다 float(total.detach().cpu())도 수행한다.
+   - 이 연산은 CPU가 queue된 CUDA kernel을 기다리게 하고, uncertainty loss에도 새 CPU scalar를 통해 전달한다. metric은 progress cadence가 host 값을 요구할 때까지 device tensor로 유지해야 한다.
 
-3. ADC is the dominant periodic spike.
-   - It runs every 100 iterations.
-   - Clone, split, and prune each rebuild full Gaussian parameter tensors. For every parameter group, Adam's moment tensors are allocated and copied to preserve state.
-   - At roughly 190k Gaussians, the measured density stage is 4.644 s at iteration 10,000. This is not CPU-only ADC; it is GPU tensor allocation/copy plus GPU synchronization caused by report scalar extraction. It also increases memory traffic as SH/optimizer state grows.
+3. ADC가 지배적인 주기적 spike다.
+   - 100 iteration마다 실행한다.
+   - clone, split, prune은 모두 full Gaussian parameter tensor를 다시 만들며 Adam state 보존을 위해 parameter group별 moment tensor를 할당·복사한다.
+   - 약 190k Gaussian에서 iteration 10,000의 density stage가 4.644초였다. 이는 CPU-only ADC가 아니라 GPU tensor allocation/copy와 report scalar 추출에 따른 GPU synchronization의 조합이다.
 
-4. Surface maintenance is a separate periodic global scan.
-   - At the configured 1,000-iteration cadence it refreshes UV values for all certain Gaussians and evaluates residuals for every patch.
-   - Local correction is rare, but correction triggers a voxel rebuild for the failed patch. Voxel normal estimation uses chunked GPU cdist/SVD, while mixed-resolution adjacency and connected-component labelling explicitly transfer region bounds/normals to CPU and use Python loops.
-   - It correctly does not affect normal iterations, but it compounds ADC and streaming at 1,000-iteration boundaries.
+4. Surface maintenance는 별도의 주기적 global scan이다.
+   - 1,000 iteration cadence에서 모든 certain Gaussian의 UV를 갱신하고 모든 patch의 residual을 평가한다.
+   - local correction은 드물지만 failed patch에 대해 voxel rebuild를 유발한다. voxel normal은 chunked GPU cdist/SVD를 쓰지만 mixed-resolution adjacency와 connected-component label은 region bound/normal을 CPU로 넘기고 Python loop를 사용한다.
+   - normal iteration에는 영향을 주지 않지만 1,000 iteration 경계에서 ADC 및 streaming과 겹칠 수 있다.
 
-5. Full snapshot streaming is expensive at configured checkpoints.
-   - `STREAM_MAX_GAUSSIANS = 0` copies positions, scaling, rotations, opacity, and color for every Gaussian from GPU to CPU; the worker only serializes after that transfer.
-   - NURBS and voxel payloads copy every patch/control grid and all voxel-region arrays as well.
-   - At iteration 10,000, the same snapshot is sent twice: once because it matches the stream schedule and once from final forced streaming. This affects completion/checkpoint latency rather than the steady iteration time.
+5. Full snapshot streaming은 설정된 checkpoint에서 비용이 크다.
+   - STREAM_MAX_GAUSSIANS = 0이면 모든 Gaussian의 position, scaling, rotation, opacity, color를 GPU에서 CPU로 복사한다.
+   - NURBS와 voxel payload도 모든 patch/control grid 및 voxel-region array를 복사한다.
+   - iteration 10,000에서는 stream schedule과 final forced streaming이 겹쳐 같은 snapshot이 두 번 전송된다.
 
-6. Timing instrumentation itself synchronizes CUDA, but only at the 100-iteration logging cadence.
-   - It is necessary for stage-accurate numbers and is not the source of the 0.188 s average.
+6. Timing instrumentation도 CUDA를 synchronize하지만, 100 iteration logging cadence에서만 수행된다.
+   - stage별 수치를 얻는 데 필요하며 0.188초 평균의 원인은 아니다.
 
-## Priority
+## 우선순위
 
-1. Remove hot-path host scalar extraction and keep MSE/loss aggregation on CUDA; materialize metrics only when progress or snapshot metadata needs them.
-2. Rework ADC tensor/Adam-state growth and prune into a single shape transaction per ADC interval, avoiding clone -> full rebuild -> split -> full rebuild -> prune -> full rebuild.
-3. Decouple snapshot capture from training with a bounded pinned-memory copy policy, and avoid the duplicate final snapshot.
-4. Keep the current persistent NURBS/voxel lifecycle; optimize maintenance only at its explicit cadence rather than weakening the structural objective.
+1. hot-path host scalar 추출을 제거하고 MSE/loss aggregation을 CUDA에 유지한다. progress 또는 snapshot metadata가 필요할 때만 metric을 host에 materialize한다.
+2. ADC interval마다 clone -> full rebuild -> split -> full rebuild -> prune -> full rebuild를 피하도록 ADC tensor/Adam-state 확장과 prune을 단일 shape transaction으로 재구성한다.
+3. bounded pinned-memory copy 정책으로 snapshot capture를 학습과 분리하고, final snapshot 중복 전송을 제거한다.
+4. 현재 persistent NURBS/voxel lifecycle은 유지한다. 구조 목표를 약화시키기보다 명시적 cadence에서만 maintenance를 최적화한다.
 
-No performance behavior was changed by this audit.
+이 감사는 성능 동작을 변경하지 않았다.

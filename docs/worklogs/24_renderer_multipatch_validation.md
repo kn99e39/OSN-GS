@@ -1,44 +1,34 @@
-# 24. Renderer Multi-Patch Validation
+# 24. Renderer Multi-Patch 검증
 
-Date: 2026-07-15
+날짜: 2026-07-15
 
-## Scope
+## 범위
 
-Validated the already committed WebRenderer revision 88477a8 without touching the
-active baseline notebook or the gaussian-splatting project.
+active baseline notebook이나 gaussian-splatting project를 수정하지 않고, 이미 commit된 WebRenderer revision 88477a8을 검증했다.
 
-## Confirmed implementation
+## 확인된 구현
 
-- NurbsGeometry.buildGeometry() consumes every valid entry in patches[] and
-  does not duplicate the top-level primary patch when the array exists.
-- Each rendered patch receives a deterministic color variation.
-- Surface and iso-line vertices are assembled per patch, so line segments do
-  not join across patch boundaries.
-- Geometry bounds cover all valid patches and are used by the existing
-  camera-reset path.
-- Flattened control grids, malformed patches, patch IDs, and skipped-patch
-  reporting are covered by tests/nurbs_geometry_smoke_test.js.
+- NurbsGeometry.buildGeometry()가 patches[]의 모든 유효 entry를 사용하며 array가 존재할 때 top-level primary patch를 중복하지 않는다.
+- render된 각 patch에는 결정론적인 color variation이 적용된다.
+- surface와 iso-line vertex는 patch별로 조립되므로 line segment가 patch boundary를 넘어 연결되지 않는다.
+- geometry bound가 모든 유효 patch를 포함하며 기존 camera-reset path에서 사용된다.
+- flattened control grid, malformed patch, patch ID, skipped-patch reporting은 tests/nurbs_geometry_smoke_test.js가 검증한다.
 
-## Verification
+## 검증
 
-- Static code review confirmed the behavior in WebRenderer/util/NurbsGeometry.js
-  and WebRenderer/main.js.
-- The repository includes a Node smoke test for single-patch, multi-patch,
-  flattened-grid, and malformed-patch cases.
-- Runtime execution was not possible because node is not installed on this
-  machine. No browser or WebGPU runtime test was attempted.
+- static code review로 WebRenderer/util/NurbsGeometry.js와 WebRenderer/main.js의 동작을 확인했다.
+- repository에는 single-patch, multi-patch, flattened-grid, malformed-patch를 다루는 Node smoke test가 있다.
+- 이 환경에는 node가 없어 runtime 실행은 하지 못했다. browser나 WebGPU runtime test도 시도하지 않았다.
 
-## Remaining Priority 0 work
+## 남은 Priority 0 작업
 
 - Patch isolate/toggle UI.
-- Gaussian coloring by assigned patch ID.
-- Independent toggles for sampled surface points, U/V iso-lines, control grid,
-  and diagnostic curves.
-- Python/JavaScript numerical NURBS parity test.
-- Export provenance fields and artifact-to-run linkage.
-- Perspective/orthographic comparison control.
+- assigned patch ID에 따른 Gaussian coloring.
+- sampled surface point, U/V iso-line, control grid, diagnostic curve의 독립 toggle.
+- Python/JavaScript 수치 NURBS parity test.
+- export provenance field와 artifact-to-run linkage.
+- perspective/orthographic 비교 control.
 
-## TODO update
+## TODO 갱신
 
-Removed only the confirmed multi-patch rendering, deterministic patch-color,
-cross-patch iso-line, and all-patch bounds items from TODO.md.
+TODO.md에서는 확인된 multi-patch rendering, deterministic patch-color, cross-patch iso-line, all-patch bound 항목만 제거했다.

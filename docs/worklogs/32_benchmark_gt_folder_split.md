@@ -1,11 +1,11 @@
-# 32. Benchmark GT Renderer Folder Split
+# 32. Benchmark GT Renderer Folder 분리
 
-Date: 2026-07-16
+날짜: 2026-07-16
 
-## Work
+## 작업
 
-Changed synthetic constructor renderer export from one folder containing generated nurbs_surface.json plus GT nurbs_surface_gt.json to separate renderer-loadable sibling folders. Generated output is NURBS_output/scene with point_cloud.ply and nurbs_surface.json. GT is NURBS_output/scene_gt with nurbs_surface.json.
+synthetic constructor renderer export를 generated nurbs_surface.json과 GT nurbs_surface_gt.json이 한 folder에 함께 있던 방식에서, renderer가 직접 불러올 수 있는 sibling folder 구조로 변경했다. generated output은 NURBS_output/scene 아래의 point_cloud.ply와 nurbs_surface.json이며, GT는 NURBS_output/scene_gt 아래의 nurbs_surface.json이다.
 
-## Verification
+## 검증
 
-Ran the sine CPU benchmark. The export produced NURBS_output/sine containing point_cloud.ply and nurbs_surface.json, and NURBS_output/sine_gt containing one nurbs_surface.json.
+sine CPU benchmark를 실행했다. export는 NURBS_output/sine에 point_cloud.ply와 nurbs_surface.json을 생성했고, NURBS_output/sine_gt에는 nurbs_surface.json 하나를 생성했다.

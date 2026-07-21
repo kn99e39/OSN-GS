@@ -1,19 +1,19 @@
 # 30. Notebook Train MSVC Environment
 
-Date: 2026-07-16
+날짜: 2026-07-16
 
-## Cause
+## 원인
 
-The stored Train-cell log stopped at iteration 0: the OSN-GS CUDA rasterizer preflight could not find cl.exe. The CUDA extension setup cell activated vcvars64.bat only in its temporary build child, while Train started a separate train.py subprocess with no MSVC PATH, INCLUDE, or LIB.
+저장된 Train-cell log가 iteration 0에서 멈췄다. OSN-GS CUDA rasterizer preflight가 cl.exe를 찾지 못했기 때문이다. CUDA extension setup cell은 임시 build child에서만 vcvars64.bat를 활성화했지만, Train은 MSVC PATH, INCLUDE, LIB이 없는 별도 train.py subprocess를 시작했다.
 
-## Fix
+## 수정
 
-The Train cell now writes a temporary cmd launcher, calls vcvars64.bat, captures its environment with set, and merges it into the train.py subprocess environment. It probes where cl before launch and reports a targeted error if activation is incomplete. The temporary cmd pattern matches the successful CUDA extension-build cell.
+Train cell이 임시 cmd launcher를 작성하고 vcvars64.bat를 호출한 뒤 set으로 environment를 수집해 train.py subprocess environment에 합치도록 변경했다. launch 전에 where cl을 probe하며 activation이 불완전하면 원인을 지정한 error를 보고한다. 임시 cmd 방식은 성공했던 CUDA extension-build cell과 동일하다.
 
-## Verification
+## 검증
 
-Notebook JSON and Train-cell Python syntax compile. The new helper was executed against the local VS Build Tools installation and found cl.exe at the x64 MSVC path with non-empty INCLUDE and LIB.
+notebook JSON과 Train-cell Python syntax가 compile된다. 새 helper를 local VS Build Tools installation에서 실행했고 non-empty INCLUDE/LIB과 함께 x64 MSVC path의 cl.exe를 찾았다.
 
-## Next Run
+## 다음 실행
 
-Re-run the CUDA extension setup cell if the kernel was restarted, then run Train. It should print Train MSVC environment before the training command.
+kernel을 재시작했다면 CUDA extension setup cell을 다시 실행한 뒤 Train을 실행한다. training command 전에 Train MSVC environment가 출력돼야 한다.

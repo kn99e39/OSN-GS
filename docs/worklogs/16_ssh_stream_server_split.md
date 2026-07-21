@@ -1,37 +1,35 @@
-# SSH Stream Server Split
+# 16. SSH Stream Server 분리
 
-## Work Performed
+## 수행 내용
 
-- Removed the trainer-owned WebSocket server path from `TorchOSNGSTrainer`.
-- Kept training streaming as a WebSocket client path through `--stream_url`.
-- Replaced `scripts/start_trainer_stream.ps1` with a standalone local stream server launcher.
-- Reworked `osn_gs/interop/trainer_ws_server.py` into a loopback-only WebSocket stream server that accepts snapshot JSON from training clients and broadcasts it to renderer clients.
-- Updated `WebRenderer/README.txt` with the SSH local port-forward workflow.
+- TorchOSNGSTrainer에서 trainer-owned WebSocket server 경로를 제거했다.
+- training streaming은 --stream_url을 통한 WebSocket client 경로로 유지했다.
+- scripts/start_trainer_stream.ps1을 독립 local stream server launcher로 교체했다.
+- osn_gs/interop/trainer_ws_server.py를 training client의 snapshot JSON을 받고 renderer client에게 broadcast하는 loopback-only WebSocket stream server로 재구성했다.
+- WebRenderer/README.txt에 SSH local port-forward workflow를 반영했다.
 
-## Result
+## 결과
 
-The streaming path is now separate from training again:
+streaming 경로가 다시 training과 분리됐다.
 
-```text
-OSN-GS train.py / notebook --stream_url ws://127.0.0.1:8080
-  -> local stream server on trainer host
-  -> SSH local port forwarding
-  -> renderer browser ws://localhost:8080
-```
+    OSN-GS train.py / notebook --stream_url ws://127.0.0.1:8080
+      -> trainer host의 local stream server
+      -> SSH local port forwarding
+      -> renderer browser ws://localhost:8080
 
-The training loop no longer opens or owns the WebSocket server. Ending training does not shut down the stream server.
+training loop는 더 이상 WebSocket server를 열거나 소유하지 않는다. training을 종료해도 stream server는 종료되지 않는다.
 
-## Evaluation
+## 평가
 
-The snapshot JSON payload format remains unchanged. Browser ping messages receive a `pong` from the stream server, and snapshot messages are relayed to all other connected clients.
+snapshot JSON payload format은 변하지 않았다. browser ping message에는 stream server가 pong을 보내고, snapshot message는 연결된 다른 모든 client에게 relay된다.
 
-## Remaining Risks
+## 남은 위험
 
-- The standalone stream server requires the `websockets` package in the active Python environment.
-- The server intentionally binds only to `127.0.0.1`; remote renderer access must go through SSH port forwarding.
+- 독립 stream server는 활성 Python environment에 websockets package가 필요하다.
+- server는 의도적으로 127.0.0.1에만 bind한다. 원격 renderer 접근에는 SSH port forwarding이 필요하다.
 
 ## 2026-07-15 Notebook Interrupt Cleanup
 
-- The notebook Train cell now catches `KeyboardInterrupt` inside `_run_monitored_process()` and terminates the active `train.py` subprocess before re-raising the interrupt.
-- Termination first calls `process.terminate()` and waits up to 10 seconds; if the process does not exit, it falls back to `process.kill()`.
-- This cleanup affects the training subprocess only. The standalone stream server started by `scripts/start_trainer_stream.ps1` remains a separate process and should still be stopped with Ctrl+C in its own terminal.
+- notebook Train cell은 이제 _run_monitored_process() 안에서 KeyboardInterrupt를 잡아 active train.py subprocess를 종료한 뒤 interrupt를 다시 전달한다.
+- 먼저 process.terminate()를 호출하고 최대 10초 기다리며, 종료되지 않으면 process.kill()로 전환한다.
+- 이 cleanup은 training subprocess에만 영향을 준다. scripts/start_trainer_stream.ps1로 시작한 standalone stream server는 별도 process이므로 자신의 terminal에서 Ctrl+C로 종료해야 한다.

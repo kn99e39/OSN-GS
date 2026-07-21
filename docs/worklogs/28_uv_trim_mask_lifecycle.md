@@ -1,21 +1,17 @@
 # 28. UV Trim-Mask Lifecycle
 
-Date: 2026-07-15
+날짜: 2026-07-15
 
-## Work
+## 작업
 
-Maintenance now rebuilds every patch UV support mask after it refreshes Gaussian
-UV bindings, when trimming is enabled. The maintenance report exposes
-support_masks_refreshed.
+trimming이 활성인 경우 maintenance가 Gaussian UV binding을 갱신한 뒤 모든 patch의 UV support mask를 다시 구축하도록 변경했다. maintenance report는 support_masks_refreshed를 노출한다.
 
-## Verification
+## 검증
 
-Ran the NURBS surface and training-regression test modules.
+NURBS surface와 training-regression test module을 실행했다.
 
-Result: 24 tests passed.
+결과: 24개 test 통과.
 
-## Result
+## 결과
 
-The initialization-time trim mask no longer remains stale after maintenance UV
-projection. The TODO lifecycle item was removed. Mask and UV version metadata
-remains future diagnostic work.
+초기화 시점의 trim mask가 maintenance UV projection 이후 stale 상태로 남지 않는다. TODO lifecycle 항목을 제거했다. mask와 UV version metadata는 이후 diagnostic 과제로 남아 있다.

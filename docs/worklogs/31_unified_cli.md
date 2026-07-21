@@ -1,15 +1,17 @@
 # 31. Unified PowerShell CLI
 
-Date: 2026-07-16
+날짜: 2026-07-16
 
-## Work
+## 작업
 
-Added standard packaging metadata and the osn-gs console script. The top-level help exposes train, benchmark, inspect-surface, and stream-server. Each command delegates to the existing entry point rather than copying its implementation, so command-specific help and behavior remain authoritative.
+표준 packaging metadata와 osn-gs console script를 추가했다. top-level help는 train, benchmark, inspect-surface, stream-server를 노출한다. 각 command는 구현을 복사하지 않고 기존 entry point에 위임하므로 command별 help와 동작이 기준이 된다.
 
-## Use
+## 사용
 
-Activate the repository virtual environment, then run osn-gs --help. Refresh the local editable installation after pulling changes with .venv\Scripts\python.exe -m pip install -e . --no-deps.
+repository virtual environment를 활성화한 뒤 osn-gs --help를 실행한다. 변경을 받은 뒤 local editable installation을 갱신하려면 다음 명령을 실행한다.
 
-## Verification
+    .venv\Scripts\python.exe -m pip install -e . --no-deps
 
-Verified top-level help plus train and benchmark command help from the installed console script.
+## 검증
+
+설치된 console script에서 top-level help와 train, benchmark command help를 확인했다.
