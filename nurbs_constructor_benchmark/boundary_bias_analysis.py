@@ -31,8 +31,14 @@ import torch
 
 from osn_gs.surface.torch_boundary_refinement import kde_density, sample_nn_spacings
 from osn_gs.surface.torch_component_boundary import extract_component_boundary
-from osn_gs.surface.torch_surface_components import build_surface_components
-from osn_gs.surface.torch_voxel_hierarchy import build_voxel_gaussian_hierarchy
+from osn_gs.surface.torch_nurbs import uv_frame_from_axes
+from osn_gs.surface.torch_surface_components import SurfaceComponent, build_surface_components
+from osn_gs.surface.torch_voxel_hierarchy import (
+    TorchVoxelGaussianHierarchy,
+    build_voxel_gaussian_hierarchy,
+    plane_aabb_intersection_polygon,
+    rasterize_convex_polygon_uv,
+)
 
 from .support_domains import ellipse_radius_at_angle
 
@@ -391,3 +397,217 @@ def analyze_scene(scene: BoundaryBiasScene, **extraction_kwargs: Any) -> dict[st
     stages = extract_pipeline_stage_radii(scene, **extraction_kwargs)
     theta_samples = stages.pop("_theta_samples")
     return {name: compute_bias_metrics(theta_samples, r_stage, scene) for name, r_stage in stages.items()}
+
+
+# --- Step B (prototype, NOT wired into production): boundary-leaf-only
+# conservative clipping of the plane-AABB polygon by the convex hull of the
+# leaf's own member Gaussians. Interior leaves are always left untouched. ---
+
+def _convex_hull_2d(points: torch.Tensor) -> torch.Tensor:
+    """Andrew's monotone chain, CCW-ordered. Torch-only, no new dependency."""
+
+    pts = sorted(set(tuple(p) for p in points.tolist()))
+    if len(pts) < 3:
+        return torch.tensor(pts, dtype=points.dtype)
+
+    def cross(o: tuple, a: tuple, b: tuple) -> float:
+        return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+
+    lower: list[tuple] = []
+    for p in pts:
+        while len(lower) >= 2 and cross(lower[-2], lower[-1], p) <= 0:
+            lower.pop()
+        lower.append(p)
+    upper: list[tuple] = []
+    for p in reversed(pts):
+        while len(upper) >= 2 and cross(upper[-2], upper[-1], p) <= 0:
+            upper.pop()
+        upper.append(p)
+    hull = lower[:-1] + upper[:-1]
+    return torch.tensor(hull, dtype=points.dtype)
+
+
+def _polygon_area_2d(polygon: torch.Tensor) -> float:
+    if int(polygon.shape[0]) < 3:
+        return 0.0
+    x, y = polygon[:, 0], polygon[:, 1]
+    x2, y2 = torch.roll(x, -1), torch.roll(y, -1)
+    return float(0.5 * (x * y2 - x2 * y).sum().abs())
+
+
+def _sutherland_hodgman_clip(subject: torch.Tensor, clip_polygon: torch.Tensor) -> torch.Tensor:
+    """Intersection of two convex polygons (standard Sutherland-Hodgman).
+    ``clip_polygon`` is re-wound CCW internally for a consistent half-plane
+    test; ``subject``'s own winding does not matter."""
+
+    clip_list = clip_polygon.tolist()
+    area2 = sum(
+        clip_list[i][0] * clip_list[(i + 1) % len(clip_list)][1] - clip_list[(i + 1) % len(clip_list)][0] * clip_list[i][1]
+        for i in range(len(clip_list))
+    )
+    if area2 < 0:
+        clip_list = clip_list[::-1]
+
+    def inside(p: tuple, a: tuple, b: tuple) -> bool:
+        return (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]) >= 0.0
+
+    def intersect(p1: tuple, p2: tuple, a: tuple, b: tuple) -> tuple:
+        x1, y1 = p1
+        x2, y2 = p2
+        x3, y3 = a
+        x4, y4 = b
+        d = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
+        if abs(d) < 1e-12:
+            return p2
+        t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / d
+        return (x1 + t * (x2 - x1), y1 + t * (y2 - y1))
+
+    output = subject.tolist()
+    for i in range(len(clip_list)):
+        a, b = clip_list[i], clip_list[(i + 1) % len(clip_list)]
+        if not output:
+            break
+        input_list, output = output, []
+        for j in range(len(input_list)):
+            cur, prev = input_list[j], input_list[j - 1]
+            cur_in, prev_in = inside(cur, a, b), inside(prev, a, b)
+            if cur_in:
+                if not prev_in:
+                    output.append(intersect(prev, cur, a, b))
+                output.append(cur)
+            elif prev_in:
+                output.append(intersect(prev, cur, a, b))
+    return torch.tensor(output, dtype=subject.dtype) if output else torch.empty((0, 2), dtype=subject.dtype)
+
+
+@dataclass
+class BoundaryLeafRecord:
+    leaf_id: str
+    is_boundary: bool
+    point_count: int
+    center_angle: float
+    plane_aabb_polygon_uv: torch.Tensor
+    clipped_polygon_uv: torch.Tensor
+    plane_aabb_area: float
+    clipped_area: float
+    occupancy_ratio: float  # clipped_area / plane_aabb_area (1.0 = no change)
+
+
+def build_boundary_leaf_records(
+    component: SurfaceComponent,
+    hierarchy: TorchVoxelGaussianHierarchy,
+    points: torch.Tensor,
+    frame: Any,
+    center_world: torch.Tensor,
+    min_hull_points: int = 4,
+    clip_boundary_leaves: bool = True,
+) -> list[BoundaryLeafRecord]:
+    """Step A + B: for every member leaf, the EXISTING (unmodified)
+    ``plane_aabb_intersection_polygon`` vs. a convex-hull-clipped candidate.
+    Interior leaves (not in ``component.boundary_leaf_ids``) are recorded
+    but never clipped, even when ``clip_boundary_leaves=True`` -- this
+    dataclass IS the "existing voxel hierarchy/component logic unchanged"
+    invariant, checked directly by
+    ``tests/test_boundary_bias_analysis.py::test_interior_leaf_polygon_never_clipped``.
+    """
+
+    node_by_id = {node.node_id: node for node in hierarchy.nodes}
+    boundary_ids = set(component.boundary_leaf_ids)
+    records: list[BoundaryLeafRecord] = []
+    for leaf_id in component.member_leaf_ids:
+        leaf = node_by_id[leaf_id]
+        if leaf.plane is None:
+            continue
+        polygon_world = plane_aabb_intersection_polygon(leaf.plane.centroid, leaf.plane.normal, leaf.aabb_min, leaf.aabb_max)
+        if int(polygon_world.shape[0]) < 3:
+            continue
+        polygon_uv = frame.apply(polygon_world, clamp=False)
+        is_boundary = leaf_id in boundary_ids
+        point_count = int(leaf.gaussian_indices.shape[0]) if leaf.gaussian_indices is not None else 0
+
+        clipped_uv = polygon_uv
+        if clip_boundary_leaves and is_boundary and point_count >= min_hull_points:
+            member_uv = frame.apply(points[leaf.gaussian_indices], clamp=False)
+            hull_uv = _convex_hull_2d(member_uv)
+            if int(hull_uv.shape[0]) >= 3:
+                candidate = _sutherland_hodgman_clip(polygon_uv, hull_uv)
+                if int(candidate.shape[0]) >= 3:
+                    clipped_uv = candidate
+
+        leaf_center_world = leaf.plane.centroid
+        rel = leaf_center_world[:2] - center_world
+        center_angle = float(torch.atan2(rel[1], rel[0]))
+        area_before = _polygon_area_2d(polygon_uv)
+        area_after = _polygon_area_2d(clipped_uv)
+        records.append(
+            BoundaryLeafRecord(
+                leaf_id=leaf_id, is_boundary=is_boundary, point_count=point_count,
+                center_angle=center_angle, plane_aabb_polygon_uv=polygon_uv, clipped_polygon_uv=clipped_uv,
+                plane_aabb_area=area_before, clipped_area=area_after,
+                occupancy_ratio=(area_after / area_before) if area_before > 1e-12 else 1.0,
+            )
+        )
+    return records
+
+
+def rasterize_leaf_records(records: list[BoundaryLeafRecord], resolution: int, use_clipped: bool) -> torch.Tensor:
+    mask = torch.zeros((resolution, resolution), dtype=torch.bool)
+    for r in records:
+        polygon = r.clipped_polygon_uv if use_clipped else r.plane_aabb_polygon_uv
+        mask = mask | rasterize_convex_polygon_uv(polygon, resolution)
+    return mask
+
+
+def analyze_scene_with_clipping(scene: BoundaryBiasScene, theta_bins: int = 144, resolution: int = 64, min_hull_points: int = 4) -> dict[str, Any]:
+    """Step A+B+C for one scene: builds the real Phase-1/Phase-2 pipeline
+    (unmodified), then compares the ORIGINAL ``coarse_mask``-equivalent
+    stage against the boundary-leaf-clipped candidate -- reusing
+    ``threshold_field`` (KDE stage, UNCHANGED, no re-tuning) so only the
+    coarse/voxel-union stage differs between "before" and "after"."""
+
+    hierarchy = build_voxel_gaussian_hierarchy(scene.points, voxel_min_gaussian_count=10, voxel_max_gaussian_count=150, voxel_max_depth=6)
+    component_set = build_surface_components(hierarchy, scene.points)
+    if component_set.component_count() != 1:
+        raise RuntimeError(f"{scene.name}: expected 1 component, got {component_set.component_count()}.")
+    component = component_set.components[0]
+    boundary = extract_component_boundary(component, hierarchy, scene.points, resolution=resolution)
+    frame = boundary.frame
+
+    records = build_boundary_leaf_records(component, hierarchy, scene.points, frame, scene.center, min_hull_points=min_hull_points)
+    mask_before = rasterize_leaf_records(records, resolution, use_clipped=False)
+    mask_after = rasterize_leaf_records(records, resolution, use_clipped=True)
+    assert bool((mask_before == boundary.coarse_mask).all()), "rasterize_leaf_records(use_clipped=False) must reproduce production coarse_mask exactly"
+
+    refined_before = boundary.threshold_field & mask_before
+    refined_after = boundary.threshold_field & mask_after
+
+    theta_samples = torch.linspace(0.0, TWO_PI * (theta_bins - 1) / theta_bins, theta_bins, dtype=torch.float32)
+    cell_world = frame.to_world(_grid_cell_centers_uv(resolution, dtype=frame.origin.dtype))
+    cell_rel = cell_world[:, :2] - scene.center
+    cell_angle = torch.remainder(torch.atan2(cell_rel[:, 1], cell_rel[:, 0]), TWO_PI)
+    cell_radius = cell_rel.norm(dim=1)
+    window = 0.5 * (TWO_PI / 24)
+
+    r_before = _per_angle_max_radius(cell_angle, cell_radius, refined_before.reshape(-1), theta_samples, window)
+    r_after = _per_angle_max_radius(cell_angle, cell_radius, refined_after.reshape(-1), theta_samples, window)
+    r_gt = ellipse_radius_at_angle(theta_samples, scene.a, scene.b)
+    under_coverage_before = float((r_before < (r_gt - 0.02)).float().mean())
+    under_coverage_after = float((r_after < (r_gt - 0.02)).float().mean())
+
+    boundary_records = [r for r in records if r.is_boundary]
+    mean_occupancy = sum(r.occupancy_ratio for r in boundary_records) / len(boundary_records) if boundary_records else 1.0
+
+    return {
+        "before": {**compute_bias_metrics(theta_samples, r_before, scene), "under_coverage": under_coverage_before},
+        "after": {**compute_bias_metrics(theta_samples, r_after, scene), "under_coverage": under_coverage_after},
+        "boundary_leaf_count": len(boundary_records),
+        "interior_leaf_count": len(records) - len(boundary_records),
+        "mean_boundary_leaf_occupancy_ratio": mean_occupancy,
+        "records": records,
+    }
+
+
+def _grid_cell_centers_uv(resolution: int, dtype: torch.dtype) -> torch.Tensor:
+    centers = (torch.arange(resolution, dtype=dtype) + 0.5) / resolution
+    grid_u, grid_v = torch.meshgrid(centers, centers, indexing="ij")
+    return torch.stack([grid_u.reshape(-1), grid_v.reshape(-1)], dim=1)
