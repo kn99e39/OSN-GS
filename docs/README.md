@@ -399,3 +399,8 @@ The local Graphdeco notebook cells read/write patched Python sources with explic
 
 - Legacy and voxel_patch_stage1 remain benchmark comparison modes during the approved Boundary-First phases.
 - After the final Phase benchmarks pass and the user approves integration, the boundary-first NURBS construction pipeline becomes the only main-training path. The legacy constructor and obsolete two-stage voxel-region path are removed rather than retained as a permanent production fallback.
+
+
+## 2026-07-21 Notebook 저장 출력 오류 수정
+
+- 5000 iteration 저장 시 voxel region Tensor가 JSON 직렬화를 막아 nurbs_surface.json과 checkpoint 저장 전에 중단되던 문제를 수정했다. 노트북은 subprocess 실패 시 마지막 출력 tail을 표시한다. See docs/worklogs/44_notebook_save_output_error.md.
