@@ -202,5 +202,185 @@ class BoundaryLeafClippingIntegrationTest(unittest.TestCase):
         self.assertGreaterEqual(after["under_coverage"], before["under_coverage"])
 
 
+class _FakeFrame:
+    """Minimal stand-in for UVFrame: identity projection onto XY, no clamp."""
+
+    def apply(self, points, clamp=False):
+        return points[:, :2]
+
+
+class _FakePlane:
+    def __init__(self, centroid, normal):
+        self.centroid = centroid
+        self.normal = normal
+
+
+class _FakeLeaf:
+    def __init__(self, node_id, state, centroid, normal, gaussian_indices):
+        self.node_id = node_id
+        self.state = state
+        self.plane = _FakePlane(centroid, normal)
+        self.gaussian_indices = gaussian_indices
+
+
+@unittest.skipUnless(torch is not None, "PyTorch is required")
+class EligibilityClassifierUnitTest(unittest.TestCase):
+    """Deterministic rule-correctness tests on ``compute_leaf_eligibility``
+    with hand-built leaf/adjacency inputs -- no real hierarchy needed."""
+
+    def setUp(self):
+        from osn_gs.surface.torch_voxel_hierarchy import STATE_ACTIVE, STATE_COMPLEX, STATE_INACTIVE
+
+        self.STATE_ACTIVE = STATE_ACTIVE
+        self.STATE_COMPLEX = STATE_COMPLEX
+        self.STATE_INACTIVE = STATE_INACTIVE
+        self.frame = _FakeFrame()
+        # A leaf's own points, all points, live within a unit-ish cell.
+        self.polygon_uv = torch.tensor([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]])
+
+    def _good_neighbor_adjacency(self, leaf_id, n_active=3, n_total=4):
+        from nurbs_constructor_benchmark.boundary_bias_analysis import compute_leaf_eligibility  # noqa: F401
+
+        contacts = []
+        node_by_id = {}
+        for i in range(n_total):
+            neighbor_id = f"n{i}"
+            state = self.STATE_ACTIVE if i < n_active else self.STATE_INACTIVE
+            contacts.append({"neighbor_id": neighbor_id, "classification": "interior", "neighbor_state": state})
+            node_by_id[neighbor_id] = _FakeLeaf(neighbor_id, state, torch.tensor([0.0, 0.0, 0.0]), torch.tensor([0.0, 0.0, 1.0]), None)
+        return {leaf_id: {"contacts": contacts}}, node_by_id
+
+    def test_dense_planar_consistent_connected_is_active_observed(self):
+        from nurbs_constructor_benchmark.boundary_bias_analysis import compute_leaf_eligibility
+
+        all_points = torch.rand((300, 3)) * torch.tensor([1.0, 1.0, 0.0])  # dense grid, exactly on z=0 plane
+        leaf = _FakeLeaf("L", self.STATE_ACTIVE, torch.tensor([0.5, 0.5, 0.0]), torch.tensor([0.0, 0.0, 1.0]), torch.arange(300))
+        adjacency, node_by_id = self._good_neighbor_adjacency("L", n_active=3, n_total=4)
+        result = compute_leaf_eligibility(leaf, all_points, self.frame, self.polygon_uv, adjacency, node_by_id, {"L"})
+        self.assertEqual(result.final_class, "ACTIVE_OBSERVED")
+        self.assertEqual(result.primary_spacing_class, "active_candidate")
+
+    def test_sparse_but_otherwise_consistent_is_uncertain_not_inactive(self):
+        # Sparse spacing alone must NOT be enough for INACTIVE (plan review
+        # point 9: conservative default is UNCERTAIN unless corroborated).
+        from nurbs_constructor_benchmark.boundary_bias_analysis import compute_leaf_eligibility
+
+        few_points = torch.tensor([[0.1, 0.1, 0.0], [0.9, 0.9, 0.0], [0.1, 0.9, 0.0]])
+        leaf = _FakeLeaf("L", self.STATE_ACTIVE, torch.tensor([0.5, 0.5, 0.0]), torch.tensor([0.0, 0.0, 1.0]), torch.arange(3))
+        adjacency, node_by_id = self._good_neighbor_adjacency("L", n_active=3, n_total=4)
+        result = compute_leaf_eligibility(leaf, few_points, self.frame, self.polygon_uv, adjacency, node_by_id, {"L"})
+        self.assertIn(result.primary_spacing_class, ("inactive_candidate", "uncertain_candidate"))
+        self.assertEqual(result.final_class, "UNCERTAIN")
+        self.assertNotEqual(result.final_class, "INACTIVE")
+
+    def test_sparse_and_corroborated_is_inactive(self):
+        # Sparse spacing + bad plane residual + no active neighbors together
+        # -> INACTIVE (multiple corroborating signals, per point 9).
+        from nurbs_constructor_benchmark.boundary_bias_analysis import compute_leaf_eligibility
+
+        # Only 2 points, near-opposite corners of the cell (maximal NN
+        # spacing relative to cell size) and off the nominal z=0 plane.
+        few_points = torch.tensor([[0.05, 0.05, 0.4], [0.95, 0.95, -0.4]])
+        leaf = _FakeLeaf("L", self.STATE_ACTIVE, torch.tensor([0.5, 0.5, 0.0]), torch.tensor([0.0, 0.0, 1.0]), torch.arange(2))
+        # No active neighbors at all -> bad neighbor continuity too.
+        adjacency, node_by_id = self._good_neighbor_adjacency("L", n_active=0, n_total=4)
+        result = compute_leaf_eligibility(leaf, few_points, self.frame, self.polygon_uv, adjacency, node_by_id, {"L"})
+        self.assertEqual(result.primary_spacing_class, "inactive_candidate")
+        self.assertEqual(result.final_class, "INACTIVE")
+
+    def test_complex_state_short_circuits_to_complex_regardless_of_features(self):
+        from nurbs_constructor_benchmark.boundary_bias_analysis import compute_leaf_eligibility
+
+        dense_points = torch.rand((300, 3)) * torch.tensor([1.0, 1.0, 0.0])
+        leaf = _FakeLeaf("L", self.STATE_COMPLEX, torch.tensor([0.5, 0.5, 0.0]), torch.tensor([0.0, 0.0, 1.0]), torch.arange(300))
+        adjacency, node_by_id = self._good_neighbor_adjacency("L", n_active=3, n_total=4)
+        result = compute_leaf_eligibility(leaf, dense_points, self.frame, self.polygon_uv, adjacency, node_by_id, {"L"})
+        self.assertEqual(result.final_class, "COMPLEX")
+        self.assertEqual(result.class_transition_reason, "phase1_complex_state")
+
+    def test_normal_consistency_uses_absolute_dot_for_sign_ambiguity(self):
+        # A neighbor plane normal pointing the OPPOSITE way (same physical
+        # plane, flipped sign) must NOT be treated as inconsistent.
+        from nurbs_constructor_benchmark.boundary_bias_analysis import compute_leaf_eligibility
+
+        dense_points = torch.rand((300, 3)) * torch.tensor([1.0, 1.0, 0.0])
+        leaf = _FakeLeaf("L", self.STATE_ACTIVE, torch.tensor([0.5, 0.5, 0.0]), torch.tensor([0.0, 0.0, 1.0]), torch.arange(300))
+        contacts = [{"neighbor_id": "n0", "classification": "interior", "neighbor_state": self.STATE_ACTIVE}]
+        node_by_id = {"n0": _FakeLeaf("n0", self.STATE_ACTIVE, torch.tensor([0.0, 0.0, 0.0]), torch.tensor([0.0, 0.0, -1.0]), None)}
+        adjacency = {"L": {"contacts": contacts}}
+        result = compute_leaf_eligibility(leaf, dense_points, self.frame, self.polygon_uv, adjacency, node_by_id, {"L"})
+        self.assertAlmostEqual(result.normal_consistency, 1.0, places=5)
+        self.assertEqual(result.normal_consistency_vote, "good")
+
+    def test_deterministic_repeat_calls_give_identical_result(self):
+        from nurbs_constructor_benchmark.boundary_bias_analysis import compute_leaf_eligibility
+
+        points = torch.rand((300, 3), generator=torch.Generator().manual_seed(0)) * torch.tensor([1.0, 1.0, 0.0])
+        leaf = _FakeLeaf("L", self.STATE_ACTIVE, torch.tensor([0.5, 0.5, 0.0]), torch.tensor([0.0, 0.0, 1.0]), torch.arange(300))
+        adjacency, node_by_id = self._good_neighbor_adjacency("L", n_active=3, n_total=4)
+        r1 = compute_leaf_eligibility(leaf, points, self.frame, self.polygon_uv, adjacency, node_by_id, {"L"})
+        r2 = compute_leaf_eligibility(leaf, points, self.frame, self.polygon_uv, adjacency, node_by_id, {"L"})
+        self.assertEqual(r1.final_class, r2.final_class)
+        self.assertEqual(r1.spacing_ratio, r2.spacing_ratio)
+
+
+@unittest.skipUnless(torch is not None, "PyTorch is required")
+class EligibilityMaskStructuralInvariantTest(unittest.TestCase):
+    """Structural contract tests on ``rasterize_eligibility_masks`` (plan
+    review point 11): mask disjointness and cumulative-view correctness,
+    using directly-constructed records -- not scene-level number assertions."""
+
+    @staticmethod
+    def _record(polygon, final_class):
+        from nurbs_constructor_benchmark.boundary_bias_analysis import BoundaryLeafRecord, LeafEligibilityResult, LeafBoundaryProvenance
+
+        eligibility = LeafEligibilityResult(
+            leaf_id="x", spacing_ratio=0.0, rho_u=0.0, rho_v=0.0, plane_residual_world=0.0,
+            plane_residual_normalized=0.0, normal_consistency=1.0, normal_neighbor_count=1,
+            neighbor_phase1_active_ratio=1.0, primary_spacing_class="active_candidate",
+            plane_residual_vote="good", normal_consistency_vote="good", neighbor_continuity_vote="good",
+            final_class=final_class, class_transition_reason="test", provenance=LeafBoundaryProvenance(False, False, False),
+        )
+        record = BoundaryLeafRecord(
+            leaf_id="x", is_boundary=True, point_count=10, center_angle=0.0,
+            plane_aabb_polygon_uv=polygon, clipped_polygon_uv=polygon, plane_aabb_area=1.0, clipped_area=1.0, occupancy_ratio=1.0,
+        )
+        return record, eligibility
+
+    def test_inactive_leaf_contributes_to_no_mask(self):
+        from nurbs_constructor_benchmark.boundary_bias_analysis import rasterize_eligibility_masks
+
+        polygon = torch.tensor([[0.1, 0.1], [0.9, 0.1], [0.9, 0.9], [0.1, 0.9]])
+        masks = rasterize_eligibility_masks([self._record(polygon, "INACTIVE")], resolution=16)
+        for key in ("active", "uncertain", "complex", "active_only", "active_plus_uncertain", "active_plus_uncertain_plus_complex"):
+            self.assertFalse(bool(masks[key].any()), key)
+
+    def test_complex_leaf_excluded_from_active_but_present_in_full_union(self):
+        from nurbs_constructor_benchmark.boundary_bias_analysis import rasterize_eligibility_masks
+
+        polygon = torch.tensor([[0.1, 0.1], [0.9, 0.1], [0.9, 0.9], [0.1, 0.9]])
+        masks = rasterize_eligibility_masks([self._record(polygon, "COMPLEX")], resolution=16)
+        self.assertFalse(bool(masks["active"].any()))
+        self.assertFalse(bool(masks["active_only"].any()))
+        self.assertFalse(bool(masks["active_plus_uncertain"].any()))
+        self.assertTrue(bool(masks["complex"].any()))
+        self.assertTrue(bool(masks["active_plus_uncertain_plus_complex"].any()))
+
+    def test_active_and_uncertain_leaves_land_in_disjoint_own_masks(self):
+        from nurbs_constructor_benchmark.boundary_bias_analysis import rasterize_eligibility_masks
+
+        active_polygon = torch.tensor([[0.0, 0.0], [0.4, 0.0], [0.4, 0.4], [0.0, 0.4]])
+        uncertain_polygon = torch.tensor([[0.6, 0.6], [1.0, 0.6], [1.0, 1.0], [0.6, 1.0]])
+        records = [self._record(active_polygon, "ACTIVE_OBSERVED"), self._record(uncertain_polygon, "UNCERTAIN")]
+        masks = rasterize_eligibility_masks(records, resolution=16)
+        self.assertFalse(bool((masks["active"] & masks["uncertain"]).any()))
+        self.assertTrue(bool(masks["active"].any()))
+        self.assertTrue(bool(masks["uncertain"].any()))
+        # active_only must NOT include the uncertain leaf's contribution.
+        self.assertTrue(bool((masks["active_only"] == masks["active"]).all()))
+        # active_plus_uncertain must be a strict superset.
+        self.assertTrue(bool(((masks["active_plus_uncertain"] & ~masks["active_only"]) == masks["uncertain"]).all()))
+
+
 if __name__ == "__main__":
     unittest.main()

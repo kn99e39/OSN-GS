@@ -34,8 +34,14 @@ from osn_gs.surface.torch_component_boundary import extract_component_boundary
 from osn_gs.surface.torch_nurbs import uv_frame_from_axes
 from osn_gs.surface.torch_surface_components import SurfaceComponent, build_surface_components
 from osn_gs.surface.torch_voxel_hierarchy import (
+    FACE_INTERIOR,
+    STATE_ACTIVE,
+    STATE_COMPLEX,
+    STATE_EMPTY,
+    STATE_INACTIVE,
     TorchVoxelGaussianHierarchy,
     build_voxel_gaussian_hierarchy,
+    compute_leaf_face_adjacency,
     plane_aabb_intersection_polygon,
     rasterize_convex_polygon_uv,
 )
@@ -154,6 +160,11 @@ def _wrap_delta(angle: torch.Tensor, theta: float) -> torch.Tensor:
 def _fill_nan_nearest(values: torch.Tensor) -> torch.Tensor:
     out = values.tolist()
     n = len(out)
+    if all(v != v for v in out):
+        # Entirely empty mask (e.g. zero ACTIVE_OBSERVED leaves) -- no
+        # neighbor to copy from at all. Explicit zero radius (no support)
+        # is the honest value here, not NaN propagating into every metric.
+        return torch.zeros((n,), dtype=values.dtype)
     for i in range(n):
         if out[i] == out[i]:
             continue
@@ -611,3 +622,370 @@ def _grid_cell_centers_uv(resolution: int, dtype: torch.dtype) -> torch.Tensor:
     centers = (torch.arange(resolution, dtype=dtype) + 0.5) / resolution
     grid_u, grid_v = torch.meshgrid(centers, centers, indexing="ij")
     return torch.stack([grid_u.reshape(-1), grid_v.reshape(-1)], dim=1)
+
+
+# --- Support ELIGIBILITY classification: ACTIVE_OBSERVED / UNCERTAIN /
+# INACTIVE / COMPLEX. Reframes worklog 46's "under-coverage" finding: a
+# sparse near-boundary Gaussian cluster isn't necessarily proof of observed
+# surface (OSN-GS already treats certain/observed and uncertain/inferred
+# evidence as distinct elsewhere -- [[project_osn_gs_direction]]), so a
+# convex hull built from thin evidence should not be silently promoted to
+# "observed support". This is a STATIC, deterministic, per-leaf classifier
+# -- explicitly NOT hysteresis in the state-machine sense (no memory of a
+# leaf's previous classification across iterations); it is a two-threshold
+# TERNARY CLASSIFICATION BAND on one static pass. A real hysteresis
+# (promote/demote thresholds that differ depending on current state) would
+# only matter for a training-time lifecycle that re-evaluates leaves over
+# time, which is out of scope here. ---
+
+ACTIVE_OBSERVED = "ACTIVE_OBSERVED"
+UNCERTAIN = "UNCERTAIN"
+INACTIVE = "INACTIVE"
+COMPLEX = "COMPLEX"
+
+DEFAULT_ELIGIBILITY_THRESHOLDS = {
+    "spacing_ratio_low": 0.35,   # <= this -> spacing-based "active" candidate
+    "spacing_ratio_high": 0.70,  # >= this -> spacing-based "inactive" candidate
+    "plane_residual_normalized_high": 0.15,
+    "normal_consistency_angle_high_deg": 25.0,
+    "neighbor_phase1_active_ratio_low": 0.34,
+}
+
+
+@dataclass
+class LeafBoundaryProvenance:
+    """Which KIND of boundary this leaf's face contacts actually reflect --
+    conflated in the raw ``is_boundary_leaf`` flag, which is why EVERY leaf
+    on a flat (z=0) synthetic scene reads as "boundary" (every leaf touches
+    the z-axis ROOT AABB face, unrelated to real x/y support edges; see
+    worklog 46). Distinguishing these matters for interpreting eligibility
+    results correctly, not just for producing them.
+
+    ``is_hole_boundary_leaf`` is deliberately NOT included: whether a leaf
+    borders a hole vs. the outer edge is a Phase-2 (density-threshold +
+    loop-labeling) concept, not decidable from Phase-1 leaf adjacency alone
+    -- a real limitation of this pass, documented rather than faked.
+    """
+
+    is_root_boundary_leaf: bool          # touches the analysis-domain AABB itself (no neighbor at all)
+    is_inactive_neighbor_leaf: bool      # touches a REAL neighbor leaf classified inactive/empty
+    is_cross_component_boundary_leaf: bool  # touches an active/complex leaf belonging to a DIFFERENT component
+
+
+@dataclass
+class LeafEligibilityResult:
+    leaf_id: str
+    spacing_ratio: float
+    rho_u: float
+    rho_v: float
+    plane_residual_world: float
+    plane_residual_normalized: float
+    normal_consistency: float  # mean of |dot| (sign-ambiguity-safe), NaN if no interior neighbors
+    normal_neighbor_count: int
+    neighbor_phase1_active_ratio: float
+    primary_spacing_class: str          # "active_candidate" | "uncertain_candidate" | "inactive_candidate"
+    plane_residual_vote: str            # "good" | "bad"
+    normal_consistency_vote: str        # "good" | "bad" | "neutral" (neutral = no neighbor data, not counted)
+    neighbor_continuity_vote: str       # "good" | "bad"
+    final_class: str
+    class_transition_reason: str
+    provenance: LeafBoundaryProvenance
+
+
+def _axis_nn_spacing(uv: torch.Tensor) -> tuple[float, float]:
+    """Per-axis (u, v) component of each point's own 2D nearest-neighbor
+    displacement, median over points -- avoids collapsing an elongated
+    leaf's anisotropic sampling into one scalar spacing number."""
+
+    n = int(uv.shape[0])
+    if n < 2:
+        return float("inf"), float("inf")
+    d = torch.cdist(uv, uv)
+    d.fill_diagonal_(float("inf"))
+    nearest = uv[d.argmin(dim=1)]
+    diffs = (uv - nearest).abs()
+    return float(diffs[:, 0].median()), float(diffs[:, 1].median())
+
+
+def compute_leaf_boundary_provenance(
+    leaf_id: str, adjacency: dict[str, dict[str, Any]], component_member_ids: set[str],
+) -> LeafBoundaryProvenance:
+    contacts = adjacency.get(leaf_id, {}).get("contacts", [])
+    is_root = any(c["neighbor_id"] is None for c in contacts)
+    is_inactive_neighbor = any(
+        c["neighbor_id"] is not None and c.get("neighbor_state") in (STATE_INACTIVE, STATE_EMPTY) for c in contacts
+    )
+    is_cross_component = any(
+        c["neighbor_id"] is not None and c["neighbor_id"] not in component_member_ids
+        and c.get("neighbor_state") in (STATE_ACTIVE, STATE_COMPLEX)
+        for c in contacts
+    )
+    return LeafBoundaryProvenance(is_root, is_inactive_neighbor, is_cross_component)
+
+
+def compute_leaf_eligibility(
+    leaf: Any,
+    points: torch.Tensor,
+    frame: Any,
+    polygon_uv: torch.Tensor,
+    adjacency: dict[str, dict[str, Any]],
+    node_by_id: dict[str, Any],
+    component_member_ids: set[str],
+    thresholds: dict[str, float] = DEFAULT_ELIGIBILITY_THRESHOLDS,
+) -> LeafEligibilityResult:
+    provenance = compute_leaf_boundary_provenance(leaf.leaf_id if hasattr(leaf, "leaf_id") else leaf.node_id, adjacency, component_member_ids)
+
+    if leaf.state == STATE_COMPLEX:
+        return LeafEligibilityResult(
+            leaf_id=leaf.node_id, spacing_ratio=float("nan"), rho_u=float("nan"), rho_v=float("nan"),
+            plane_residual_world=float("nan"), plane_residual_normalized=float("nan"),
+            normal_consistency=float("nan"), normal_neighbor_count=0, neighbor_phase1_active_ratio=float("nan"),
+            primary_spacing_class="n/a", plane_residual_vote="n/a", normal_consistency_vote="n/a",
+            neighbor_continuity_vote="n/a", final_class=COMPLEX, class_transition_reason="phase1_complex_state",
+            provenance=provenance,
+        )
+
+    member_points_world = points[leaf.gaussian_indices] if leaf.gaussian_indices is not None else points[:0]
+    member_uv = frame.apply(member_points_world, clamp=False) if int(member_points_world.shape[0]) else torch.empty((0, 2))
+
+    lo_u, hi_u = float(polygon_uv[:, 0].min()), float(polygon_uv[:, 0].max())
+    lo_v, hi_v = float(polygon_uv[:, 1].min()), float(polygon_uv[:, 1].max())
+    L_u, L_v = max(hi_u - lo_u, 1e-9), max(hi_v - lo_v, 1e-9)
+    cell_scale = math.sqrt(L_u * L_v)
+
+    d_nn_u, d_nn_v = _axis_nn_spacing(member_uv)
+    rho_u, rho_v = d_nn_u / L_u, d_nn_v / L_v
+    spacing = float(sample_nn_spacings(member_uv).median()) if int(member_uv.shape[0]) >= 2 else float("inf")
+    spacing_ratio = spacing / cell_scale
+
+    if leaf.plane is not None and int(member_points_world.shape[0]):
+        residuals = (member_points_world - leaf.plane.centroid) @ leaf.plane.normal
+        plane_residual_world = float(residuals.square().mean().sqrt())
+    else:
+        plane_residual_world = float("inf")
+    plane_residual_normalized = plane_residual_world / cell_scale
+
+    contacts = adjacency.get(leaf.node_id, {}).get("contacts", [])
+    # Real spatial contacts only -- excludes root-AABB-boundary contacts
+    # (neighbor_id=None), which on a flat z=0 scene are a domain-box
+    # artifact (every leaf touches both z faces), not spatial information;
+    # including them in the denominator would dilute this ratio for every
+    # leaf regardless of real x/y connectivity (see worklog 46's finding).
+    real_contacts = [c for c in contacts if c["neighbor_id"] is not None]
+    interior_contacts = [c for c in real_contacts if c["classification"] == FACE_INTERIOR]
+    # neighbor_phase1_active_ratio uses ONLY the pre-existing Phase 1 leaf
+    # STATE (active/inactive/complex/empty) of face-contact neighbors -- NOT
+    # this eligibility classifier's own output, to avoid a circular
+    # definition (a leaf's class depending on neighbors' not-yet-computed class).
+    phase1_active_contacts = [c for c in interior_contacts if c.get("neighbor_state") == STATE_ACTIVE]
+    neighbor_phase1_active_ratio = len(phase1_active_contacts) / len(real_contacts) if real_contacts else 0.0
+
+    dots = []
+    for c in interior_contacts:
+        neighbor = node_by_id.get(c["neighbor_id"])
+        if neighbor is not None and neighbor.plane is not None and leaf.plane is not None:
+            dots.append(abs(float((leaf.plane.normal @ neighbor.plane.normal).clamp(-1.0, 1.0))))
+    normal_neighbor_count = len(dots)
+    normal_consistency = sum(dots) / len(dots) if dots else float("nan")
+
+    # --- Votes (explicit trace, not a weighted-sum score -- avoids hidden
+    # magic weights per the plan review; each vote is independently readable). ---
+    if spacing_ratio <= thresholds["spacing_ratio_low"]:
+        primary_spacing_class = "active_candidate"
+    elif spacing_ratio >= thresholds["spacing_ratio_high"]:
+        primary_spacing_class = "inactive_candidate"
+    else:
+        primary_spacing_class = "uncertain_candidate"
+
+    plane_residual_vote = "bad" if plane_residual_normalized > thresholds["plane_residual_normalized_high"] else "good"
+    if normal_neighbor_count == 0:
+        normal_consistency_vote = "neutral"
+    else:
+        angle_deg = math.degrees(math.acos(min(1.0, max(-1.0, normal_consistency))))
+        normal_consistency_vote = "bad" if angle_deg > thresholds["normal_consistency_angle_high_deg"] else "good"
+    neighbor_continuity_vote = "bad" if neighbor_phase1_active_ratio < thresholds["neighbor_phase1_active_ratio_low"] else "good"
+
+    bad_votes = sum(1 for v in (plane_residual_vote, normal_consistency_vote, neighbor_continuity_vote) if v == "bad")
+
+    # --- Decision table (explicit, conservative toward UNCERTAIN -- per the
+    # plan review, INACTIVE must require sparse spacing AND corroborating
+    # secondary evidence together, never spacing alone, so genuine thin
+    # structure isn't discarded on one signal). ---
+    if primary_spacing_class == "active_candidate":
+        if bad_votes == 0:
+            final_class, reason = ACTIVE_OBSERVED, "dense_and_consistent"
+        else:
+            bad_names = [n for n, v in (("plane_residual", plane_residual_vote), ("normal_consistency", normal_consistency_vote), ("neighbor_continuity", neighbor_continuity_vote)) if v == "bad"]
+            final_class, reason = UNCERTAIN, f"downgraded_from_active_by_{'_'.join(bad_names)}"
+    elif primary_spacing_class == "inactive_candidate":
+        if bad_votes >= 2:
+            final_class, reason = INACTIVE, "sparse_and_multiple_conflicting_signals"
+        else:
+            final_class, reason = UNCERTAIN, "sparse_but_insufficient_corroborating_evidence_for_inactive"
+    else:
+        final_class, reason = UNCERTAIN, "ambiguous_spacing_signal"
+
+    return LeafEligibilityResult(
+        leaf_id=leaf.node_id, spacing_ratio=spacing_ratio, rho_u=rho_u, rho_v=rho_v,
+        plane_residual_world=plane_residual_world, plane_residual_normalized=plane_residual_normalized,
+        normal_consistency=normal_consistency, normal_neighbor_count=normal_neighbor_count,
+        neighbor_phase1_active_ratio=neighbor_phase1_active_ratio,
+        primary_spacing_class=primary_spacing_class, plane_residual_vote=plane_residual_vote,
+        normal_consistency_vote=normal_consistency_vote, neighbor_continuity_vote=neighbor_continuity_vote,
+        final_class=final_class, class_transition_reason=reason, provenance=provenance,
+    )
+
+
+def build_boundary_leaf_records_with_eligibility(
+    component: SurfaceComponent,
+    hierarchy: TorchVoxelGaussianHierarchy,
+    points: torch.Tensor,
+    frame: Any,
+    min_hull_points: int = 4,
+    thresholds: dict[str, float] = DEFAULT_ELIGIBILITY_THRESHOLDS,
+) -> list[tuple[BoundaryLeafRecord, LeafEligibilityResult]]:
+    """Step A+B extended: every boundary leaf gets an eligibility
+    classification; the convex-hull clip (worklog 46, UNCHANGED) is applied
+    only to leaves classified ``ACTIVE_OBSERVED``. Interior leaves keep
+    their original, unclipped polygon and are not run through the
+    classifier at all (out of scope -- this pass only re-examines BOUNDARY
+    evidence, not leaves already fully surrounded by other active leaves)."""
+
+    node_by_id = {node.node_id: node for node in hierarchy.nodes}
+    boundary_ids = set(component.boundary_leaf_ids)
+    member_ids = set(component.member_leaf_ids)
+    adjacency = compute_leaf_face_adjacency(hierarchy, degenerate_axis_tolerant=True)
+
+    out: list[tuple[BoundaryLeafRecord, LeafEligibilityResult]] = []
+    for leaf_id in component.member_leaf_ids:
+        leaf = node_by_id[leaf_id]
+        if leaf.plane is None:
+            continue
+        polygon_world = plane_aabb_intersection_polygon(leaf.plane.centroid, leaf.plane.normal, leaf.aabb_min, leaf.aabb_max)
+        if int(polygon_world.shape[0]) < 3:
+            continue
+        polygon_uv = frame.apply(polygon_world, clamp=False)
+        is_boundary = leaf_id in boundary_ids
+        point_count = int(leaf.gaussian_indices.shape[0]) if leaf.gaussian_indices is not None else 0
+
+        if is_boundary:
+            eligibility = compute_leaf_eligibility(leaf, points, frame, polygon_uv, adjacency, node_by_id, member_ids, thresholds)
+        else:
+            eligibility = None  # interior leaves: not classified, original polygon kept as-is
+
+        clipped_uv = polygon_uv
+        if is_boundary and eligibility.final_class == ACTIVE_OBSERVED and point_count >= min_hull_points:
+            member_uv = frame.apply(points[leaf.gaussian_indices], clamp=False)
+            hull_uv = _convex_hull_2d(member_uv)
+            if int(hull_uv.shape[0]) >= 3:
+                candidate = _sutherland_hodgman_clip(polygon_uv, hull_uv)
+                if int(candidate.shape[0]) >= 3:
+                    clipped_uv = candidate
+
+        area_before = _polygon_area_2d(polygon_uv)
+        area_after = _polygon_area_2d(clipped_uv)
+        record = BoundaryLeafRecord(
+            leaf_id=leaf_id, is_boundary=is_boundary, point_count=point_count,
+            center_angle=0.0, plane_aabb_polygon_uv=polygon_uv, clipped_polygon_uv=clipped_uv,
+            plane_aabb_area=area_before, clipped_area=area_after,
+            occupancy_ratio=(area_after / area_before) if area_before > 1e-12 else 1.0,
+        )
+        out.append((record, eligibility))
+    return out
+
+
+def rasterize_eligibility_masks(
+    records: list[tuple[BoundaryLeafRecord, LeafEligibilityResult]], resolution: int,
+) -> dict[str, torch.Tensor]:
+    """Four DISJOINT masks (by construction: each leaf's polygon goes into
+    exactly one of these, never more than one) plus the three REQUIRED
+    cumulative coverage views. ``inactive`` leaves contribute no polygon at
+    all (excluded, not just unclipped)."""
+
+    active = torch.zeros((resolution, resolution), dtype=torch.bool)
+    uncertain = torch.zeros((resolution, resolution), dtype=torch.bool)
+    complex_mask = torch.zeros((resolution, resolution), dtype=torch.bool)
+    interior = torch.zeros((resolution, resolution), dtype=torch.bool)
+    for record, eligibility in records:
+        if eligibility is None:  # interior leaf, not classified
+            interior = interior | rasterize_convex_polygon_uv(record.plane_aabb_polygon_uv, resolution)
+            continue
+        cls = eligibility.final_class
+        if cls == ACTIVE_OBSERVED:
+            active = active | rasterize_convex_polygon_uv(record.clipped_polygon_uv, resolution)
+        elif cls == UNCERTAIN:
+            uncertain = uncertain | rasterize_convex_polygon_uv(record.plane_aabb_polygon_uv, resolution)
+        elif cls == COMPLEX:
+            complex_mask = complex_mask | rasterize_convex_polygon_uv(record.plane_aabb_polygon_uv, resolution)
+        # INACTIVE: deliberately contributes nothing to any mask.
+    return {
+        "active": active,
+        "uncertain": uncertain,
+        "complex": complex_mask,
+        "interior": interior,
+        "active_only": active | interior,
+        "active_plus_uncertain": active | interior | uncertain,
+        "active_plus_uncertain_plus_complex": active | interior | uncertain | complex_mask,
+    }
+
+
+def analyze_scene_with_eligibility(
+    scene: BoundaryBiasScene, theta_bins: int = 144, resolution: int = 64, min_hull_points: int = 4,
+    thresholds: dict[str, float] = DEFAULT_ELIGIBILITY_THRESHOLDS,
+) -> dict[str, Any]:
+    """Step A+B+C, eligibility-classified version. Reports the three
+    cumulative views SEPARATELY, interpreted per the plan review: read
+    ``active_only`` for PRECISION (false-fill, outward bias, evidence
+    purity -- it is not a defect for this to under-cover a physical GT
+    boundary the data doesn't actually evidence), and
+    ``active_plus_uncertain`` for RECALL (how much of the true boundary is
+    at least in the uncertain pool, not truly lost). Matching GT coverage
+    on ``active_only`` is explicitly NOT a target -- doing so would just
+    re-promote thin evidence back to "observed", the exact failure mode
+    this classifier exists to avoid.
+    """
+
+    hierarchy = build_voxel_gaussian_hierarchy(scene.points, voxel_min_gaussian_count=10, voxel_max_gaussian_count=150, voxel_max_depth=6)
+    component_set = build_surface_components(hierarchy, scene.points)
+    if component_set.component_count() != 1:
+        raise RuntimeError(f"{scene.name}: expected 1 component, got {component_set.component_count()}.")
+    component = component_set.components[0]
+    boundary = extract_component_boundary(component, hierarchy, scene.points, resolution=resolution)
+    frame = boundary.frame
+
+    records = build_boundary_leaf_records_with_eligibility(component, hierarchy, scene.points, frame, min_hull_points=min_hull_points, thresholds=thresholds)
+    masks = rasterize_eligibility_masks(records, resolution)
+
+    theta_samples = torch.linspace(0.0, TWO_PI * (theta_bins - 1) / theta_bins, theta_bins, dtype=torch.float32)
+    cell_world = frame.to_world(_grid_cell_centers_uv(resolution, dtype=frame.origin.dtype))
+    cell_rel = cell_world[:, :2] - scene.center
+    cell_angle = torch.remainder(torch.atan2(cell_rel[:, 1], cell_rel[:, 0]), TWO_PI)
+    cell_radius = cell_rel.norm(dim=1)
+    window = 0.5 * (TWO_PI / 24)
+    r_gt = ellipse_radius_at_angle(theta_samples, scene.a, scene.b)
+
+    views: dict[str, Any] = {}
+    for view_name in ("active_only", "active_plus_uncertain", "active_plus_uncertain_plus_complex"):
+        refined = boundary.threshold_field & masks[view_name]
+        r_view = _per_angle_max_radius(cell_angle, cell_radius, refined.reshape(-1), theta_samples, window)
+        under_coverage = float((r_view < (r_gt - 0.02)).float().mean())
+        views[view_name] = {**compute_bias_metrics(theta_samples, r_view, scene), "under_coverage": under_coverage}
+
+    classification_counts: dict[str, int] = {ACTIVE_OBSERVED: 0, UNCERTAIN: 0, INACTIVE: 0, COMPLEX: 0}
+    provenance_counts = {"is_root_boundary_leaf": 0, "is_inactive_neighbor_leaf": 0, "is_cross_component_boundary_leaf": 0}
+    for _record, eligibility in records:
+        if eligibility is None:
+            continue
+        classification_counts[eligibility.final_class] += 1
+        for key in provenance_counts:
+            if getattr(eligibility.provenance, key):
+                provenance_counts[key] += 1
+
+    return {
+        "views": views,
+        "classification_counts": classification_counts,
+        "provenance_counts": provenance_counts,
+        "boundary_leaf_count": sum(1 for _r, e in records if e is not None),
+        "interior_leaf_count": sum(1 for _r, e in records if e is None),
+        "records": records,
+    }
