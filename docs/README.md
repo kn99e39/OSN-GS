@@ -422,3 +422,16 @@ The local Graphdeco notebook cells read/write patched Python sources with explic
 - surface maintenance는 `OSN_SURFACE_MAINTENANCE_PATCH_BUDGET`/`--surface_maintenance_patch_budget`(기본 16)만큼 patch를 round-robin 검사한다. 0은 모든 patch 검사다.
 - training view는 순차 순환 대신 seed 재현 가능한 epoch별 무작위 순열(without replacement)을 사용한다.
 - CUDA smoke와 전체 150-test 회귀는 통과했다. 동일 해상도 10k baseline A/B는 남은 acceptance 검증이다. See `docs/worklogs/57_priority8_training_performance.md`.
+
+## 2026-07-22 Proxy-Based Surface Decomposition Stage 0/1
+
+- Stage 0에서 현재 Phase 1/2 계약과 기준선을 동결했다. `curved_annulus`는 생성된 edge 14개가 모두 merge됐지만 face-contact가 없는 cross-component AABB-touch pair 때문에 2개 component로 갈리는 것을 재현했다. `mild_curved_sheet`의 spurious annulus는 component가 이미 1개라 Phase 2 문제로 분리했다. See `docs/worklogs/60_proxy_decomposition_stage0_baseline.md`.
+- Stage 1에 diagnostics-only local quadratic proxy와 실제 leaf-pair 분석 도구를 추가했다. 누락 curved pair는 기존 smooth pair와 비슷한 proxy distortion을 보였고, crease/parallel/disconnected는 단일 threshold가 아니라 proxy error·normal variation·layer direction·support gap의 독립 신호가 필요했다.
+- Production component builder와 기본값은 변경하지 않았다. 당시 전체 171 tests 통과(1 skip), artifact 반복 생성 hash 일치. Stage 2 Spatial Candidate Graph는 후속 승인 후 완료했으며 아래에 기록했다. See `docs/worklogs/61_proxy_decomposition_stage1_quadratic_diagnostics.md` 및 `artifacts/proxy_decomposition_{baseline,stage1}.json`.
+
+## 2026-07-22 Proxy-Based Surface Decomposition Stage 2
+
+- Diagnostics-only scale-aware spatial candidate graph를 추가했다. Adaptive leaf AABB diagonal에 비례한 반경, deterministic sweep-and-prune, canonical pair ordering, duplicate 제거를 사용하며 face/edge/corner 관계는 결과 provenance로만 기록한다.
+- 기본 `curved_annulus`에서 누락 smooth pair 4/4와 기존 face-smooth pair 14/14를 모두 포함했다. 12 nodes, 39 edges, degree mean 6.50, p95/max 9였다. 회전·point count·adaptive leaf resolution·density-gradient sweep에서도 평가 reference recall은 모두 1.0이었다.
+- Candidate graph는 의도적으로 broad하다. 8-leaf crease/parallel 및 5–8-leaf density 조건은 complete graph였고, GT-cross false candidate 비율은 crease 57.1%, parallel layer 57.1%, disconnected-close 27.3%였다. 거리 sweep은 edge membership보다 기록된 `support_gap`에 반영되므로 Stage 3 admissibility에서 독립적으로 검증해야 한다.
+- 실제 `osn-gs benchmark --constructor boundary_first --bf-candidate-diagnostics`를 실행했으며 production `curved_annulus` component count는 2로 유지됐다. 전체 182 tests 통과(1 skip). Stage 3는 diagnostics-only prototype으로 조건부 진행 가능하지만 사용자 승인 전에는 시작하지 않는다. 상세 근거는 `docs/worklogs/62_proxy_decomposition_stage2_candidate_graph.md`와 `artifacts/proxy_decomposition_stage2.json`, `artifacts/proxy_decomposition_stage2_unified_benchmark.json/report.json`에 있다.

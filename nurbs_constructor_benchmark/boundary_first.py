@@ -33,6 +33,10 @@ import torch
 from osn_gs.surface.torch_annulus_chart import annulus_chart_payload, build_annulus_chart
 from osn_gs.surface.torch_chart_topology import TOPOLOGY_ANNULUS, classify_boundary_result
 from osn_gs.surface.torch_component_boundary import extract_component_boundary
+from osn_gs.surface.torch_surface_candidate_graph import (
+    build_surface_cell_candidate_graph,
+    candidate_graph_payload,
+)
 from osn_gs.surface.torch_surface_components import build_surface_components
 from osn_gs.surface.torch_trimmed_component_fitter import fit_trimmed_component
 from osn_gs.surface.torch_voxel_hierarchy import build_voxel_gaussian_hierarchy, validate_hierarchy_conservation
@@ -62,6 +66,7 @@ class BoundaryFirstState:
     voxel_hierarchy: Any = None
     per_component: list[dict[str, Any]] = field(default_factory=list)
     component_count: int = 0
+    candidate_graph: dict[str, Any] | None = None
 
 
 def construct_boundary_first(
@@ -80,6 +85,9 @@ def construct_boundary_first(
     annulus_hermite_boundary_seed: bool = False,
     annulus_coupled_boundary_fit: bool = True,
     annulus_collect_diagnostic_samples: bool = False,
+    candidate_graph_diagnostics: bool = False,
+    candidate_radius_factor: float = 0.25,
+    candidate_max_neighbors: int = 0,
     fallback_resolution_u: int = 12,
     fallback_resolution_v: int = 12,
     export_dir: Path | None = None,
@@ -108,6 +116,42 @@ def construct_boundary_first(
     )
     if component_set.component_count() == 0:
         raise ValueError(f"{scene.name}: boundary-first produced zero components.")
+
+    candidate_payload = None
+    if candidate_graph_diagnostics:
+        graph = build_surface_cell_candidate_graph(
+            hierarchy,
+            scene.points,
+            radius_factor=candidate_radius_factor,
+            max_neighbors=candidate_max_neighbors,
+        )
+        reference_pairs = {
+            "existing_face_all": [
+                (edge.leaf_a, edge.leaf_b) for edge in component_set.edge_decisions
+            ],
+            "existing_face_smooth": [
+                (edge.leaf_a, edge.leaf_b)
+                for edge in component_set.edge_decisions
+                if edge.reason == "merged"
+            ],
+        }
+        face_reason = {
+            tuple(sorted((edge.leaf_a, edge.leaf_b))): edge.reason
+            for edge in component_set.edge_decisions
+        }
+        diagnostic_tags: dict[tuple[str, str], list[str]] = {}
+        for pair in graph.edge_pairs():
+            if pair in face_reason:
+                diagnostic_tags[pair] = [f"legacy_face_{face_reason[pair]}"]
+            elif component_set.leaf_component_id.get(pair[0]) == component_set.leaf_component_id.get(pair[1]):
+                diagnostic_tags[pair] = ["nonface_same_component"]
+            else:
+                diagnostic_tags[pair] = ["nonface_cross_component"]
+        candidate_payload = candidate_graph_payload(
+            graph,
+            reference_pairs=reference_pairs,
+            diagnostic_tags=diagnostic_tags,
+        )
 
     count = int(scene.points.shape[0])
     cluster_ids = torch.full((count,), -1, dtype=torch.long)
@@ -202,6 +246,7 @@ def construct_boundary_first(
         voxel_hierarchy=hierarchy,
         per_component=per_component,
         component_count=component_set.component_count(),
+        candidate_graph=candidate_payload,
     )
     return state, payload_patches
 

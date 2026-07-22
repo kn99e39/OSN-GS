@@ -298,6 +298,9 @@ def evaluate_scene_boundary_first(
         annulus_seam_phase_offset=args.bf_seam_phase_offset,
         annulus_hermite_boundary_seed=args.bf_hermite_boundary_seed,
         annulus_coupled_boundary_fit=not args.bf_disable_coupled_boundary_fit,
+        candidate_graph_diagnostics=args.bf_candidate_diagnostics,
+        candidate_radius_factor=args.bf_candidate_radius_factor,
+        candidate_max_neighbors=args.bf_candidate_max_neighbors,
         export_dir=export_dir,
     )
     construct_seconds = time.perf_counter() - construct_start
@@ -320,6 +323,7 @@ def evaluate_scene_boundary_first(
     result["boundary_first"] = {
         "component_count": state.component_count,
         "per_component": state.per_component,
+        "candidate_graph": state.candidate_graph,
     }
     return result
 
@@ -497,6 +501,23 @@ def build_parser() -> argparse.ArgumentParser:
         "--bf-disable-coupled-boundary-fit", action="store_true",
         help="[boundary_first] Phase 5 Step 5-A (production default since 2026-07-22, docs/worklogs/55): pass this to fall back to the pre-Step-5-A independent per-wedge fit instead of the joint shared-seam-boundary solve -- see OSN_GS_Phase5_Boundary_Aligned_Extension_Plan.md.",
     )
+    parser.add_argument(
+        "--bf-candidate-diagnostics",
+        action="store_true",
+        help="[boundary_first] Emit diagnostics-only Stage 2 spatial candidate graph; never changes component membership.",
+    )
+    parser.add_argument(
+        "--bf-candidate-radius-factor",
+        type=float,
+        default=0.25,
+        help="[boundary_first diagnostics] Scale-aware AABB radius as a multiple of max adaptive leaf diagonal.",
+    )
+    parser.add_argument(
+        "--bf-candidate-max-neighbors",
+        type=int,
+        default=0,
+        help="[boundary_first diagnostics] Deterministic per-node degree cap; 0 keeps all candidates for recall analysis.",
+    )
     parser.add_argument("--resolution-u", type=int, default=8)
     parser.add_argument("--resolution-v", type=int, default=4)
     parser.add_argument("--fit-mode", choices=("lsq", "idw"), default="lsq")
@@ -603,6 +624,15 @@ def main(argv: list[str] | None = None) -> int:
             bf = result["boundary_first"]
             topologies = [c["topology"] for c in bf["per_component"]]
             print(f"  boundary_first: components={bf['component_count']} topologies={topologies}")
+            if bf.get("candidate_graph"):
+                graph = bf["candidate_graph"]
+                recall = graph["reference_recall"]["existing_face_smooth"]["recall"]
+                degree = graph["degree"]
+                print(
+                    f"  candidate_graph: nodes={graph['node_count']} edges={graph['edge_count']} "
+                    f"degree_mean={degree['mean']:.2f} p95={degree['p95']} max={degree['max']} "
+                    f"face_smooth_recall={recall:.3f} sources={graph['candidate_source_counts']}"
+                )
             for c in bf["per_component"]:
                 if c["chart"] == "o_grid":
                     cq = c["chart_quality"]

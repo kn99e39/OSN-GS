@@ -1,0 +1,3674 @@
+{
+  "config": null,
+  "run": {
+    "scenes": [
+      "curved_annulus",
+      "mild_curved_sheet",
+      "crease",
+      "close_parallel_sheets",
+      "density_gradient"
+    ],
+    "output": "artifacts\\proxy_decomposition_stage2_unified_benchmark.json",
+    "device": "cpu",
+    "points": 600,
+    "seed": 0,
+    "noise_std": 0.0,
+    "disable_voxel": false,
+    "adaptive_voxel": false,
+    "voxel_grid": 6,
+    "constructor": "boundary_first",
+    "voxel_min_count": 10,
+    "voxel_max_count": 150,
+    "voxel_max_depth": 6,
+    "voxel_min_size": 0.0,
+    "stage1_support": "voxel_density",
+    "stage1_obs_per_control": 2.0,
+    "stage1_density_resolution": 32,
+    "stage1_density_bandwidth": 2.0,
+    "stage1_density_threshold": 2.0,
+    "no_stage1_boundary_refinement": false,
+    "bf_normal_threshold_degrees": 40.0,
+    "bf_offset_threshold_ratio": 0.5,
+    "bf_boundary_resolution": 64,
+    "bf_density_threshold": 3.0,
+    "bf_coarse_gap_closing_cells": 2,
+    "bf_annulus_segments": 8,
+    "bf_annulus_segment_placement": "uniform_angle",
+    "bf_seam_phase_offset": 0.0,
+    "bf_hermite_boundary_seed": false,
+    "bf_disable_coupled_boundary_fit": false,
+    "bf_candidate_diagnostics": true,
+    "bf_candidate_radius_factor": 0.25,
+    "bf_candidate_max_neighbors": 0,
+    "resolution_u": 8,
+    "resolution_v": 4,
+    "fit_mode": "lsq",
+    "trim_resolution": null,
+    "trim_dilation": null,
+    "max_fit_rms": null,
+    "max_chart_rms": null,
+    "max_chamfer_rms": null,
+    "max_extrapolation": null,
+    "min_topology_ari": null,
+    "skip_renderer_export": true
+  },
+  "results": [
+    {
+      "scene": "curved_annulus",
+      "description": "Curved (sine) annular support: annulus O-grid on a non-planar surface, where the true normal legitimately rotates around the ring.",
+      "input_gaussians": 600,
+      "patches": 2,
+      "control_points": 288,
+      "construction_seconds": 0.42872080000233836,
+      "unassigned_gaussians": 20,
+      "fit_rms_assigned": 0.0016999025829136372,
+      "fit_rms": 0.0016713306540623307,
+      "fit_max": 0.02693675458431244,
+      "surface_chart_rms": 0.0010729841887950897,
+      "surface_chart_max": 0.00799030065536499,
+      "normal_mean_degrees": 1.228739619255066,
+      "normal_p95_degrees": 3.710580825805664,
+      "ground_truth": {
+        "accuracy_rms": 0.0073959301225841045,
+        "accuracy_p95": 0.009953783825039864,
+        "accuracy_max": 0.058732882142066956,
+        "completeness_rms": 0.013795140199363232,
+        "chamfer_rms": 0.010595535160973668,
+        "support_coverage_uncovered_fraction": 0.008756173774600029,
+        "support_extrapolation_fraction": 0.024414431303739548,
+        "support_extrapolation_fraction_local": 0.0797128826379776,
+        "support_local_threshold_p50": 0.08321399986743927,
+        "support_local_threshold_p95": 0.16726306080818176,
+        "support_observed_gt_samples": 8908,
+        "support_threshold": 0.07042885757982731,
+        "topology_gen_patch_count": 2,
+        "topology_gt_patch_count": 1,
+        "topology_patch_count_delta": 1,
+        "topology_patch_count_match": false,
+        "topology_label_ari": 0.0,
+        "support_grid_resolution": 128,
+        "support_gt_cells": 8984,
+        "support_generated_cells": 8328,
+        "support_intersection_cells": 8061,
+        "support_coverage_fraction": 0.8972617987533392,
+        "support_unsupported_fraction": 0.03206051873198847,
+        "support_uncovered_fraction": 0.10273820124666073,
+        "support_precision": 0.9679394812680115,
+        "support_recall": 0.8972617987533392,
+        "support_iou": 0.8713652578099665,
+        "support_gt_component_count": 1,
+        "support_generated_component_count": 1,
+        "support_gt_hole_count": 1,
+        "support_generated_hole_count": 6,
+        "support_gt_euler": 0,
+        "support_generated_euler": -5,
+        "support_topology_mismatch": true,
+        "support_boundary_chamfer": 0.04162175953388214,
+        "support_boundary_hausdorff": 0.28346455097198486
+      },
+      "support_conformality": {
+        "support_conformality_ratio": 0.15502555366269166,
+        "support_conformality_boundary_cells": 587,
+        "support_conformality_edge_cells": 91,
+        "support_conformality_trimmed_patches": 2
+      },
+      "patch_union": {
+        "union_resolution": 128,
+        "union_patch_count": 2,
+        "union_gt_cells": 8984,
+        "union_generated_cells": 8328,
+        "union_coverage_ratio": 0.8972617987533392,
+        "union_uncovered_ratio": 0.10273820124666073,
+        "union_unsupported_ratio": 0.03206051873198847,
+        "union_iou": 0.8713652578099665,
+        "union_component_count": 1,
+        "union_hole_count": 6,
+        "union_gt_hole_count": 1,
+        "union_euler": -5,
+        "union_gt_euler": 0,
+        "union_false_fill_ratio": 0.09937888198757763,
+        "union_hole_iou": 0.7754010695187166,
+        "union_patch_overlap_ratio": 0.0015609990393852064,
+        "union_interpatch_gap_ratio": 0.0013357079252003562,
+        "union_boundary_chamfer": 0.04162175953388214,
+        "union_boundary_hausdorff": 0.28346455097198486,
+        "union_component_areas_top8": [
+          8328
+        ],
+        "union_component_area_histogram": {
+          "area_1": 0,
+          "area_2_4": 0,
+          "area_5_16": 0,
+          "area_17_64": 0,
+          "area_65_plus": 1
+        },
+        "union_tiny_component_count": 0,
+        "union_hole_areas_top8": [
+          1356,
+          5,
+          3,
+          2,
+          1,
+          1
+        ],
+        "union_hole_area_histogram": {
+          "area_1": 2,
+          "area_2_4": 2,
+          "area_5_16": 1,
+          "area_17_64": 0,
+          "area_65_plus": 1
+        },
+        "union_tiny_hole_count": 4,
+        "union_seam_cell_count": 12,
+        "union_seam_length": 0.1875,
+        "union_seam_component_count": 5,
+        "union_false_hole_count": 5,
+        "union_false_hole_area_sum": 12,
+        "union_tiny_false_hole_count": 4
+      },
+      "patch_union_coarse": null,
+      "coarse_vs_refined_support_iou": null,
+      "stage1": {
+        "leaf_state_counts": {
+          "subdivided": 3,
+          "active": 12,
+          "inactive": 6,
+          "empty": 4
+        },
+        "hierarchy_max_depth": 2,
+        "inactive_enclosed_leaf_count": 0,
+        "underdetermined_patch_count": 0,
+        "empty_support_mask_count": 0,
+        "observations_per_control_min": null,
+        "observations_per_control_median": null,
+        "boundary_leaf_count": 0,
+        "refined_patch_count": 0,
+        "refined_boundary_length_world": 0,
+        "density_contour_gt_chamfer": Infinity,
+        "density_contour_gt_hausdorff": Infinity,
+        "patches": []
+      },
+      "finite": true,
+      "patch_diagnostics": [],
+      "construction_diagnostics": null,
+      "support_artifacts": {},
+      "boundary_first": {
+        "component_count": 2,
+        "per_component": [
+          {
+            "component_id": 0,
+            "topology": "disk_like",
+            "chart": "trimmed_rect_fallback",
+            "fit_metrics": {
+              "point_to_surface_rms": 0.0010015607113018632,
+              "point_to_surface_max": 0.011519054882228374,
+              "mask_hit_rate": 0.9072847962379456,
+              "control_grid_extent": 2.0011866092681885,
+              "control_grid_edge_median": 0.09318868070840836,
+              "control_grid_edge_min": 0.030677571892738342,
+              "control_grid_collapsed": false,
+              "jacobian_median": 1.533909559249878,
+              "jacobian_min": 0.02100694179534912,
+              "degenerate_fraction": 0.0
+            }
+          },
+          {
+            "component_id": 1,
+            "topology": "complex",
+            "chart": "trimmed_rect_fallback",
+            "fit_metrics": {
+              "point_to_surface_rms": 0.0022224043495953083,
+              "point_to_surface_max": 0.02693675458431244,
+              "mask_hit_rate": 0.8884891867637634,
+              "control_grid_extent": 2.0068612098693848,
+              "control_grid_edge_median": 0.09750349819660187,
+              "control_grid_edge_min": 0.041957978159189224,
+              "control_grid_collapsed": false,
+              "jacobian_median": 1.554605484008789,
+              "jacobian_min": 0.011770769022405148,
+              "degenerate_fraction": 0.0
+            }
+          }
+        ],
+        "candidate_graph": {
+          "config": {
+            "radius_factor": 0.25,
+            "max_neighbors": 0,
+            "fit_complex_leaves": true,
+            "candidate_source": "scale_aware_expanded_aabb_sweep",
+            "broad_phase": "expanded_aabb_sweep_and_prune",
+            "exact_distance": "aabb_euclidean"
+          },
+          "node_count": 12,
+          "edge_count": 39,
+          "possible_edge_count": 66,
+          "candidate_fraction_of_complete_graph": 0.5909090909090909,
+          "degree": {
+            "by_node": {
+              "r00": 4,
+              "r02": 5,
+              "r05": 7,
+              "r06": 8,
+              "r07": 9,
+              "r2": 6,
+              "r50": 7,
+              "r52": 9,
+              "r53": 8,
+              "r54": 4,
+              "r57": 5,
+              "r7": 6
+            },
+            "histogram": {
+              "4": 2,
+              "5": 2,
+              "7": 2,
+              "8": 2,
+              "9": 2,
+              "6": 2
+            },
+            "min": 4,
+            "median": 7,
+            "p95": 9,
+            "max": 9,
+            "mean": 6.5,
+            "isolated_node_count": 0
+          },
+          "contact_relation_counts": {
+            "corner": 8,
+            "disjoint": 6,
+            "edge": 11,
+            "face": 14
+          },
+          "candidate_source_counts": {
+            "scale_aware_expanded_aabb_sweep": 39
+          },
+          "diagnostic_tag_counts": {
+            "legacy_face_merged": 14,
+            "nonface_cross_component": 13,
+            "nonface_same_component": 12
+          },
+          "reference_recall": {
+            "existing_face_all": {
+              "reference_count": 14,
+              "found_count": 14,
+              "recall": 1.0,
+              "missing_pairs": []
+            },
+            "existing_face_smooth": {
+              "reference_count": 14,
+              "found_count": 14,
+              "recall": 1.0,
+              "missing_pairs": []
+            }
+          },
+          "edges": [
+            {
+              "pair_id": "r00|r02",
+              "cell_a": "r00",
+              "cell_b": "r02",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.28954634070396423,
+              "support_gap": 0.039286162704229355,
+              "scale_a": 0.6357852816581726,
+              "scale_b": 0.6357852816581726,
+              "radius_limit": 0.15894632041454315,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.06179155736629871,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            },
+            {
+              "pair_id": "r00|r05",
+              "cell_a": "r00",
+              "cell_b": "r05",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.4412742853164673,
+              "support_gap": 0.03273943066596985,
+              "scale_a": 0.6357852816581726,
+              "scale_b": 0.6357852816581726,
+              "radius_limit": 0.15894632041454315,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.051494477161508234,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_same_component"
+              ]
+            },
+            {
+              "pair_id": "r00|r06",
+              "cell_a": "r00",
+              "cell_b": "r06",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.40793076157569885,
+              "support_gap": 0.10651374608278275,
+              "scale_a": 0.6357852816581726,
+              "scale_b": 0.6357852816581726,
+              "radius_limit": 0.15894632041454315,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.16753100324214398,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_same_component"
+              ]
+            },
+            {
+              "pair_id": "r00|r07",
+              "cell_a": "r00",
+              "cell_b": "r07",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.4944315552711487,
+              "support_gap": 0.1970132738351822,
+              "scale_a": 0.6357852816581726,
+              "scale_b": 0.6357852816581726,
+              "radius_limit": 0.15894632041454315,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.3098739142267618,
+              "contact_relation": "corner",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_same_component"
+              ]
+            },
+            {
+              "pair_id": "r02|r05",
+              "cell_a": "r02",
+              "cell_b": "r05",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.6182065606117249,
+              "support_gap": 0.13322585821151733,
+              "scale_a": 0.6357852816581726,
+              "scale_b": 0.6357852816581726,
+              "radius_limit": 0.15894632041454315,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.20954536390659273,
+              "contact_relation": "corner",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_same_component"
+              ]
+            },
+            {
+              "pair_id": "r02|r06",
+              "cell_a": "r02",
+              "cell_b": "r06",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.2911447584629059,
+              "support_gap": 0.03372897952795029,
+              "scale_a": 0.6357852816581726,
+              "scale_b": 0.6357852816581726,
+              "radius_limit": 0.15894632041454315,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.0530508970575455,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            },
+            {
+              "pair_id": "r02|r07",
+              "cell_a": "r02",
+              "cell_b": "r07",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.5181745290756226,
+              "support_gap": 0.1632847785949707,
+              "scale_a": 0.6357852816581726,
+              "scale_b": 0.6357852816581726,
+              "radius_limit": 0.15894632041454315,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.2568237788850861,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_same_component"
+              ]
+            },
+            {
+              "pair_id": "r02|r2",
+              "cell_a": "r02",
+              "cell_b": "r2",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.6935616135597229,
+              "support_gap": 0.018336569890379906,
+              "scale_a": 0.6357852816581726,
+              "scale_b": 1.2715705633163452,
+              "radius_limit": 0.3178926408290863,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.014420410804852894,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            },
+            {
+              "pair_id": "r05|r06",
+              "cell_a": "r05",
+              "cell_b": "r06",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.4780963361263275,
+              "support_gap": 0.04209213703870773,
+              "scale_a": 0.6357852816581726,
+              "scale_b": 0.6357852816581726,
+              "radius_limit": 0.15894632041454315,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.0662049566937575,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_same_component"
+              ]
+            },
+            {
+              "pair_id": "r05|r07",
+              "cell_a": "r05",
+              "cell_b": "r07",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.2938239276409149,
+              "support_gap": 0.04042978957295418,
+              "scale_a": 0.6357852816581726,
+              "scale_b": 0.6357852816581726,
+              "radius_limit": 0.15894632041454315,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.06359032009597713,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            },
+            {
+              "pair_id": "r05|r50",
+              "cell_a": "r05",
+              "cell_b": "r50",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.45483988523483276,
+              "support_gap": 0.060451555997133255,
+              "scale_a": 0.6357852816581726,
+              "scale_b": 0.6357852816581726,
+              "radius_limit": 0.15894632041454315,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.09508171664413394,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_cross_component"
+              ]
+            },
+            {
+              "pair_id": "r05|r52",
+              "cell_a": "r05",
+              "cell_b": "r52",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.49666762351989746,
+              "support_gap": 0.2025647759437561,
+              "scale_a": 0.6357852816581726,
+              "scale_b": 0.6357852816581726,
+              "radius_limit": 0.15894632041454315,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.31860563902242744,
+              "contact_relation": "corner",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_cross_component"
+              ]
+            },
+            {
+              "pair_id": "r05|r53",
+              "cell_a": "r05",
+              "cell_b": "r53",
+              "aabb_distance": 0.09968173503875732,
+              "centroid_distance": 0.7154268622398376,
+              "support_gap": 0.4289163053035736,
+              "scale_a": 0.6357852816581726,
+              "scale_b": 0.6357852816581726,
+              "radius_limit": 0.15894632041454315,
+              "scale_normalized_aabb_distance": 0.15678521965588818,
+              "scale_normalized_gap": 0.6746244647012428,
+              "contact_relation": "disjoint",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_cross_component"
+              ]
+            },
+            {
+              "pair_id": "r06|r07",
+              "cell_a": "r06",
+              "cell_b": "r07",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.2660236060619354,
+              "support_gap": 0.03319661691784859,
+              "scale_a": 0.6357852816581726,
+              "scale_b": 0.6357852816581726,
+              "radius_limit": 0.15894632041454315,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.05221356623932766,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            },
+            {
+              "pair_id": "r06|r2",
+              "cell_a": "r06",
+              "cell_b": "r2",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.6315391659736633,
+              "support_gap": 0.048249900341033936,
+              "scale_a": 0.6357852816581726,
+              "scale_b": 1.2715705633163452,
+              "radius_limit": 0.3178926408290863,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.037945122145006886,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            },
+            {
+              "pair_id": "r06|r50",
+              "cell_a": "r06",
+              "cell_b": "r50",
+              "aabb_distance": 0.09968173503875732,
+              "centroid_distance": 0.7760090827941895,
+              "support_gap": 0.367866575717926,
+              "scale_a": 0.6357852816581726,
+              "scale_b": 0.6357852816581726,
+              "radius_limit": 0.15894632041454315,
+              "scale_normalized_aabb_distance": 0.15678521965588818,
+              "scale_normalized_gap": 0.5786019059115433,
+              "contact_relation": "disjoint",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_cross_component"
+              ]
+            },
+            {
+              "pair_id": "r06|r52",
+              "cell_a": "r06",
+              "cell_b": "r52",
+              "aabb_distance": 0.09968173503875732,
+              "centroid_distance": 0.5953256487846375,
+              "support_gap": 0.394013911485672,
+              "scale_a": 0.6357852816581726,
+              "scale_b": 0.6357852816581726,
+              "radius_limit": 0.15894632041454315,
+              "scale_normalized_aabb_distance": 0.15678521965588818,
+              "scale_normalized_gap": 0.6197279535286757,
+              "contact_relation": "disjoint",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_cross_component"
+              ]
+            },
+            {
+              "pair_id": "r06|r7",
+              "cell_a": "r06",
+              "cell_b": "r7",
+              "aabb_distance": 0.09968173503875732,
+              "centroid_distance": 1.03365957736969,
+              "support_gap": 0.5386242270469666,
+              "scale_a": 0.6357852816581726,
+              "scale_b": 1.2715705633163452,
+              "radius_limit": 0.3178926408290863,
+              "scale_normalized_aabb_distance": 0.07839260982794409,
+              "scale_normalized_gap": 0.42358972642634696,
+              "contact_relation": "disjoint",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_cross_component"
+              ]
+            },
+            {
+              "pair_id": "r07|r2",
+              "cell_a": "r07",
+              "cell_b": "r2",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.8272901177406311,
+              "support_gap": 0.36038854718208313,
+              "scale_a": 0.6357852816581726,
+              "scale_b": 1.2715705633163452,
+              "radius_limit": 0.3178926408290863,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.2834200142555711,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            },
+            {
+              "pair_id": "r07|r50",
+              "cell_a": "r07",
+              "cell_b": "r50",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.5111983418464661,
+              "support_gap": 0.10837080329656601,
+              "scale_a": 0.6357852816581726,
+              "scale_b": 0.6357852816581726,
+              "radius_limit": 0.15894632041454315,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.17045189063503854,
+              "contact_relation": "corner",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_cross_component"
+              ]
+            },
+            {
+              "pair_id": "r07|r52",
+              "cell_a": "r07",
+              "cell_b": "r52",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.3591480255126953,
+              "support_gap": 0.13124383985996246,
+              "scale_a": 0.6357852816581726,
+              "scale_b": 0.6357852816581726,
+              "radius_limit": 0.15894632041454315,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.20642793038188825,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_cross_component"
+              ]
+            },
+            {
+              "pair_id": "r07|r53",
+              "cell_a": "r07",
+              "cell_b": "r53",
+              "aabb_distance": 0.09968173503875732,
+              "centroid_distance": 0.5684605240821838,
+              "support_gap": 0.3398456871509552,
+              "scale_a": 0.6357852816581726,
+              "scale_b": 0.6357852816581726,
+              "radius_limit": 0.15894632041454315,
+              "scale_normalized_aabb_distance": 0.15678521965588818,
+              "scale_normalized_gap": 0.5345290256871216,
+              "contact_relation": "disjoint",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_cross_component"
+              ]
+            },
+            {
+              "pair_id": "r07|r7",
+              "cell_a": "r07",
+              "cell_b": "r7",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.9832592010498047,
+              "support_gap": 0.5535609722137451,
+              "scale_a": 0.6357852816581726,
+              "scale_b": 1.2715705633163452,
+              "radius_limit": 0.3178926408290863,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.43533641638417553,
+              "contact_relation": "corner",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_cross_component"
+              ]
+            },
+            {
+              "pair_id": "r2|r52",
+              "cell_a": "r2",
+              "cell_b": "r52",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.0001472234725952,
+              "support_gap": 0.665219783782959,
+              "scale_a": 1.2715705633163452,
+              "scale_b": 0.6357852816581726,
+              "radius_limit": 0.3178926408290863,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.5231481468460697,
+              "contact_relation": "corner",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_cross_component"
+              ]
+            },
+            {
+              "pair_id": "r2|r53",
+              "cell_a": "r2",
+              "cell_b": "r53",
+              "aabb_distance": 0.09968173503875732,
+              "centroid_distance": 1.0742853879928589,
+              "support_gap": 0.6122239232063293,
+              "scale_a": 1.2715705633163452,
+              "scale_b": 0.6357852816581726,
+              "radius_limit": 0.3178926408290863,
+              "scale_normalized_aabb_distance": 0.07839260982794409,
+              "scale_normalized_gap": 0.48147066381405246,
+              "contact_relation": "disjoint",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_cross_component"
+              ]
+            },
+            {
+              "pair_id": "r2|r7",
+              "cell_a": "r2",
+              "cell_b": "r7",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.8890438675880432,
+              "support_gap": 0.04435773938894272,
+              "scale_a": 1.2715705633163452,
+              "scale_b": 1.2715705633163452,
+              "radius_limit": 0.3178926408290863,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.03488421379719158,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_cross_component"
+              ]
+            },
+            {
+              "pair_id": "r50|r52",
+              "cell_a": "r50",
+              "cell_b": "r52",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.31884729862213135,
+              "support_gap": 0.06840752810239792,
+              "scale_a": 0.6357852816581726,
+              "scale_b": 0.6357852816581726,
+              "radius_limit": 0.15894632041454315,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.107595331436403,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            },
+            {
+              "pair_id": "r50|r53",
+              "cell_a": "r50",
+              "cell_b": "r53",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.43773406744003296,
+              "support_gap": 0.0916152149438858,
+              "scale_a": 0.6357852816581726,
+              "scale_b": 0.6357852816581726,
+              "radius_limit": 0.15894632041454315,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.14409772856796385,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_same_component"
+              ]
+            },
+            {
+              "pair_id": "r50|r54",
+              "cell_a": "r50",
+              "cell_b": "r54",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.3234170079231262,
+              "support_gap": 0.017915664240717888,
+              "scale_a": 0.6357852816581726,
+              "scale_b": 0.6357852816581726,
+              "radius_limit": 0.15894632041454315,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.028178796769237215,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            },
+            {
+              "pair_id": "r50|r57",
+              "cell_a": "r50",
+              "cell_b": "r57",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.6410435438156128,
+              "support_gap": 0.12320952862501144,
+              "scale_a": 0.6357852816581726,
+              "scale_b": 0.6357852816581726,
+              "radius_limit": 0.15894632041454315,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.19379109925865592,
+              "contact_relation": "corner",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_same_component"
+              ]
+            },
+            {
+              "pair_id": "r52|r53",
+              "cell_a": "r52",
+              "cell_b": "r53",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.2219923436641693,
+              "support_gap": 0.06381914764642715,
+              "scale_a": 0.6357852816581726,
+              "scale_b": 0.6357852816581726,
+              "radius_limit": 0.15894632041454315,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.10037846028769704,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            },
+            {
+              "pair_id": "r52|r54",
+              "cell_a": "r52",
+              "cell_b": "r54",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.4694911241531372,
+              "support_gap": 0.20993950963020325,
+              "scale_a": 0.6357852816581726,
+              "scale_b": 0.6357852816581726,
+              "radius_limit": 0.15894632041454315,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.3302050482871612,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_same_component"
+              ]
+            },
+            {
+              "pair_id": "r52|r57",
+              "cell_a": "r52",
+              "cell_b": "r57",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.5088497400283813,
+              "support_gap": 0.1558099240064621,
+              "scale_a": 0.6357852816581726,
+              "scale_b": 0.6357852816581726,
+              "radius_limit": 0.15894632041454315,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.24506689365330836,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_same_component"
+              ]
+            },
+            {
+              "pair_id": "r52|r7",
+              "cell_a": "r52",
+              "cell_b": "r7",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.8050313591957092,
+              "support_gap": 0.36002904176712036,
+              "scale_a": 0.6357852816581726,
+              "scale_b": 1.2715705633163452,
+              "radius_limit": 0.3178926408290863,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.28313728876212685,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            },
+            {
+              "pair_id": "r53|r54",
+              "cell_a": "r53",
+              "cell_b": "r54",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.42132875323295593,
+              "support_gap": 0.14986681938171387,
+              "scale_a": 0.6357852816581726,
+              "scale_b": 0.6357852816581726,
+              "radius_limit": 0.15894632041454315,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.23571923368664763,
+              "contact_relation": "corner",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_same_component"
+              ]
+            },
+            {
+              "pair_id": "r53|r57",
+              "cell_a": "r53",
+              "cell_b": "r57",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.2921229898929596,
+              "support_gap": 0.039534199982881546,
+              "scale_a": 0.6357852816581726,
+              "scale_b": 0.6357852816581726,
+              "radius_limit": 0.15894632041454315,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.06218168479737936,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            },
+            {
+              "pair_id": "r53|r7",
+              "cell_a": "r53",
+              "cell_b": "r7",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.6708329319953918,
+              "support_gap": 0.059322405606508255,
+              "scale_a": 0.6357852816581726,
+              "scale_b": 1.2715705633163452,
+              "radius_limit": 0.3178926408290863,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.04665286167980427,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            },
+            {
+              "pair_id": "r54|r57",
+              "cell_a": "r54",
+              "cell_b": "r57",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.4574776291847229,
+              "support_gap": 0.13665039837360382,
+              "scale_a": 0.6357852816581726,
+              "scale_b": 0.6357852816581726,
+              "radius_limit": 0.15894632041454315,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.21493167947708697,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_same_component"
+              ]
+            },
+            {
+              "pair_id": "r57|r7",
+              "cell_a": "r57",
+              "cell_b": "r7",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.6414811611175537,
+              "support_gap": 0.036404795944690704,
+              "scale_a": 0.6357852816581726,
+              "scale_b": 1.2715705633163452,
+              "radius_limit": 0.3178926408290863,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.028629788227988263,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "scene": "mild_curved_sheet",
+      "description": "Gently curved paraboloid sheet: curvature fidelity without creases.",
+      "input_gaussians": 600,
+      "patches": 8,
+      "control_points": 256,
+      "construction_seconds": 0.3899382000017795,
+      "unassigned_gaussians": 0,
+      "fit_rms_assigned": 0.009437602013349533,
+      "fit_rms": 0.009437602013349533,
+      "fit_max": 0.13099004328250885,
+      "surface_chart_rms": 0.0018729146104305983,
+      "surface_chart_max": 0.013526947237551212,
+      "normal_mean_degrees": 2.5956125259399414,
+      "normal_p95_degrees": 8.245838165283203,
+      "ground_truth": {
+        "accuracy_rms": 0.019116690382361412,
+        "accuracy_p95": 0.022939983755350113,
+        "accuracy_max": 0.15958133339881897,
+        "completeness_rms": 0.011875547468662262,
+        "chamfer_rms": 0.015496118925511837,
+        "support_coverage_uncovered_fraction": 0.0023853210732340813,
+        "support_extrapolation_fraction": 0.0413055419921875,
+        "support_extrapolation_fraction_local": 0.09999847412109375,
+        "support_local_threshold_p50": 0.11790058761835098,
+        "support_local_threshold_p95": 0.22547844052314758,
+        "support_observed_gt_samples": 16350,
+        "support_threshold": 0.09696333669126034,
+        "topology_gen_patch_count": 8,
+        "topology_gt_patch_count": 1,
+        "topology_patch_count_delta": 7,
+        "topology_patch_count_match": false,
+        "topology_label_ari": 0.0,
+        "support_grid_resolution": 128,
+        "support_gt_cells": 16384,
+        "support_generated_cells": 15655,
+        "support_intersection_cells": 15655,
+        "support_coverage_fraction": 0.95550537109375,
+        "support_unsupported_fraction": 0.0,
+        "support_uncovered_fraction": 0.04449462890625,
+        "support_precision": 1.0,
+        "support_recall": 0.95550537109375,
+        "support_iou": 0.95550537109375,
+        "support_gt_component_count": 1,
+        "support_generated_component_count": 1,
+        "support_gt_hole_count": 0,
+        "support_generated_hole_count": 6,
+        "support_gt_euler": 1,
+        "support_generated_euler": -5,
+        "support_topology_mismatch": true,
+        "support_boundary_chamfer": Infinity,
+        "support_boundary_hausdorff": Infinity
+      },
+      "support_conformality": {
+        "support_conformality_ratio": 1.0,
+        "support_conformality_boundary_cells": 0,
+        "support_conformality_edge_cells": 0,
+        "support_conformality_trimmed_patches": 0
+      },
+      "patch_union": {
+        "union_resolution": 128,
+        "union_patch_count": 8,
+        "union_gt_cells": 16384,
+        "union_generated_cells": 15655,
+        "union_coverage_ratio": 0.95550537109375,
+        "union_uncovered_ratio": 0.04449462890625,
+        "union_unsupported_ratio": 0.0,
+        "union_iou": 0.95550537109375,
+        "union_component_count": 1,
+        "union_hole_count": 1,
+        "union_gt_hole_count": 0,
+        "union_euler": 0,
+        "union_gt_euler": 1,
+        "union_false_fill_ratio": 0.0,
+        "union_hole_iou": 0.0,
+        "union_patch_overlap_ratio": 0.03417438518045353,
+        "union_interpatch_gap_ratio": 0.00128173828125,
+        "union_boundary_chamfer": Infinity,
+        "union_boundary_hausdorff": Infinity,
+        "union_component_areas_top8": [
+          15655
+        ],
+        "union_component_area_histogram": {
+          "area_1": 0,
+          "area_2_4": 0,
+          "area_5_16": 0,
+          "area_17_64": 0,
+          "area_65_plus": 1
+        },
+        "union_tiny_component_count": 0,
+        "union_hole_areas_top8": [
+          317
+        ],
+        "union_hole_area_histogram": {
+          "area_1": 0,
+          "area_2_4": 0,
+          "area_5_16": 0,
+          "area_17_64": 0,
+          "area_65_plus": 1
+        },
+        "union_tiny_hole_count": 0,
+        "union_seam_cell_count": 21,
+        "union_seam_length": 0.328125,
+        "union_seam_component_count": 10,
+        "union_false_hole_count": 1,
+        "union_false_hole_area_sum": 317,
+        "union_tiny_false_hole_count": 0
+      },
+      "patch_union_coarse": null,
+      "coarse_vs_refined_support_iou": null,
+      "stage1": {
+        "leaf_state_counts": {
+          "subdivided": 1,
+          "active": 8
+        },
+        "hierarchy_max_depth": 1,
+        "inactive_enclosed_leaf_count": 0,
+        "underdetermined_patch_count": 0,
+        "empty_support_mask_count": 0,
+        "observations_per_control_min": null,
+        "observations_per_control_median": null,
+        "boundary_leaf_count": 0,
+        "refined_patch_count": 0,
+        "refined_boundary_length_world": 0,
+        "density_contour_gt_chamfer": Infinity,
+        "density_contour_gt_hausdorff": Infinity,
+        "patches": []
+      },
+      "finite": true,
+      "patch_diagnostics": [],
+      "construction_diagnostics": null,
+      "support_artifacts": {},
+      "boundary_first": {
+        "component_count": 1,
+        "per_component": [
+          {
+            "component_id": 0,
+            "topology": "annulus",
+            "chart": "o_grid",
+            "segments": 8,
+            "mean_seam_gap": 7.49872191008194e-08,
+            "max_seam_gap": 1.5082987658843194e-07,
+            "topology_checks": {
+              "uv_overlap": false,
+              "near_degenerate_slice_count": 0,
+              "min_jacobian_singular_value": 0.0406169593334198,
+              "max_jacobian_condition": 26.74579620361328,
+              "total_orientation_flip_samples": 0,
+              "min_slice_point_count": 52,
+              "seed_boundary_anchor_max_error": 0.1754302680492401,
+              "shared_boundary_constraint": true
+            },
+            "chart_quality": {
+              "jacobian": {
+                "min_area_jacobian": 0.044123586267232895,
+                "min_jacobian_singular_value": 0.0406169593334198,
+                "min_jacobian_singular_value_normalized": 0.10364848375320435,
+                "characteristic_length": 0.39187219738960266,
+                "jacobian_condition_mean_of_slice_means": 2.747947096824646,
+                "jacobian_condition_max_of_slice_p95": 8.086820602416992,
+                "max_jacobian_condition": 26.74579620361328,
+                "total_orientation_flip_samples": 0,
+                "total_near_degenerate_samples": 0,
+                "holonomy_consistent": true,
+                "holonomy_local_disagreement_count": 0
+              },
+              "seams": {
+                "position_gap_mean": 7.49872191008194e-08,
+                "position_gap_max": 1.5082987658843194e-07,
+                "tangent_angle_deg_mean": 0.008442642050795257,
+                "tangent_angle_deg_max": 0.02797645516693592,
+                "cross_derivative_angle_deg_mean": 42.77905607223511,
+                "cross_derivative_angle_deg_max": 142.41517639160156,
+                "normal_angle_deg_mean": 11.072074592113495,
+                "normal_angle_deg_max": 92.7197494506836,
+                "derivative_ratio_mean": 1.3003478199243546,
+                "derivative_ratio_max": 7.867990016937256
+              },
+              "parameter_quality": {
+                "cv_v_along_u_line_mean": 0.06459037787135458,
+                "cv_u_along_v_line_mean": 0.09442716761259362,
+                "anisotropy_mean": 0.5538479015231133,
+                "anisotropy_min": 0.0471770353615284,
+                "orthogonality_mean": 0.24338813312351704,
+                "orthogonality_max": 0.9844951629638672
+              },
+              "phase2_boundary_conformance": {
+                "inner": {
+                  "edge_to_reference_mean": 0.039053719490766525,
+                  "edge_to_reference_max": 0.0666198804974556,
+                  "reference_to_edge_mean": 0.03714515641331673,
+                  "reference_to_edge_max": 0.06987521797418594,
+                  "symmetric_chamfer": 0.038099437952041626,
+                  "hausdorff": 0.06987521797418594,
+                  "boundary_coverage_ratio": 0.6666666865348816,
+                  "coverage_tolerance": 0.05,
+                  "reference_point_count": 24
+                },
+                "outer": {
+                  "edge_to_reference_mean": 0.09221771359443665,
+                  "edge_to_reference_max": 0.19922414422035217,
+                  "reference_to_edge_mean": 0.21041186153888702,
+                  "reference_to_edge_max": 0.9687445163726807,
+                  "symmetric_chamfer": 0.15131479501724243,
+                  "hausdorff": 0.9687445163726807,
+                  "boundary_coverage_ratio": 0.1316872388124466,
+                  "coverage_tolerance": 0.05,
+                  "reference_point_count": 243
+                }
+              }
+            },
+            "chart_export": null
+          }
+        ],
+        "candidate_graph": {
+          "config": {
+            "radius_factor": 0.25,
+            "max_neighbors": 0,
+            "fit_complex_leaves": true,
+            "candidate_source": "scale_aware_expanded_aabb_sweep",
+            "broad_phase": "expanded_aabb_sweep_and_prune",
+            "exact_distance": "aabb_euclidean"
+          },
+          "node_count": 8,
+          "edge_count": 28,
+          "possible_edge_count": 28,
+          "candidate_fraction_of_complete_graph": 1.0,
+          "degree": {
+            "by_node": {
+              "r0": 7,
+              "r1": 7,
+              "r2": 7,
+              "r3": 7,
+              "r4": 7,
+              "r5": 7,
+              "r6": 7,
+              "r7": 7
+            },
+            "histogram": {
+              "7": 8
+            },
+            "min": 7,
+            "median": 7,
+            "p95": 7,
+            "max": 7,
+            "mean": 7.0,
+            "isolated_node_count": 0
+          },
+          "contact_relation_counts": {
+            "corner": 4,
+            "edge": 12,
+            "face": 12
+          },
+          "candidate_source_counts": {
+            "scale_aware_expanded_aabb_sweep": 28
+          },
+          "diagnostic_tag_counts": {
+            "legacy_face_merged": 12,
+            "nonface_same_component": 16
+          },
+          "reference_recall": {
+            "existing_face_all": {
+              "reference_count": 12,
+              "found_count": 12,
+              "recall": 1.0,
+              "missing_pairs": []
+            },
+            "existing_face_smooth": {
+              "reference_count": 12,
+              "found_count": 12,
+              "recall": 1.0,
+              "missing_pairs": []
+            }
+          },
+          "edges": [
+            {
+              "pair_id": "r0|r1",
+              "cell_a": "r0",
+              "cell_b": "r1",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.521671712398529,
+              "support_gap": 0.04504378139972687,
+              "scale_a": 1.4178009033203125,
+              "scale_b": 1.4178009033203125,
+              "radius_limit": 0.3544502258300781,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.031770174002739,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            },
+            {
+              "pair_id": "r0|r2",
+              "cell_a": "r0",
+              "cell_b": "r2",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.8065089583396912,
+              "support_gap": 0.03981813043355942,
+              "scale_a": 1.4178009033203125,
+              "scale_b": 1.4178009033203125,
+              "radius_limit": 0.3544502258300781,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.02808443014834476,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            },
+            {
+              "pair_id": "r0|r3",
+              "cell_a": "r0",
+              "cell_b": "r3",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.2135391235351562,
+              "support_gap": 0.08453472703695297,
+              "scale_a": 1.4178009033203125,
+              "scale_b": 1.4178009033203125,
+              "radius_limit": 0.3544502258300781,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.05962383493971771,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_same_component"
+              ]
+            },
+            {
+              "pair_id": "r0|r4",
+              "cell_a": "r0",
+              "cell_b": "r4",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.8340945839881897,
+              "support_gap": 0.012290062382817268,
+              "scale_a": 1.4178009033203125,
+              "scale_b": 1.4178009033203125,
+              "radius_limit": 0.3544502258300781,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.008668397906952575,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            },
+            {
+              "pair_id": "r0|r5",
+              "cell_a": "r0",
+              "cell_b": "r5",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.267999529838562,
+              "support_gap": 0.2857299745082855,
+              "scale_a": 1.4178009033203125,
+              "scale_b": 1.4178009033203125,
+              "radius_limit": 0.3544502258300781,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.20153039389320576,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_same_component"
+              ]
+            },
+            {
+              "pair_id": "r0|r6",
+              "cell_a": "r0",
+              "cell_b": "r6",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.172717809677124,
+              "support_gap": 0.19551856815814972,
+              "scale_a": 1.4178009033203125,
+              "scale_b": 1.4178009033203125,
+              "radius_limit": 0.3544502258300781,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.13790269684570639,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_same_component"
+              ]
+            },
+            {
+              "pair_id": "r0|r7",
+              "cell_a": "r0",
+              "cell_b": "r7",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.7137669324874878,
+              "support_gap": 1.068428874015808,
+              "scale_a": 1.4178009033203125,
+              "scale_b": 1.4178009033203125,
+              "radius_limit": 0.3544502258300781,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.7535817416350076,
+              "contact_relation": "corner",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_same_component"
+              ]
+            },
+            {
+              "pair_id": "r1|r2",
+              "cell_a": "r1",
+              "cell_b": "r2",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.2473692893981934,
+              "support_gap": 0.3529621660709381,
+              "scale_a": 1.4178009033203125,
+              "scale_b": 1.4178009033203125,
+              "radius_limit": 0.3544502258300781,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.24895044518898587,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_same_component"
+              ]
+            },
+            {
+              "pair_id": "r1|r3",
+              "cell_a": "r1",
+              "cell_b": "r3",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.5491952896118164,
+              "support_gap": 0.3676474094390869,
+              "scale_a": 1.4178009033203125,
+              "scale_b": 1.4178009033203125,
+              "radius_limit": 0.3544502258300781,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.2593082065176448,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            },
+            {
+              "pair_id": "r1|r4",
+              "cell_a": "r1",
+              "cell_b": "r4",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.2275187969207764,
+              "support_gap": 0.3185465335845947,
+              "scale_a": 1.4178009033203125,
+              "scale_b": 1.4178009033203125,
+              "radius_limit": 0.3544502258300781,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.22467649219195626,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_same_component"
+              ]
+            },
+            {
+              "pair_id": "r1|r5",
+              "cell_a": "r1",
+              "cell_b": "r5",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.5403406620025635,
+              "support_gap": 0.5270410776138306,
+              "scale_a": 1.4178009033203125,
+              "scale_b": 1.4178009033203125,
+              "radius_limit": 0.3544502258300781,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.37173137383363647,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            },
+            {
+              "pair_id": "r1|r6",
+              "cell_a": "r1",
+              "cell_b": "r6",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.6879335641860962,
+              "support_gap": 1.1084166765213013,
+              "scale_a": 1.4178009033203125,
+              "scale_b": 1.4178009033203125,
+              "radius_limit": 0.3544502258300781,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.781785844490244,
+              "contact_relation": "corner",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_same_component"
+              ]
+            },
+            {
+              "pair_id": "r1|r7",
+              "cell_a": "r1",
+              "cell_b": "r7",
+              "aabb_distance": 0.0,
+              "centroid_distance": 2.2234370708465576,
+              "support_gap": 1.8434988260269165,
+              "scale_a": 1.4178009033203125,
+              "scale_b": 1.4178009033203125,
+              "radius_limit": 0.3544502258300781,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 1.3002522580636482,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_same_component"
+              ]
+            },
+            {
+              "pair_id": "r2|r3",
+              "cell_a": "r2",
+              "cell_b": "r3",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.5078465938568115,
+              "support_gap": 0.03192366287112236,
+              "scale_a": 1.4178009033203125,
+              "scale_b": 1.4178009033203125,
+              "radius_limit": 0.3544502258300781,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.022516322846431493,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            },
+            {
+              "pair_id": "r2|r4",
+              "cell_a": "r2",
+              "cell_b": "r4",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.1708903312683105,
+              "support_gap": 0.15107034146785736,
+              "scale_a": 1.4178009033203125,
+              "scale_b": 1.4178009033203125,
+              "radius_limit": 0.3544502258300781,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.10655257809052703,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_same_component"
+              ]
+            },
+            {
+              "pair_id": "r2|r5",
+              "cell_a": "r2",
+              "cell_b": "r5",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.6886570453643799,
+              "support_gap": 1.0414527654647827,
+              "scale_a": 1.4178009033203125,
+              "scale_b": 1.4178009033203125,
+              "radius_limit": 0.3544502258300781,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.7345550161703456,
+              "contact_relation": "corner",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_same_component"
+              ]
+            },
+            {
+              "pair_id": "r2|r6",
+              "cell_a": "r2",
+              "cell_b": "r6",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.795466423034668,
+              "support_gap": 0.04474838450551033,
+              "scale_a": 1.4178009033203125,
+              "scale_b": 1.4178009033203125,
+              "radius_limit": 0.3544502258300781,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.03156182535976328,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            },
+            {
+              "pair_id": "r2|r7",
+              "cell_a": "r2",
+              "cell_b": "r7",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.2400736808776855,
+              "support_gap": 0.4111173748970032,
+              "scale_a": 1.4178009033203125,
+              "scale_b": 1.4178009033203125,
+              "radius_limit": 0.3544502258300781,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.28996834036021396,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_same_component"
+              ]
+            },
+            {
+              "pair_id": "r3|r4",
+              "cell_a": "r3",
+              "cell_b": "r4",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.6721566915512085,
+              "support_gap": 1.0339123010635376,
+              "scale_a": 1.4178009033203125,
+              "scale_b": 1.4178009033203125,
+              "radius_limit": 0.3544502258300781,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.7292365935458528,
+              "contact_relation": "corner",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_same_component"
+              ]
+            },
+            {
+              "pair_id": "r3|r5",
+              "cell_a": "r3",
+              "cell_b": "r5",
+              "aabb_distance": 0.0,
+              "centroid_distance": 2.184412717819214,
+              "support_gap": 1.607319951057434,
+              "scale_a": 1.4178009033203125,
+              "scale_b": 1.4178009033203125,
+              "radius_limit": 0.3544502258300781,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 1.1336711292067114,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_same_component"
+              ]
+            },
+            {
+              "pair_id": "r3|r6",
+              "cell_a": "r3",
+              "cell_b": "r6",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.1888679265975952,
+              "support_gap": 0.11905604600906372,
+              "scale_a": 1.4178009033203125,
+              "scale_b": 1.4178009033203125,
+              "radius_limit": 0.3544502258300781,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.08397233048042876,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_same_component"
+              ]
+            },
+            {
+              "pair_id": "r3|r7",
+              "cell_a": "r3",
+              "cell_b": "r7",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.504429817199707,
+              "support_gap": 0.40303972363471985,
+              "scale_a": 1.4178009033203125,
+              "scale_b": 1.4178009033203125,
+              "radius_limit": 0.3544502258300781,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.2842710303617745,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            },
+            {
+              "pair_id": "r4|r5",
+              "cell_a": "r4",
+              "cell_b": "r5",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.523869514465332,
+              "support_gap": 0.05399317666888237,
+              "scale_a": 1.4178009033203125,
+              "scale_b": 1.4178009033203125,
+              "radius_limit": 0.3544502258300781,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.038082340434709205,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            },
+            {
+              "pair_id": "r4|r6",
+              "cell_a": "r4",
+              "cell_b": "r6",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.8798971176147461,
+              "support_gap": 0.036856845021247864,
+              "scale_a": 1.4178009033203125,
+              "scale_b": 1.4178009033203125,
+              "radius_limit": 0.3544502258300781,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.025995783283064455,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            },
+            {
+              "pair_id": "r4|r7",
+              "cell_a": "r4",
+              "cell_b": "r7",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.3274030685424805,
+              "support_gap": 0.5806590914726257,
+              "scale_a": 1.4178009033203125,
+              "scale_b": 1.4178009033203125,
+              "radius_limit": 0.3544502258300781,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.409549105317111,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_same_component"
+              ]
+            },
+            {
+              "pair_id": "r5|r6",
+              "cell_a": "r5",
+              "cell_b": "r6",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.3030695915222168,
+              "support_gap": 0.3193974494934082,
+              "scale_a": 1.4178009033203125,
+              "scale_b": 1.4178009033203125,
+              "radius_limit": 0.3544502258300781,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.22527665820032933,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_same_component"
+              ]
+            },
+            {
+              "pair_id": "r5|r7",
+              "cell_a": "r5",
+              "cell_b": "r7",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.6398308277130127,
+              "support_gap": 0.7553046941757202,
+              "scale_a": 1.4178009033203125,
+              "scale_b": 1.4178009033203125,
+              "radius_limit": 0.3544502258300781,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.5327297312386323,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            },
+            {
+              "pair_id": "r6|r7",
+              "cell_a": "r6",
+              "cell_b": "r7",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.5475931763648987,
+              "support_gap": 0.023480692878365517,
+              "scale_a": 1.4178009033203125,
+              "scale_b": 1.4178009033203125,
+              "radius_limit": 0.3544502258300781,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.01656134709984785,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "scene": "crease",
+      "description": "Two planes with a sharp crease: voxel-boundary and multi-patch behavior.",
+      "input_gaussians": 600,
+      "patches": 2,
+      "control_points": 288,
+      "construction_seconds": 0.4849213999987114,
+      "unassigned_gaussians": 0,
+      "fit_rms_assigned": 6.028088250786823e-08,
+      "fit_rms": 6.028088250786823e-08,
+      "fit_max": 1.7881393432617188e-07,
+      "surface_chart_rms": 0.0024930937215685844,
+      "surface_chart_max": 0.03148689866065979,
+      "normal_mean_degrees": 1.1828978061676025,
+      "normal_p95_degrees": 0.02797645516693592,
+      "ground_truth": {
+        "accuracy_rms": 0.007109194993972778,
+        "accuracy_p95": 0.00994704570621252,
+        "accuracy_max": 0.04580223932862282,
+        "completeness_rms": 0.005726024508476257,
+        "chamfer_rms": 0.006417609751224518,
+        "support_coverage_uncovered_fraction": 0.0,
+        "support_extrapolation_fraction": 0.012988220900297165,
+        "support_extrapolation_fraction_local": 0.09411035478115082,
+        "support_local_threshold_p50": 0.11749505251646042,
+        "support_local_threshold_p95": 0.23293210566043854,
+        "support_observed_gt_samples": 16350,
+        "support_threshold": 0.09696333669126034,
+        "topology_gen_patch_count": 2,
+        "topology_gt_patch_count": 2,
+        "topology_patch_count_delta": 0,
+        "topology_patch_count_match": true,
+        "topology_label_ari": 1.0,
+        "support_grid_resolution": 128,
+        "support_gt_cells": 16384,
+        "support_generated_cells": 16283,
+        "support_intersection_cells": 16283,
+        "support_coverage_fraction": 0.99383544921875,
+        "support_unsupported_fraction": 0.0,
+        "support_uncovered_fraction": 0.00616455078125,
+        "support_precision": 1.0,
+        "support_recall": 0.99383544921875,
+        "support_iou": 0.99383544921875,
+        "support_gt_component_count": 1,
+        "support_generated_component_count": 1,
+        "support_gt_hole_count": 0,
+        "support_generated_hole_count": 7,
+        "support_gt_euler": 1,
+        "support_generated_euler": -6,
+        "support_topology_mismatch": true,
+        "support_boundary_chamfer": Infinity,
+        "support_boundary_hausdorff": Infinity
+      },
+      "support_conformality": {
+        "support_conformality_ratio": 0.8653061224489796,
+        "support_conformality_boundary_cells": 490,
+        "support_conformality_edge_cells": 424,
+        "support_conformality_trimmed_patches": 2
+      },
+      "patch_union": {
+        "union_resolution": 128,
+        "union_patch_count": 2,
+        "union_gt_cells": 16384,
+        "union_generated_cells": 16283,
+        "union_coverage_ratio": 0.99383544921875,
+        "union_uncovered_ratio": 0.00616455078125,
+        "union_unsupported_ratio": 0.0,
+        "union_iou": 0.99383544921875,
+        "union_component_count": 1,
+        "union_hole_count": 2,
+        "union_gt_hole_count": 0,
+        "union_euler": -1,
+        "union_gt_euler": 1,
+        "union_false_fill_ratio": 0.0,
+        "union_hole_iou": 0.0,
+        "union_patch_overlap_ratio": 0.009150647915003378,
+        "union_interpatch_gap_ratio": 0.00103759765625,
+        "union_boundary_chamfer": Infinity,
+        "union_boundary_hausdorff": Infinity,
+        "union_component_areas_top8": [
+          16283
+        ],
+        "union_component_area_histogram": {
+          "area_1": 0,
+          "area_2_4": 0,
+          "area_5_16": 0,
+          "area_17_64": 0,
+          "area_65_plus": 1
+        },
+        "union_tiny_component_count": 0,
+        "union_hole_areas_top8": [
+          6,
+          1
+        ],
+        "union_hole_area_histogram": {
+          "area_1": 1,
+          "area_2_4": 0,
+          "area_5_16": 1,
+          "area_17_64": 0,
+          "area_65_plus": 0
+        },
+        "union_tiny_hole_count": 1,
+        "union_seam_cell_count": 17,
+        "union_seam_length": 0.265625,
+        "union_seam_component_count": 3,
+        "union_false_hole_count": 2,
+        "union_false_hole_area_sum": 7,
+        "union_tiny_false_hole_count": 1
+      },
+      "patch_union_coarse": null,
+      "coarse_vs_refined_support_iou": null,
+      "stage1": {
+        "leaf_state_counts": {
+          "subdivided": 1,
+          "active": 8
+        },
+        "hierarchy_max_depth": 1,
+        "inactive_enclosed_leaf_count": 0,
+        "underdetermined_patch_count": 0,
+        "empty_support_mask_count": 0,
+        "observations_per_control_min": null,
+        "observations_per_control_median": null,
+        "boundary_leaf_count": 0,
+        "refined_patch_count": 0,
+        "refined_boundary_length_world": 0,
+        "density_contour_gt_chamfer": Infinity,
+        "density_contour_gt_hausdorff": Infinity,
+        "patches": []
+      },
+      "finite": true,
+      "patch_diagnostics": [],
+      "construction_diagnostics": null,
+      "support_artifacts": {},
+      "boundary_first": {
+        "component_count": 2,
+        "per_component": [
+          {
+            "component_id": 0,
+            "topology": "disk_like",
+            "chart": "trimmed_rect_fallback",
+            "fit_metrics": {
+              "point_to_surface_rms": 6.380870587463505e-08,
+              "point_to_surface_max": 1.7881393432617188e-07,
+              "mask_hit_rate": 1.0,
+              "control_grid_extent": 2.3051958084106445,
+              "control_grid_edge_median": 0.11555478721857071,
+              "control_grid_edge_min": 0.06392183154821396,
+              "control_grid_collapsed": false,
+              "jacobian_median": 2.170158863067627,
+              "jacobian_min": 1.8008685111999512,
+              "degenerate_fraction": 0.0
+            }
+          },
+          {
+            "component_id": 1,
+            "topology": "disk_like",
+            "chart": "trimmed_rect_fallback",
+            "fit_metrics": {
+              "point_to_surface_rms": 5.6320800467801746e-08,
+              "point_to_surface_max": 1.341104507446289e-07,
+              "mask_hit_rate": 0.9965753555297852,
+              "control_grid_extent": 2.4030115604400635,
+              "control_grid_edge_median": 0.11778293550014496,
+              "control_grid_edge_min": 0.06746471673250198,
+              "control_grid_collapsed": false,
+              "jacobian_median": 2.2762398719787598,
+              "jacobian_min": 1.9145801067352295,
+              "degenerate_fraction": 0.0
+            }
+          }
+        ],
+        "candidate_graph": {
+          "config": {
+            "radius_factor": 0.25,
+            "max_neighbors": 0,
+            "fit_complex_leaves": true,
+            "candidate_source": "scale_aware_expanded_aabb_sweep",
+            "broad_phase": "expanded_aabb_sweep_and_prune",
+            "exact_distance": "aabb_euclidean"
+          },
+          "node_count": 8,
+          "edge_count": 28,
+          "possible_edge_count": 28,
+          "candidate_fraction_of_complete_graph": 1.0,
+          "degree": {
+            "by_node": {
+              "r0": 7,
+              "r1": 7,
+              "r2": 7,
+              "r3": 7,
+              "r4": 7,
+              "r5": 7,
+              "r6": 7,
+              "r7": 7
+            },
+            "histogram": {
+              "7": 8
+            },
+            "min": 7,
+            "median": 7,
+            "p95": 7,
+            "max": 7,
+            "mean": 7.0,
+            "isolated_node_count": 0
+          },
+          "contact_relation_counts": {
+            "corner": 4,
+            "edge": 12,
+            "face": 12
+          },
+          "candidate_source_counts": {
+            "scale_aware_expanded_aabb_sweep": 28
+          },
+          "diagnostic_tag_counts": {
+            "legacy_face_merged": 8,
+            "legacy_face_normal": 4,
+            "nonface_cross_component": 12,
+            "nonface_same_component": 4
+          },
+          "reference_recall": {
+            "existing_face_all": {
+              "reference_count": 12,
+              "found_count": 12,
+              "recall": 1.0,
+              "missing_pairs": []
+            },
+            "existing_face_smooth": {
+              "reference_count": 8,
+              "found_count": 8,
+              "recall": 1.0,
+              "missing_pairs": []
+            }
+          },
+          "edges": [
+            {
+              "pair_id": "r0|r1",
+              "cell_a": "r0",
+              "cell_b": "r1",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.5961426496505737,
+              "support_gap": 0.09315748512744904,
+              "scale_a": 1.4307698011398315,
+              "scale_b": 1.4307698011398315,
+              "radius_limit": 0.3576924502849579,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.06511004429450115,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            },
+            {
+              "pair_id": "r0|r2",
+              "cell_a": "r0",
+              "cell_b": "r2",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.9678415656089783,
+              "support_gap": 0.053225405514240265,
+              "scale_a": 1.4307698011398315,
+              "scale_b": 1.4307698011398315,
+              "radius_limit": 0.3576924502849579,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.03720053741128581,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            },
+            {
+              "pair_id": "r0|r3",
+              "cell_a": "r0",
+              "cell_b": "r3",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.1496094465255737,
+              "support_gap": 0.0977267175912857,
+              "scale_a": 1.4307698011398315,
+              "scale_b": 1.4307698011398315,
+              "radius_limit": 0.3576924502849579,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.06830359259290426,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_same_component"
+              ]
+            },
+            {
+              "pair_id": "r0|r4",
+              "cell_a": "r0",
+              "cell_b": "r4",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.499254435300827,
+              "support_gap": 0.01240906398743391,
+              "scale_a": 1.4307698011398315,
+              "scale_b": 1.4307698011398315,
+              "radius_limit": 0.3576924502849579,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.008672998254190264,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_normal"
+              ]
+            },
+            {
+              "pair_id": "r0|r5",
+              "cell_a": "r0",
+              "cell_b": "r5",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.0244659185409546,
+              "support_gap": 0.5753127336502075,
+              "scale_a": 1.4307698011398315,
+              "scale_b": 1.4307698011398315,
+              "radius_limit": 0.3576924502849579,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.40210013741685147,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_cross_component"
+              ]
+            },
+            {
+              "pair_id": "r0|r6",
+              "cell_a": "r0",
+              "cell_b": "r6",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.1161531209945679,
+              "support_gap": 0.20009179413318634,
+              "scale_a": 1.4307698011398315,
+              "scale_b": 1.4307698011398315,
+              "radius_limit": 0.3576924502849579,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.13984904767614048,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_cross_component"
+              ]
+            },
+            {
+              "pair_id": "r0|r7",
+              "cell_a": "r0",
+              "cell_b": "r7",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.4783180952072144,
+              "support_gap": 0.6105207204818726,
+              "scale_a": 1.4307698011398315,
+              "scale_b": 1.4307698011398315,
+              "radius_limit": 0.3576924502849579,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.42670786033888713,
+              "contact_relation": "corner",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_cross_component"
+              ]
+            },
+            {
+              "pair_id": "r1|r2",
+              "cell_a": "r1",
+              "cell_b": "r2",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.0963159799575806,
+              "support_gap": 0.1612541824579239,
+              "scale_a": 1.4307698011398315,
+              "scale_b": 1.4307698011398315,
+              "radius_limit": 0.3576924502849579,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.11270449119729796,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_same_component"
+              ]
+            },
+            {
+              "pair_id": "r1|r3",
+              "cell_a": "r1",
+              "cell_b": "r3",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.990691065788269,
+              "support_gap": 0.0424530990421772,
+              "scale_a": 1.4307698011398315,
+              "scale_b": 1.4307698011398315,
+              "radius_limit": 0.3576924502849579,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.029671509007498396,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            },
+            {
+              "pair_id": "r1|r4",
+              "cell_a": "r1",
+              "cell_b": "r4",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.068429708480835,
+              "support_gap": 0.6175591945648193,
+              "scale_a": 1.4307698011398315,
+              "scale_b": 1.4307698011398315,
+              "radius_limit": 0.3576924502849579,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.43162722198416337,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_cross_component"
+              ]
+            },
+            {
+              "pair_id": "r1|r5",
+              "cell_a": "r1",
+              "cell_b": "r5",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.5408077239990234,
+              "support_gap": 1.073288917541504,
+              "scale_a": 1.4307698011398315,
+              "scale_b": 1.4307698011398315,
+              "radius_limit": 0.3576924502849579,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.7501478691306328,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_normal"
+              ]
+            },
+            {
+              "pair_id": "r1|r6",
+              "cell_a": "r1",
+              "cell_b": "r6",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.4460893869400024,
+              "support_gap": 0.7205122709274292,
+              "scale_a": 1.4307698011398315,
+              "scale_b": 1.4307698011398315,
+              "radius_limit": 0.3576924502849579,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.5035836445201938,
+              "contact_relation": "corner",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_cross_component"
+              ]
+            },
+            {
+              "pair_id": "r1|r7",
+              "cell_a": "r1",
+              "cell_b": "r7",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.8573243618011475,
+              "support_gap": 1.1130601167678833,
+              "scale_a": 1.4307698011398315,
+              "scale_b": 1.4307698011398315,
+              "radius_limit": 0.3576924502849579,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.7779449327775559,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_cross_component"
+              ]
+            },
+            {
+              "pair_id": "r2|r3",
+              "cell_a": "r2",
+              "cell_b": "r3",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.5083526968955994,
+              "support_gap": 0.060511671006679535,
+              "scale_a": 1.4307698011398315,
+              "scale_b": 1.4307698011398315,
+              "radius_limit": 0.3576924502849579,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.042293086531790466,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            },
+            {
+              "pair_id": "r2|r4",
+              "cell_a": "r2",
+              "cell_b": "r4",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.1425822973251343,
+              "support_gap": 0.15385498106479645,
+              "scale_a": 1.4307698011398315,
+              "scale_b": 1.4307698011398315,
+              "radius_limit": 0.3576924502849579,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.10753300841423052,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_cross_component"
+              ]
+            },
+            {
+              "pair_id": "r2|r5",
+              "cell_a": "r2",
+              "cell_b": "r5",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.4821138381958008,
+              "support_gap": 0.6580495834350586,
+              "scale_a": 1.4307698011398315,
+              "scale_b": 1.4307698011398315,
+              "radius_limit": 0.3576924502849579,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.4599269448592075,
+              "contact_relation": "corner",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_cross_component"
+              ]
+            },
+            {
+              "pair_id": "r2|r6",
+              "cell_a": "r2",
+              "cell_b": "r6",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.5354728698730469,
+              "support_gap": 0.04450128227472305,
+              "scale_a": 1.4307698011398315,
+              "scale_b": 1.4307698011398315,
+              "radius_limit": 0.3576924502849579,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.03110303435204659,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_normal"
+              ]
+            },
+            {
+              "pair_id": "r2|r7",
+              "cell_a": "r2",
+              "cell_b": "r7",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.0507407188415527,
+              "support_gap": 0.5578082203865051,
+              "scale_a": 1.4307698011398315,
+              "scale_b": 1.4307698011398315,
+              "radius_limit": 0.3576924502849579,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.3898658050667017,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_cross_component"
+              ]
+            },
+            {
+              "pair_id": "r3|r4",
+              "cell_a": "r3",
+              "cell_b": "r4",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.4659459590911865,
+              "support_gap": 0.6009729504585266,
+              "scale_a": 1.4307698011398315,
+              "scale_b": 1.4307698011398315,
+              "radius_limit": 0.3576924502849579,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.4200346904021582,
+              "contact_relation": "corner",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_cross_component"
+              ]
+            },
+            {
+              "pair_id": "r3|r5",
+              "cell_a": "r3",
+              "cell_b": "r5",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.8464200496673584,
+              "support_gap": 1.0710569620132446,
+              "scale_a": 1.4307698011398315,
+              "scale_b": 1.4307698011398315,
+              "radius_limit": 0.3576924502849579,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.7485879008349076,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_cross_component"
+              ]
+            },
+            {
+              "pair_id": "r3|r6",
+              "cell_a": "r3",
+              "cell_b": "r6",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.0181875228881836,
+              "support_gap": 0.5617374181747437,
+              "scale_a": 1.4307698011398315,
+              "scale_b": 1.4307698011398315,
+              "radius_limit": 0.3576924502849579,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.3926120174798434,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_cross_component"
+              ]
+            },
+            {
+              "pair_id": "r3|r7",
+              "cell_a": "r3",
+              "cell_b": "r7",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.4852830171585083,
+              "support_gap": 1.0194458961486816,
+              "scale_a": 1.4307698011398315,
+              "scale_b": 1.4307698011398315,
+              "radius_limit": 0.3576924502849579,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.7125156648795171,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_normal"
+              ]
+            },
+            {
+              "pair_id": "r4|r5",
+              "cell_a": "r4",
+              "cell_b": "r5",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.5460893511772156,
+              "support_gap": 0.01711772195994854,
+              "scale_a": 1.4307698011398315,
+              "scale_b": 1.4307698011398315,
+              "radius_limit": 0.3576924502849579,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.011963994449918918,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            },
+            {
+              "pair_id": "r4|r6",
+              "cell_a": "r4",
+              "cell_b": "r6",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.0419950485229492,
+              "support_gap": 0.03714870661497116,
+              "scale_a": 1.4307698011398315,
+              "scale_b": 1.4307698011398315,
+              "radius_limit": 0.3576924502849579,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.02596413943415385,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            },
+            {
+              "pair_id": "r4|r7",
+              "cell_a": "r4",
+              "cell_b": "r7",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.2419928312301636,
+              "support_gap": 0.23916250467300415,
+              "scale_a": 1.4307698011398315,
+              "scale_b": 1.4307698011398315,
+              "radius_limit": 0.3576924502849579,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.16715652265128456,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_same_component"
+              ]
+            },
+            {
+              "pair_id": "r5|r6",
+              "cell_a": "r5",
+              "cell_b": "r6",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.2034026384353638,
+              "support_gap": 0.252841055393219,
+              "scale_a": 1.4307698011398315,
+              "scale_b": 1.4307698011398315,
+              "radius_limit": 0.3576924502849579,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.176716796225215,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_same_component"
+              ]
+            },
+            {
+              "pair_id": "r5|r7",
+              "cell_a": "r5",
+              "cell_b": "r7",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.151956558227539,
+              "support_gap": 0.06125254184007645,
+              "scale_a": 1.4307698011398315,
+              "scale_b": 1.4307698011398315,
+              "radius_limit": 0.3576924502849579,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.04281089927343954,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            },
+            {
+              "pair_id": "r6|r7",
+              "cell_a": "r6",
+              "cell_b": "r7",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.5403228998184204,
+              "support_gap": 0.027221405878663063,
+              "scale_a": 1.4307698011398315,
+              "scale_b": 1.4307698011398315,
+              "radius_limit": 0.3576924502849579,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.01902570620163842,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "scene": "close_parallel_sheets",
+      "description": "Two close parallel planar sheets: layer separation vs. mid-plane merging.",
+      "input_gaussians": 600,
+      "patches": 2,
+      "control_points": 288,
+      "construction_seconds": 0.4430094999988796,
+      "unassigned_gaussians": 0,
+      "fit_rms_assigned": 0.003593276022002101,
+      "fit_rms": 0.003593276022002101,
+      "fit_max": 0.06140727922320366,
+      "surface_chart_rms": 1.0756786572585497e-08,
+      "surface_chart_max": 5.587935447692871e-08,
+      "normal_mean_degrees": 0.0,
+      "normal_p95_degrees": 0.0,
+      "ground_truth": {
+        "accuracy_rms": 0.007017920725047588,
+        "accuracy_p95": 0.009581157937645912,
+        "accuracy_max": 0.06539597362279892,
+        "completeness_rms": 0.016586637124419212,
+        "chamfer_rms": 0.0118022789247334,
+        "support_coverage_uncovered_fraction": 0.006146789062768221,
+        "support_extrapolation_fraction": 0.09746715426445007,
+        "support_extrapolation_fraction_local": 0.1774723380804062,
+        "support_local_threshold_p50": 0.10686883330345154,
+        "support_local_threshold_p95": 0.22547844052314758,
+        "support_observed_gt_samples": 32700,
+        "support_threshold": 0.09696333669126034,
+        "topology_gen_patch_count": 2,
+        "topology_gt_patch_count": 2,
+        "topology_patch_count_delta": 0,
+        "topology_patch_count_match": true,
+        "topology_label_ari": 1.0,
+        "support_grid_resolution": 128,
+        "support_gt_cells": 16384,
+        "support_generated_cells": 15975,
+        "support_intersection_cells": 15975,
+        "support_coverage_fraction": 0.97503662109375,
+        "support_unsupported_fraction": 0.0,
+        "support_uncovered_fraction": 0.02496337890625,
+        "support_precision": 1.0,
+        "support_recall": 0.97503662109375,
+        "support_iou": 0.97503662109375,
+        "support_gt_component_count": 1,
+        "support_generated_component_count": 1,
+        "support_gt_hole_count": 0,
+        "support_generated_hole_count": 14,
+        "support_gt_euler": 1,
+        "support_generated_euler": -13,
+        "support_topology_mismatch": true,
+        "support_boundary_chamfer": Infinity,
+        "support_boundary_hausdorff": Infinity
+      },
+      "support_conformality": {
+        "support_conformality_ratio": 0.2127659574468085,
+        "support_conformality_boundary_cells": 470,
+        "support_conformality_edge_cells": 100,
+        "support_conformality_trimmed_patches": 2
+      },
+      "patch_union": {
+        "union_resolution": 128,
+        "union_patch_count": 2,
+        "union_gt_cells": 16384,
+        "union_generated_cells": 15975,
+        "union_coverage_ratio": 0.97503662109375,
+        "union_uncovered_ratio": 0.02496337890625,
+        "union_unsupported_ratio": 0.0,
+        "union_iou": 0.97503662109375,
+        "union_component_count": 1,
+        "union_hole_count": 2,
+        "union_gt_hole_count": 0,
+        "union_euler": -1,
+        "union_gt_euler": 1,
+        "union_false_fill_ratio": 0.0,
+        "union_hole_iou": 0.0,
+        "union_patch_overlap_ratio": 0.9005946791862285,
+        "union_interpatch_gap_ratio": 0.003173828125,
+        "union_boundary_chamfer": Infinity,
+        "union_boundary_hausdorff": Infinity,
+        "union_component_areas_top8": [
+          15975
+        ],
+        "union_component_area_histogram": {
+          "area_1": 0,
+          "area_2_4": 0,
+          "area_5_16": 0,
+          "area_17_64": 0,
+          "area_65_plus": 1
+        },
+        "union_tiny_component_count": 0,
+        "union_hole_areas_top8": [
+          43,
+          2
+        ],
+        "union_hole_area_histogram": {
+          "area_1": 0,
+          "area_2_4": 1,
+          "area_5_16": 0,
+          "area_17_64": 1,
+          "area_65_plus": 0
+        },
+        "union_tiny_hole_count": 1,
+        "union_seam_cell_count": 52,
+        "union_seam_length": 0.8125,
+        "union_seam_component_count": 19,
+        "union_false_hole_count": 2,
+        "union_false_hole_area_sum": 45,
+        "union_tiny_false_hole_count": 1
+      },
+      "patch_union_coarse": null,
+      "coarse_vs_refined_support_iou": null,
+      "stage1": {
+        "leaf_state_counts": {
+          "subdivided": 1,
+          "active": 8
+        },
+        "hierarchy_max_depth": 1,
+        "inactive_enclosed_leaf_count": 0,
+        "underdetermined_patch_count": 0,
+        "empty_support_mask_count": 0,
+        "observations_per_control_min": null,
+        "observations_per_control_median": null,
+        "boundary_leaf_count": 0,
+        "refined_patch_count": 0,
+        "refined_boundary_length_world": 0,
+        "density_contour_gt_chamfer": Infinity,
+        "density_contour_gt_hausdorff": Infinity,
+        "patches": []
+      },
+      "finite": true,
+      "patch_diagnostics": [],
+      "construction_diagnostics": null,
+      "support_artifacts": {},
+      "boundary_first": {
+        "component_count": 2,
+        "per_component": [
+          {
+            "component_id": 0,
+            "topology": "disk_like",
+            "chart": "trimmed_rect_fallback",
+            "fit_metrics": {
+              "point_to_surface_rms": 0.0047563728876411915,
+              "point_to_surface_max": 0.06140727922320366,
+              "mask_hit_rate": 0.9100000262260437,
+              "control_grid_extent": 3.0356009006500244,
+              "control_grid_edge_median": 0.22696688771247864,
+              "control_grid_edge_min": 0.08830507844686508,
+              "control_grid_collapsed": false,
+              "jacobian_median": 4.814793586730957,
+              "jacobian_min": 0.005799882113933563,
+              "degenerate_fraction": 0.0
+            }
+          },
+          {
+            "component_id": 1,
+            "topology": "disk_like",
+            "chart": "trimmed_rect_fallback",
+            "fit_metrics": {
+              "point_to_surface_rms": 0.0017889052396640182,
+              "point_to_surface_max": 0.02665768563747406,
+              "mask_hit_rate": 0.9800000190734863,
+              "control_grid_extent": 3.129598617553711,
+              "control_grid_edge_median": 0.21035370230674744,
+              "control_grid_edge_min": 0.058624155819416046,
+              "control_grid_collapsed": false,
+              "jacobian_median": 4.566766738891602,
+              "jacobian_min": 0.02516072988510132,
+              "degenerate_fraction": 0.0
+            }
+          }
+        ],
+        "candidate_graph": {
+          "config": {
+            "radius_factor": 0.25,
+            "max_neighbors": 0,
+            "fit_complex_leaves": true,
+            "candidate_source": "scale_aware_expanded_aabb_sweep",
+            "broad_phase": "expanded_aabb_sweep_and_prune",
+            "exact_distance": "aabb_euclidean"
+          },
+          "node_count": 8,
+          "edge_count": 28,
+          "possible_edge_count": 28,
+          "candidate_fraction_of_complete_graph": 1.0,
+          "degree": {
+            "by_node": {
+              "r0": 7,
+              "r1": 7,
+              "r2": 7,
+              "r3": 7,
+              "r4": 7,
+              "r5": 7,
+              "r6": 7,
+              "r7": 7
+            },
+            "histogram": {
+              "7": 8
+            },
+            "min": 7,
+            "median": 7,
+            "p95": 7,
+            "max": 7,
+            "mean": 7.0,
+            "isolated_node_count": 0
+          },
+          "contact_relation_counts": {
+            "corner": 4,
+            "edge": 12,
+            "face": 12
+          },
+          "candidate_source_counts": {
+            "scale_aware_expanded_aabb_sweep": 28
+          },
+          "diagnostic_tag_counts": {
+            "legacy_face_merged": 8,
+            "legacy_face_offset": 4,
+            "nonface_cross_component": 12,
+            "nonface_same_component": 4
+          },
+          "reference_recall": {
+            "existing_face_all": {
+              "reference_count": 12,
+              "found_count": 12,
+              "recall": 1.0,
+              "missing_pairs": []
+            },
+            "existing_face_smooth": {
+              "reference_count": 8,
+              "found_count": 8,
+              "recall": 1.0,
+              "missing_pairs": []
+            }
+          },
+          "edges": [
+            {
+              "pair_id": "r0|r1",
+              "cell_a": "r0",
+              "cell_b": "r1",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.12374675273895264,
+              "support_gap": 0.12012413889169693,
+              "scale_a": 1.4142768383026123,
+              "scale_b": 1.4142768383026123,
+              "radius_limit": 0.3535692095756531,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.08493679288127746,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_offset"
+              ]
+            },
+            {
+              "pair_id": "r0|r2",
+              "cell_a": "r0",
+              "cell_b": "r2",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.9916097521781921,
+              "support_gap": 0.08021458983421326,
+              "scale_a": 1.4142768383026123,
+              "scale_b": 1.4142768383026123,
+              "radius_limit": 0.3535692095756531,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.056717742709047864,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            },
+            {
+              "pair_id": "r0|r3",
+              "cell_a": "r0",
+              "cell_b": "r3",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.0010658502578735,
+              "support_gap": 0.12622731924057007,
+              "scale_a": 1.4142768383026123,
+              "scale_b": 1.4142768383026123,
+              "radius_limit": 0.3535692095756531,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.08925220000920446,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_cross_component"
+              ]
+            },
+            {
+              "pair_id": "r0|r4",
+              "cell_a": "r0",
+              "cell_b": "r4",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.0829412937164307,
+              "support_gap": 0.012287181802093983,
+              "scale_a": 1.4142768383026123,
+              "scale_b": 1.4142768383026123,
+              "radius_limit": 0.3535692095756531,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.008687960849900377,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            },
+            {
+              "pair_id": "r0|r5",
+              "cell_a": "r0",
+              "cell_b": "r5",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.9627566933631897,
+              "support_gap": 0.12496362626552582,
+              "scale_a": 1.4142768383026123,
+              "scale_b": 1.4142768383026123,
+              "radius_limit": 0.3535692095756531,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.08835867411609791,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_cross_component"
+              ]
+            },
+            {
+              "pair_id": "r0|r6",
+              "cell_a": "r0",
+              "cell_b": "r6",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.4183295965194702,
+              "support_gap": 0.19551798701286316,
+              "scale_a": 1.4142768383026123,
+              "scale_b": 1.4142768383026123,
+              "radius_limit": 0.3535692095756531,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.13824590894631356,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_same_component"
+              ]
+            },
+            {
+              "pair_id": "r0|r7",
+              "cell_a": "r0",
+              "cell_b": "r7",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.4477572441101074,
+              "support_gap": 0.27215489745140076,
+              "scale_a": 1.4142768383026123,
+              "scale_b": 1.4142768383026123,
+              "radius_limit": 0.3535692095756531,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.19243396347919817,
+              "contact_relation": "corner",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_cross_component"
+              ]
+            },
+            {
+              "pair_id": "r1|r2",
+              "cell_a": "r1",
+              "cell_b": "r2",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.9696781635284424,
+              "support_gap": 0.14396297931671143,
+              "scale_a": 1.4142768383026123,
+              "scale_b": 1.4142768383026123,
+              "radius_limit": 0.3535692095756531,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.10179264442278006,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_cross_component"
+              ]
+            },
+            {
+              "pair_id": "r1|r3",
+              "cell_a": "r1",
+              "cell_b": "r3",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.9642110466957092,
+              "support_gap": 0.05311848968267441,
+              "scale_a": 1.4142768383026123,
+              "scale_b": 1.4142768383026123,
+              "radius_limit": 0.3535692095756531,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.037558763775291826,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            },
+            {
+              "pair_id": "r1|r4",
+              "cell_a": "r1",
+              "cell_b": "r4",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.0979119539260864,
+              "support_gap": 0.15227113664150238,
+              "scale_a": 1.4142768383026123,
+              "scale_b": 1.4142768383026123,
+              "radius_limit": 0.3535692095756531,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.10766713596487605,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_cross_component"
+              ]
+            },
+            {
+              "pair_id": "r1|r5",
+              "cell_a": "r1",
+              "cell_b": "r5",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.9628550410270691,
+              "support_gap": 0.03094235621392727,
+              "scale_a": 1.4142768383026123,
+              "scale_b": 1.4142768383026123,
+              "radius_limit": 0.3535692095756531,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.021878570995381416,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            },
+            {
+              "pair_id": "r1|r6",
+              "cell_a": "r1",
+              "cell_b": "r6",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.4066343307495117,
+              "support_gap": 0.2968798279762268,
+              "scale_a": 1.4142768383026123,
+              "scale_b": 1.4142768383026123,
+              "radius_limit": 0.3535692095756531,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.2099163473061867,
+              "contact_relation": "corner",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_cross_component"
+              ]
+            },
+            {
+              "pair_id": "r1|r7",
+              "cell_a": "r1",
+              "cell_b": "r7",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.425369381904602,
+              "support_gap": 0.28483569622039795,
+              "scale_a": 1.4142768383026123,
+              "scale_b": 1.4142768383026123,
+              "radius_limit": 0.3535692095756531,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.20140024110290333,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_same_component"
+              ]
+            },
+            {
+              "pair_id": "r2|r3",
+              "cell_a": "r2",
+              "cell_b": "r3",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.12584859132766724,
+              "support_gap": 0.12036219984292984,
+              "scale_a": 1.4142768383026123,
+              "scale_b": 1.4142768383026123,
+              "radius_limit": 0.3535692095756531,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.08510511986280297,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_offset"
+              ]
+            },
+            {
+              "pair_id": "r2|r4",
+              "cell_a": "r2",
+              "cell_b": "r4",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.4944682121276855,
+              "support_gap": 0.21829856932163239,
+              "scale_a": 1.4142768383026123,
+              "scale_b": 1.4142768383026123,
+              "radius_limit": 0.3535692095756531,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.15435349247720842,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_same_component"
+              ]
+            },
+            {
+              "pair_id": "r2|r5",
+              "cell_a": "r2",
+              "cell_b": "r5",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.3869761228561401,
+              "support_gap": 0.24768784642219543,
+              "scale_a": 1.4142768383026123,
+              "scale_b": 1.4142768383026123,
+              "radius_limit": 0.3535692095756531,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.17513391983387466,
+              "contact_relation": "corner",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_cross_component"
+              ]
+            },
+            {
+              "pair_id": "r2|r6",
+              "cell_a": "r2",
+              "cell_b": "r6",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.9575021266937256,
+              "support_gap": 0.044321443885564804,
+              "scale_a": 1.4142768383026123,
+              "scale_b": 1.4142768383026123,
+              "radius_limit": 0.3535692095756531,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.03133859134591962,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            },
+            {
+              "pair_id": "r2|r7",
+              "cell_a": "r2",
+              "cell_b": "r7",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.9598560929298401,
+              "support_gap": 0.14023299515247345,
+              "scale_a": 1.4142768383026123,
+              "scale_b": 1.4142768383026123,
+              "radius_limit": 0.3535692095756531,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.09915526533035667,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_cross_component"
+              ]
+            },
+            {
+              "pair_id": "r3|r4",
+              "cell_a": "r3",
+              "cell_b": "r4",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.5278762578964233,
+              "support_gap": 0.2501641511917114,
+              "scale_a": 1.4142768383026123,
+              "scale_b": 1.4142768383026123,
+              "radius_limit": 0.3535692095756531,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.17688485338694623,
+              "contact_relation": "corner",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_cross_component"
+              ]
+            },
+            {
+              "pair_id": "r3|r5",
+              "cell_a": "r3",
+              "cell_b": "r5",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.4093087911605835,
+              "support_gap": 0.15107034146785736,
+              "scale_a": 1.4142768383026123,
+              "scale_b": 1.4142768383026123,
+              "radius_limit": 0.3535692095756531,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.10681808354379123,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_same_component"
+              ]
+            },
+            {
+              "pair_id": "r3|r6",
+              "cell_a": "r3",
+              "cell_b": "r6",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.0024518966674805,
+              "support_gap": 0.1452397108078003,
+              "scale_a": 1.4142768383026123,
+              "scale_b": 1.4142768383026123,
+              "radius_limit": 0.3535692095756531,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.10269538952650471,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_cross_component"
+              ]
+            },
+            {
+              "pair_id": "r3|r7",
+              "cell_a": "r3",
+              "cell_b": "r7",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.9898802042007446,
+              "support_gap": 0.08730126917362213,
+              "scale_a": 1.4142768383026123,
+              "scale_b": 1.4142768383026123,
+              "radius_limit": 0.3535692095756531,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.06172855752795855,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            },
+            {
+              "pair_id": "r4|r5",
+              "cell_a": "r4",
+              "cell_b": "r5",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.17767846584320068,
+              "support_gap": 0.12015637755393982,
+              "scale_a": 1.4142768383026123,
+              "scale_b": 1.4142768383026123,
+              "radius_limit": 0.3535692095756531,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.08495958803804578,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_offset"
+              ]
+            },
+            {
+              "pair_id": "r4|r6",
+              "cell_a": "r4",
+              "cell_b": "r6",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.0942041873931885,
+              "support_gap": 0.061231859028339386,
+              "scale_a": 1.4142768383026123,
+              "scale_b": 1.4142768383026123,
+              "radius_limit": 0.3535692095756531,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.04329552557887371,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            },
+            {
+              "pair_id": "r4|r7",
+              "cell_a": "r4",
+              "cell_b": "r7",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.1414912939071655,
+              "support_gap": 0.1488974243402481,
+              "scale_a": 1.4142768383026123,
+              "scale_b": 1.4142768383026123,
+              "radius_limit": 0.3535692095756531,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.10528166785150206,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_cross_component"
+              ]
+            },
+            {
+              "pair_id": "r5|r6",
+              "cell_a": "r5",
+              "cell_b": "r6",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.0614794492721558,
+              "support_gap": 0.1372104287147522,
+              "scale_a": 1.4142768383026123,
+              "scale_b": 1.4142768383026123,
+              "radius_limit": 0.3535692095756531,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.09701808372922907,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_cross_component"
+              ]
+            },
+            {
+              "pair_id": "r5|r7",
+              "cell_a": "r5",
+              "cell_b": "r7",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.0949543714523315,
+              "support_gap": 0.036848049610853195,
+              "scale_a": 1.4142768383026123,
+              "scale_b": 1.4142768383026123,
+              "radius_limit": 0.3535692095756531,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.026054340008196352,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            },
+            {
+              "pair_id": "r6|r7",
+              "cell_a": "r6",
+              "cell_b": "r7",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.1268511712551117,
+              "support_gap": 0.12014149874448776,
+              "scale_a": 1.4142768383026123,
+              "scale_b": 1.4142768383026123,
+              "radius_limit": 0.3535692095756531,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.08494906760170043,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_offset"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "scene": "density_gradient",
+      "description": "Same smooth sheet as 'sine' but with a dense central cluster plus sparse background: stresses density-adaptive voxel subdivision (run with --adaptive-voxel to exercise it).",
+      "input_gaussians": 600,
+      "patches": 1,
+      "control_points": 144,
+      "construction_seconds": 0.2181038000053377,
+      "unassigned_gaussians": 22,
+      "fit_rms_assigned": 0.002939918776974082,
+      "fit_rms": 0.0028855165001004934,
+      "fit_max": 0.03154700621962547,
+      "surface_chart_rms": 0.004926871508359909,
+      "surface_chart_max": 0.03461956977844238,
+      "normal_mean_degrees": 5.162547588348389,
+      "normal_p95_degrees": 24.266807556152344,
+      "ground_truth": {
+        "accuracy_rms": 0.006815007422119379,
+        "accuracy_p95": 0.009821692481637001,
+        "accuracy_max": 0.027219217270612717,
+        "completeness_rms": 0.05241891369223595,
+        "chamfer_rms": 0.029616960557177663,
+        "support_coverage_uncovered_fraction": 0.11454753577709198,
+        "support_extrapolation_fraction": 0.5583623647689819,
+        "support_extrapolation_fraction_local": 0.0659843236207962,
+        "support_local_threshold_p50": 0.15669044852256775,
+        "support_local_threshold_p95": 0.3851434588432312,
+        "support_observed_gt_samples": 7857,
+        "support_threshold": 0.04781403113156557,
+        "topology_gen_patch_count": 1,
+        "topology_gt_patch_count": 1,
+        "topology_patch_count_delta": 0,
+        "topology_patch_count_match": true,
+        "topology_label_ari": 1.0,
+        "support_grid_resolution": 128,
+        "support_gt_cells": 16384,
+        "support_generated_cells": 12121,
+        "support_intersection_cells": 12121,
+        "support_coverage_fraction": 0.73980712890625,
+        "support_unsupported_fraction": 0.0,
+        "support_uncovered_fraction": 0.26019287109375,
+        "support_precision": 1.0,
+        "support_recall": 0.73980712890625,
+        "support_iou": 0.73980712890625,
+        "support_gt_component_count": 1,
+        "support_generated_component_count": 1,
+        "support_gt_hole_count": 0,
+        "support_generated_hole_count": 4,
+        "support_gt_euler": 1,
+        "support_generated_euler": -3,
+        "support_topology_mismatch": true,
+        "support_boundary_chamfer": Infinity,
+        "support_boundary_hausdorff": Infinity
+      },
+      "support_conformality": {
+        "support_conformality_ratio": 0.15121951219512195,
+        "support_conformality_boundary_cells": 205,
+        "support_conformality_edge_cells": 31,
+        "support_conformality_trimmed_patches": 1
+      },
+      "patch_union": {
+        "union_resolution": 128,
+        "union_patch_count": 1,
+        "union_gt_cells": 16384,
+        "union_generated_cells": 12121,
+        "union_coverage_ratio": 0.73980712890625,
+        "union_uncovered_ratio": 0.26019287109375,
+        "union_unsupported_ratio": 0.0,
+        "union_iou": 0.73980712890625,
+        "union_component_count": 1,
+        "union_hole_count": 0,
+        "union_gt_hole_count": 0,
+        "union_euler": 1,
+        "union_gt_euler": 1,
+        "union_false_fill_ratio": 0.0,
+        "union_hole_iou": 1.0,
+        "union_patch_overlap_ratio": 0.0,
+        "union_interpatch_gap_ratio": 0.0,
+        "union_boundary_chamfer": Infinity,
+        "union_boundary_hausdorff": Infinity,
+        "union_component_areas_top8": [
+          12121
+        ],
+        "union_component_area_histogram": {
+          "area_1": 0,
+          "area_2_4": 0,
+          "area_5_16": 0,
+          "area_17_64": 0,
+          "area_65_plus": 1
+        },
+        "union_tiny_component_count": 0,
+        "union_hole_areas_top8": [],
+        "union_hole_area_histogram": {
+          "area_1": 0,
+          "area_2_4": 0,
+          "area_5_16": 0,
+          "area_17_64": 0,
+          "area_65_plus": 0
+        },
+        "union_tiny_hole_count": 0,
+        "union_seam_cell_count": 0,
+        "union_seam_length": 0.0,
+        "union_seam_component_count": 0,
+        "union_false_hole_count": 0,
+        "union_false_hole_area_sum": 0,
+        "union_tiny_false_hole_count": 0
+      },
+      "patch_union_coarse": null,
+      "coarse_vs_refined_support_iou": null,
+      "stage1": {
+        "leaf_state_counts": {
+          "subdivided": 1,
+          "active": 5,
+          "inactive": 3
+        },
+        "hierarchy_max_depth": 1,
+        "inactive_enclosed_leaf_count": 0,
+        "underdetermined_patch_count": 0,
+        "empty_support_mask_count": 0,
+        "observations_per_control_min": null,
+        "observations_per_control_median": null,
+        "boundary_leaf_count": 0,
+        "refined_patch_count": 0,
+        "refined_boundary_length_world": 0,
+        "density_contour_gt_chamfer": Infinity,
+        "density_contour_gt_hausdorff": Infinity,
+        "patches": []
+      },
+      "finite": true,
+      "patch_diagnostics": [],
+      "construction_diagnostics": null,
+      "support_artifacts": {},
+      "boundary_first": {
+        "component_count": 1,
+        "per_component": [
+          {
+            "component_id": 0,
+            "topology": "disk_like",
+            "chart": "trimmed_rect_fallback",
+            "fit_metrics": {
+              "point_to_surface_rms": 0.0029399185441434383,
+              "point_to_surface_max": 0.03154700621962547,
+              "mask_hit_rate": 0.9429065585136414,
+              "control_grid_extent": 2.838609218597412,
+              "control_grid_edge_median": 0.1973656266927719,
+              "control_grid_edge_min": 0.09180419892072678,
+              "control_grid_collapsed": false,
+              "jacobian_median": 4.054269790649414,
+              "jacobian_min": 0.022817060351371765,
+              "degenerate_fraction": 0.0
+            }
+          }
+        ],
+        "candidate_graph": {
+          "config": {
+            "radius_factor": 0.25,
+            "max_neighbors": 0,
+            "fit_complex_leaves": true,
+            "candidate_source": "scale_aware_expanded_aabb_sweep",
+            "broad_phase": "expanded_aabb_sweep_and_prune",
+            "exact_distance": "aabb_euclidean"
+          },
+          "node_count": 5,
+          "edge_count": 10,
+          "possible_edge_count": 10,
+          "candidate_fraction_of_complete_graph": 1.0,
+          "degree": {
+            "by_node": {
+              "r0": 4,
+              "r2": 4,
+              "r4": 4,
+              "r5": 4,
+              "r7": 4
+            },
+            "histogram": {
+              "4": 5
+            },
+            "min": 4,
+            "median": 4,
+            "p95": 4,
+            "max": 4,
+            "mean": 4.0,
+            "isolated_node_count": 0
+          },
+          "contact_relation_counts": {
+            "corner": 2,
+            "edge": 4,
+            "face": 4
+          },
+          "candidate_source_counts": {
+            "scale_aware_expanded_aabb_sweep": 10
+          },
+          "diagnostic_tag_counts": {
+            "legacy_face_merged": 4,
+            "nonface_same_component": 6
+          },
+          "reference_recall": {
+            "existing_face_all": {
+              "reference_count": 4,
+              "found_count": 4,
+              "recall": 1.0,
+              "missing_pairs": []
+            },
+            "existing_face_smooth": {
+              "reference_count": 4,
+              "found_count": 4,
+              "recall": 1.0,
+              "missing_pairs": []
+            }
+          },
+          "edges": [
+            {
+              "pair_id": "r0|r2",
+              "cell_a": "r0",
+              "cell_b": "r2",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.4644295573234558,
+              "support_gap": 0.01443213690072298,
+              "scale_a": 1.4230709075927734,
+              "scale_b": 1.4230709075927734,
+              "radius_limit": 0.35576772689819336,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.010141544475205369,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            },
+            {
+              "pair_id": "r0|r4",
+              "cell_a": "r0",
+              "cell_b": "r4",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.169748306274414,
+              "support_gap": 0.09181732684373856,
+              "scale_a": 1.4230709075927734,
+              "scale_b": 1.4230709075927734,
+              "radius_limit": 0.35576772689819336,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.06452055646268122,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            },
+            {
+              "pair_id": "r0|r5",
+              "cell_a": "r0",
+              "cell_b": "r5",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.4840937852859497,
+              "support_gap": 0.018247980624437332,
+              "scale_a": 1.4230709075927734,
+              "scale_b": 1.4230709075927734,
+              "radius_limit": 0.35576772689819336,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.012822959507551947,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_same_component"
+              ]
+            },
+            {
+              "pair_id": "r0|r7",
+              "cell_a": "r0",
+              "cell_b": "r7",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.6569291353225708,
+              "support_gap": 0.04048836603760719,
+              "scale_a": 1.4230709075927734,
+              "scale_b": 1.4230709075927734,
+              "radius_limit": 0.35576772689819336,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.028451404509488687,
+              "contact_relation": "corner",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_same_component"
+              ]
+            },
+            {
+              "pair_id": "r2|r4",
+              "cell_a": "r2",
+              "cell_b": "r4",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.490515947341919,
+              "support_gap": 0.9260738492012024,
+              "scale_a": 1.4230709075927734,
+              "scale_b": 1.4230709075927734,
+              "radius_limit": 0.35576772689819336,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.650757347550392,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_same_component"
+              ]
+            },
+            {
+              "pair_id": "r2|r5",
+              "cell_a": "r2",
+              "cell_b": "r5",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.6589850187301636,
+              "support_gap": 0.04891890287399292,
+              "scale_a": 1.4230709075927734,
+              "scale_b": 1.4230709075927734,
+              "radius_limit": 0.35576772689819336,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.03437559057176058,
+              "contact_relation": "corner",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_same_component"
+              ]
+            },
+            {
+              "pair_id": "r2|r7",
+              "cell_a": "r2",
+              "cell_b": "r7",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.45569881796836853,
+              "support_gap": 0.016551222652196884,
+              "scale_a": 1.4230709075927734,
+              "scale_b": 1.4230709075927734,
+              "radius_limit": 0.35576772689819336,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.011630638054567825,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_same_component"
+              ]
+            },
+            {
+              "pair_id": "r4|r5",
+              "cell_a": "r4",
+              "cell_b": "r5",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.8570266962051392,
+              "support_gap": 0.06731200963258743,
+              "scale_a": 1.4230709075927734,
+              "scale_b": 1.4230709075927734,
+              "radius_limit": 0.35576772689819336,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.047300531037100975,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            },
+            {
+              "pair_id": "r4|r7",
+              "cell_a": "r4",
+              "cell_b": "r7",
+              "aabb_distance": 0.0,
+              "centroid_distance": 1.2693153619766235,
+              "support_gap": 0.9187405109405518,
+              "scale_a": 1.4230709075927734,
+              "scale_b": 1.4230709075927734,
+              "radius_limit": 0.35576772689819336,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.645604169151815,
+              "contact_relation": "edge",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "nonface_same_component"
+              ]
+            },
+            {
+              "pair_id": "r5|r7",
+              "cell_a": "r5",
+              "cell_b": "r7",
+              "aabb_distance": 0.0,
+              "centroid_distance": 0.4571450650691986,
+              "support_gap": 0.019256679341197014,
+              "scale_a": 1.4230709075927734,
+              "scale_b": 1.4230709075927734,
+              "radius_limit": 0.35576772689819336,
+              "scale_normalized_aabb_distance": 0.0,
+              "scale_normalized_gap": 0.013531777818275456,
+              "contact_relation": "face",
+              "candidate_source": "scale_aware_expanded_aabb_sweep",
+              "diagnostic_tags": [
+                "legacy_face_merged"
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "failures": []
+}
