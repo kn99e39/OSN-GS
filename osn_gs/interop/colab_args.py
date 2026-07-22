@@ -129,6 +129,19 @@ def build_osn_gs_train_parser() -> argparse.ArgumentParser:
     parser.add_argument("--sparse_dir", type=str, default="sparse/0", help="Sparse COLMAP folder under --source_path.")
     parser.add_argument("--image_downscale", type=int, default=1, help="Integer image downscale for COLMAP loading.")
     parser.add_argument("--max_images", type=int, default=0, help="Limit loaded COLMAP images; 0 means all.")
+    parser.add_argument(
+        "--eval", action="store_true",
+        help="Hold out a Graphdeco-identical test-camera split (see osn_gs/data/vendor/graphdeco_scene_split.py) "
+             "and report held-out PSNR/SSIM after training, for a same-condition A/B against the baseline "
+             "gaussian-splatting/train.py --eval run. Held-out cameras are never sampled during training.",
+    )
+    parser.add_argument("--llffhold", type=int, default=8, help="[--eval only] Hold out every Nth sorted image, matching baseline's own default.")
+    parser.add_argument(
+        "--resolution", type=int, default=-1,
+        help="[--eval only] Matches baseline's -r/--resolution: -1 auto-downscales to <=1.6K width, "
+             "1/2/4/8 divide by that exact factor, any other value is treated as a target width.",
+    )
+    parser.add_argument("--resolution_scale", type=float, default=1.0, help="[--eval only] Additional multiplicative resolution factor, matching baseline's own resolution_scale.")
     parser.add_argument("--device", type=str, default="", help="cuda, cpu, or empty for auto.")
     parser.add_argument(
         "--image_device",

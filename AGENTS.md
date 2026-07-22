@@ -76,6 +76,27 @@ Do not spend time retrying those commands inside the restricted sandbox. Treat t
 - Avoid reintroducing `adapter`-style render APIs unless there is a clear
   compatibility reason.
 
+## Vendored Baseline Scene-Split Logic (2026-07-22)
+
+- `osn_gs/data/vendor/graphdeco_scene_split.py` is a verbatim port (license
+  header preserved) of two small, self-contained pieces of the original
+  Graphdeco `gaussian-splatting/` baseline: its held-out test-camera
+  selection (`readColmapSceneInfo`'s `llffhold` branch) and its resolution
+  auto-downscale decision (`loadCam`'s `>1600px` rule). Exists so the
+  OSN-GS vs. baseline 3DGS quality A/B (`TODO.md`'s top section) can use the
+  IDENTICAL train/test camera split and effective training resolution on
+  both sides -- verified bit-for-bit against upstream's own function output
+  on the real `DATASET/` scene (185 images: same 24 held out, same
+  `(1600, 1036)` resolution at scale `3.241875`).
+- `osn_gs/data/colmap_scene.py::load_colmap_scene_with_eval_split` is the
+  OSN-GS-side loader that uses it, returning a train-only `TorchScene` plus
+  the held-out test cameras/images kept separate (never sampled during
+  training). `load_colmap_scene` (the original, no-split loader) is
+  unchanged and still used by the normal training entry points.
+- Per the vendoring rule above: `gaussian-splatting/` itself is never
+  imported or modified at runtime -- only these two ported functions, living
+  under OSN-GS's own tree.
+
 ## Communication
 
 - If a command fails for environment reasons, say that clearly and move to a

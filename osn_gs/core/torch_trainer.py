@@ -16,6 +16,7 @@ from osn_gs.core.torch_pipeline import (
     TorchPipelineState,
     nurbs_intermediate_payload,
 )
+from osn_gs.data.colmap_scene import estimate_scene_extent
 from osn_gs.data.torch_scene import TorchScene
 from osn_gs.gaussian.torch_model import GaussianParameterGroups
 from osn_gs.gaussian.torch_density_control import (
@@ -630,14 +631,34 @@ class TorchOSNGSTrainer:
         }
 
     def _scene_extent(self, points) -> float:
-        """Return a conservative scene extent used by ADC size thresholds."""
+        """Return a conservative, outlier-robust scene extent used by ADC
+        size thresholds and (via ``spatial_lr_scale``) the xyz position
+        learning-rate magnitude.
+
+        Previously computed as the raw point cloud's bounding-box diagonal
+        (``(max - min).norm()``), which is extremely sensitive to a handful
+        of far-flung noisy points -- a common artifact of real COLMAP SfM
+        reconstructions (not something that shows up on this project's clean
+        synthetic oracle-Gaussian benchmarks, which is why this went
+        undetected until an actual real-dataset training run). On a real
+        185-image garden scene this measured 124.5 while the actual scene
+        content (median distance from centroid) was only ~5.0 and baseline
+        3DGS's own camera-position-based extent was ~4.9 for the same scene
+        -- a ~25x inflated ``spatial_lr_scale``, which oversizes the xyz
+        learning rate enough to keep Gaussian positions perpetually
+        overshooting instead of converging, visible as persistent blur that
+        does not resolve even after many iterations/Gaussians.
+
+        Now reuses ``estimate_scene_extent`` (mean-centered, 90th-percentile
+        distance * 1.1) -- the same robust formula already used elsewhere in
+        this codebase for exactly this purpose, previously not applied here.
+        """
 
         pts = self.torch.as_tensor(points, dtype=self.torch.float32, device=self.device)
         if pts.numel() == 0:
             return 1.0
-        span = pts.max(dim=0).values - pts.min(dim=0).values
-        extent = float(self.torch.linalg.norm(span).detach().cpu())
-        return max(extent, 1e-6)
+        extent = estimate_scene_extent(pts.detach().cpu().numpy())
+        return max(float(extent), 1e-6)
 
     def _should_log_timing(self, iteration: int) -> bool:
         interval = max(0, int(self.training_config.timing_log_interval))

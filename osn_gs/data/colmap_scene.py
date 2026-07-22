@@ -20,6 +20,10 @@ from typing import Any, BinaryIO
 import numpy as np
 
 from osn_gs.data.torch_scene import TorchScene
+from osn_gs.data.vendor.graphdeco_scene_split import (
+    resolve_graphdeco_resolution,
+    select_llff_holdout_test_names,
+)
 from osn_gs.render.torch_fallback import TorchCamera
 from osn_gs.utils.torch_ops import require_torch
 
@@ -141,6 +145,142 @@ def load_colmap_scene(
         images=image_tensors,
         device=device,
         extent=extent,
+    )
+
+
+@dataclass
+class EvalSplitScene:
+    """Result of :func:`load_colmap_scene_with_eval_split`: a training-only
+    ``TorchScene`` plus the held-out test cameras/images kept separate so
+    they are never sampled during training."""
+
+    train_scene: TorchScene
+    test_cameras: list[TorchCamera]
+    test_images: list[Any]  # (3, H, W) CPU tensors, same convention as TorchScene.images
+    test_image_names: list[str]
+    resolution: tuple[int, int]
+    downscale_factor: float
+
+
+def load_colmap_scene_with_eval_split(
+    scene_root: str | Path,
+    device: str = "cuda",
+    image_dir_name: str = "images",
+    sparse_dir_name: str = "sparse/0",
+    resolution: int = -1,
+    resolution_scale: float = 1.0,
+    eval: bool = True,
+    llffhold: int = 8,
+) -> EvalSplitScene:
+    """Same-condition-A/B loader (``TODO.md``'s baseline quality-gap
+    acceptance check).
+
+    Loads a COLMAP scene using the vendored Graphdeco resolution rule
+    (``resolve_graphdeco_resolution``) and held-out test-camera split
+    (``select_llff_holdout_test_names``, ``osn_gs/data/vendor/
+    graphdeco_scene_split.py``), so the resulting effective resolution and
+    train/test partition are IDENTICAL to running
+    ``gaussian-splatting/train.py --eval --llffhold <llffhold> --resolution
+    <resolution>`` on the same ``scene_root`` -- default args
+    (``resolution=-1``, ``llffhold=8``) match upstream's own defaults.
+
+    Unlike :func:`load_colmap_scene`, resolution is a single continuous
+    factor computed once from the scene's own image size (matching
+    upstream's per-image ``loadCam`` computation, which is constant across
+    a scene with uniform image dimensions) rather than an integer
+    power-of-two folder-style downscale -- this is what lets the two
+    frameworks' effective training resolution match exactly instead of only
+    approximately.
+    """
+
+    torch = require_torch()
+    scene_root = Path(scene_root)
+    image_root = scene_root / image_dir_name
+    sparse_root = scene_root / sparse_dir_name
+    if not image_root.exists():
+        raise FileNotFoundError(f"Missing COLMAP image directory: {image_root}")
+    if not sparse_root.exists():
+        raise FileNotFoundError(f"Missing COLMAP sparse directory: {sparse_root}")
+
+    cameras = read_colmap_cameras(sparse_root)
+    images = read_colmap_images(sparse_root)
+    point_cloud = read_colmap_points3d(sparse_root)
+    if point_cloud.xyz.shape[0] == 0:
+        raise ValueError(f"No sparse points found in {sparse_root}")
+
+    ordered_images = sorted(images.values(), key=lambda image: image.name)
+    all_names = [image.name for image in ordered_images]
+    test_names = set(
+        select_llff_holdout_test_names(all_names, scene_path=scene_root, eval=eval, llffhold=llffhold)
+    )
+
+    from PIL import Image as PILImage
+
+    train_cameras: list[TorchCamera] = []
+    train_images = []
+    test_cameras: list[TorchCamera] = []
+    test_images = []
+    test_image_names: list[str] = []
+    resolution_wh = (0, 0)
+    downscale_factor = 1.0
+    for image in ordered_images:
+        colmap_camera = cameras[image.camera_id]
+        image_path = resolve_image_path(image_root, image.name)
+        with PILImage.open(image_path) as probe:
+            orig_w, orig_h = probe.size
+        target_w, target_h, downscale_factor = resolve_graphdeco_resolution(
+            orig_w, orig_h, resolution=resolution, resolution_scale=resolution_scale
+        )
+        resolution_wh = (target_w, target_h)
+        image_tensor, out_h, out_w = load_image_tensor(
+            image_path, device="cpu", downscale=downscale_factor, target_size=(target_w, target_h)
+        )
+        fovx, fovy = camera_fovs(colmap_camera, width=out_w, height=out_h, downscale=downscale_factor)
+        world_view, full_proj, center = camera_matrices(image.qvec, image.tvec, fovx, fovy, device=device)
+        camera_obj = TorchCamera(
+            image_height=out_h,
+            image_width=out_w,
+            world_view_transform=world_view,
+            full_proj_transform=full_proj,
+            camera_center=center,
+            FoVx=fovx,
+            FoVy=fovy,
+            image_name=image.name,
+        )
+        if image.name in test_names:
+            test_cameras.append(camera_obj)
+            test_images.append(image_tensor)
+            test_image_names.append(image.name)
+        else:
+            train_cameras.append(camera_obj)
+            train_images.append(image_tensor)
+
+    if not train_images:
+        raise ValueError(f"No training images found under {image_root} (all held out as test?)")
+
+    points = torch.as_tensor(point_cloud.xyz, dtype=torch.float32, device=device)
+    colors = torch.as_tensor(point_cloud.rgb, dtype=torch.float32, device=device)
+    extent = estimate_scene_extent(point_cloud.xyz)
+    train_scene = TorchScene(
+        initial_points=points,
+        initial_colors=colors,
+        cameras=train_cameras,
+        images=train_images,
+        device=device,
+        extent=extent,
+    )
+    print(
+        f"OSN-GS eval-split scene: train={len(train_cameras)} test={len(test_cameras)} "
+        f"resolution={resolution_wh} downscale_factor={downscale_factor:.4f}",
+        flush=True,
+    )
+    return EvalSplitScene(
+        train_scene=train_scene,
+        test_cameras=test_cameras,
+        test_images=test_images,
+        test_image_names=test_image_names,
+        resolution=resolution_wh,
+        downscale_factor=downscale_factor,
     )
 
 
@@ -302,15 +442,34 @@ def resolve_image_path(image_root: Path, image_name: str) -> Path:
     raise FileNotFoundError(f"Missing COLMAP image file: {path}")
 
 
-def load_image_tensor(path: Path, device: str, downscale: int = 1) -> tuple[Any, int, int]:
+def load_image_tensor(
+    path: Path, device: str, downscale: float = 1, target_size: tuple[int, int] | None = None
+) -> tuple[Any, int, int]:
+    """``downscale`` accepts a float (not just an integer folder-style
+    factor) so a caller can match Graphdeco baseline's own continuous
+    resolution scale exactly (see
+    ``osn_gs/data/vendor/graphdeco_scene_split.py``'s
+    ``resolve_graphdeco_resolution`` -- e.g. a 5187px-wide image auto-scaled
+    to ~1600px is a 3.24x factor, not a power of two).
+
+    ``target_size`` (``(width, height)``), when given, is used verbatim
+    instead of recomputing from ``downscale`` -- pass the exact tuple
+    ``resolve_graphdeco_resolution`` returned so the resize target is
+    pixel-identical to what upstream's own ``loadCam`` would produce
+    (upstream's ``int()`` truncation and a fresh ``round()`` here can
+    differ by a pixel on some inputs).
+    """
+
     torch = require_torch()
     from PIL import Image
 
     with Image.open(path) as image:
         image = image.convert("RGB")
-        if downscale > 1:
-            width = max(1, image.width // downscale)
-            height = max(1, image.height // downscale)
+        if target_size is not None:
+            image = image.resize(target_size, Image.BILINEAR)
+        elif downscale > 1:
+            width = max(1, round(image.width / downscale))
+            height = max(1, round(image.height / downscale))
             image = image.resize((width, height), Image.BILINEAR)
         array = np.asarray(image, dtype=np.float32) / 255.0
     tensor = torch.as_tensor(array, dtype=torch.float32, device=device).permute(2, 0, 1).contiguous()

@@ -4,7 +4,8 @@
 
 정적 원인 후보였던 image loss 차이는 원본과 같은 L1+D-SSIM으로 정정했고, NURBS가 visible Gaussian을 끌던 역방향 anchor도 제거했으며, 학습 view는 이제 seed 재현 가능한 epoch별 무작위 순열로 sample한다. 기존 5k 결과는 OSN-GS가 `--low_vram` 반해상도이고 baseline은 full resolution이라 품질 격차의 공정한 증거로 사용할 수 없다.
 
-- [ ] 동일 dataset·동일 해상도·동일 iteration/save/eval 조건으로 OSN-GS와 Graphdeco 3DGS 10k A/B를 다시 실행한다.
+- [x] **A/B 인프라 구축 완료 (2026-07-22, `docs/worklogs/59`, `60`)**: baseline의 held-out test-camera 분리(`llffhold`)와 해상도 자동축소 로직을 `osn_gs/data/vendor/graphdeco_scene_split.py`로 그대로 vendoring(license 보존, upstream 실제 함수와 실측 대조해 held-out 24/185장·해상도 1600x1036·scale 3.241875 완전 일치 확인). `load_colmap_scene_with_eval_split` + `osn_gs/eval/held_out_metrics.py`를 `train.py`/`scripts/train_osn_gs_torch.py`(`--eval --llffhold --resolution --resolution_scale`)에 연결하고, 실제 DATASET에서 CUDA smoke test(5 iteration)로 held-out PSNR/SSIM 리포트(`held_out_eval.json`)가 정상 생성되는 것까지 확인했다. 171 tests passing(1 skipped).
+- [ ] 동일 dataset·동일 해상도·동일 iteration/save/eval 조건으로 OSN-GS와 Graphdeco 3DGS 10k A/B를 실제로 실행한다(인프라는 준비됨, 실행은 사용자 지시 대기).
 - [ ] train-view PSNR뿐 아니라 동일 holdout camera의 PSNR/SSIM과 Gaussian 수, 평균 iteration 시간, ADC spike를 함께 기록한다.
 - [ ] 변경 전 checkpoint가 동일 조건으로 남아 있지 않으므로 수치 동일성 대신 deterministic replay와 구조 회귀를 보장하고, 품질 acceptance는 위 A/B로 판정한다.
 
@@ -21,7 +22,7 @@
 
 # OSN-GS NURBS Construction — 안정화 로드맵
 
-> **Planning status:** this section is retained as a backlog and evidence index, not as the authoritative implementation sequence. For all new NURBS construction work, follow the phase gates and constraints in [OSN_GS_Final_Boundary_First_NURBS_Direction.md](OSN_GS_Final_Boundary_First_NURBS_Direction.md). The historical voxel-driven migration plan is not a substitute for that governing plan.
+> **Planning status:** this section is retained as a backlog and evidence index, not as the authoritative implementation sequence. For all new NURBS construction work, follow the phase gates and constraints in [OSN_GS_Final_Boundary_First_NURBS_Direction.md](docs/Urgent_Work/OSN_GS_Final_Boundary_First_NURBS_Direction.md). The historical voxel-driven migration plan is not a substitute for that governing plan.
 
 ## 범위와 문제 분리
 
@@ -159,7 +160,7 @@ Gaussian + coarse NURBS
 
 - Phase 4 하드닝 Step 3(`docs/worklogs/39_phase4_hardening_step1_3.md`)에서 처음 발견된 이후 Step 6/6-B(`docs/worklogs/50`, `51`)와 Step 4-D 재평가(`docs/worklogs/52`, `53`)까지 매번 재확인됐지만, 시도된 모든 수정(arc-length seed, seam-phase offset, Hermite seed, worst_wedge_optimized, profile_constrained, coupled boundary fit)은 전부 inner-corner/seam 메커니즘만 겨냥했고 outer conformance를 직접 타겟한 적은 한 번도 없다.
 - Phase 1의 per-leaf plane-AABB polygon union이 outer 방향으로 과대 확장되는 것이 근본 원인 후보로 지목됐다(`docs/worklogs/45`, `46`) — convex-hull clipping 프로토타입이 부분적으로 도움이 됐으나 sparse-boundary scene에서 새 under-coverage를 만들어 채택되지 않았고, 그 대신 채택된 boundary-leaf eligibility classifier(`docs/worklogs/47`-`49`)는 전체 false_fill/coverage는 개선했지만 이 outer-conformance 지표 자체를 별도로 개선하지는 못했다(위 표가 그 증거).
-- **Phase 5 연관성**: Phase 5의 extension chart(`OSN_GS_Phase5_Boundary_Aligned_Extension_Plan.md` §5.1-5.4)는 바로 이 boundary 추정치를 boundary tangent/local frame의 시드로 사용하므로, outer conformance가 나쁜 채로 Phase 5로 넘어가면 그 오차가 extension chart 품질에 직접 전파될 위험이 있다. Phase 5 본편 착수 전에 검토 필요.
+- **Phase 5 연관성**: Phase 5의 extension chart(`docs/Urgent_Work/OSN_GS_Phase5_Boundary_Aligned_Extension_Plan.md` §5.1-5.4)는 바로 이 boundary 추정치를 boundary tangent/local frame의 시드로 사용하므로, outer conformance가 나쁜 채로 Phase 5로 넘어가면 그 오차가 extension chart 품질에 직접 전파될 위험이 있다. Phase 5 본편 착수 전에 검토 필요.
 
 ### Synthetic boundary benchmark
 
@@ -228,7 +229,7 @@ PCA UV가 실패하는 경우를 단순 LSQ 실패로 분류하지 않는다. `U
 
 ### 곡률 있는 컴포넌트의 topology 오분류 (실데이터 영향 우려, 2026-07-22)
 
-- [ ] `curved_annulus`(sine 곡률 + hole 1개)가 Phase 1(`build_surface_components`)에서 `annulus`로 인식되지 않고 `disk_like`/`complex` 컴포넌트 2개로 쪼개짐 -- `--bf-normal-threshold-degrees`/`--bf-offset-threshold-ratio` 조정과 무관하게 재현됨(`docs/worklogs/39_phase4_hardening_step1_3.md`, `docs/worklogs/43_phase4_hardening_step4d_worst_wedge_optimizer.md`, `OSN_GS_Phase5_Boundary_Aligned_Extension_Plan.md`). Phase 4/5(chart generator, coupled boundary fit)의 책임 범위가 아니라 Phase 1 component builder 자체의 구조적 한계로 판단됨.
+- [ ] `curved_annulus`(sine 곡률 + hole 1개)가 Phase 1(`build_surface_components`)에서 `annulus`로 인식되지 않고 `disk_like`/`complex` 컴포넌트 2개로 쪼개짐 -- `--bf-normal-threshold-degrees`/`--bf-offset-threshold-ratio` 조정과 무관하게 재현됨(`docs/worklogs/39_phase4_hardening_step1_3.md`, `docs/worklogs/43_phase4_hardening_step4d_worst_wedge_optimizer.md`, `docs/Urgent_Work/OSN_GS_Phase5_Boundary_Aligned_Extension_Plan.md`). Phase 4/5(chart generator, coupled boundary fit)의 책임 범위가 아니라 Phase 1 component builder 자체의 구조적 한계로 판단됨.
 - [ ] 반대 방향 오분류도 확인됨(2026-07-22, `osn-gs benchmark --scenes mild_curved_sheet` 직접 실행): hole이 전혀 없는 단일 곡면(`mild_curved_sheet`, GT=1)이 오히려 `annulus`로 오분류되어 O-grid 8-wedge로 쪼개짐(`patches=8(gt 1)`, `topology_label_ari=0.000`) -- Phase 2의 hole-loop 검출이 곡률이 있는 컴포넌트에서 존재하지 않는 hole을 spurious하게 만들어내는 것으로 보임. `curved_annulus`와 반대 방향(hole 없음→있음으로 오판)이지만 같은 근본 원인(곡률이 있을 때 Phase 1/2의 loop/topology 판정이 불안정)을 공유하는 것으로 추정.
 - **영향 평가(에이전트 판단, 사용자 질의에 대한 답)**: 실데이터에서 "곡률 + occlusion으로 인한 hole"은 평면보다 오히려 흔한 조합이며, 이 실패 모드는 크래시 없이 조용히 품질을 깎아먹는 유형(시각적으로 렌더를 봐야 발견됨, chamfer_rms 등 집계 지표만으로는 안 잡힘)이라 실데이터 적용 시 영향이 작지 않을 것으로 예상됨. 다만 이는 Phase 1(Surface-Cell Component Builder)의 책임 범위이며, Phase 4/5 쪽에서 국소적으로 패치하기보다 Phase 1 자체를 다시 열어 근본 원인을 찾는 것이 맞는 방향으로 판단됨(현재 미착수).
 

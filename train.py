@@ -14,7 +14,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from osn_gs.core.torch_pipeline import TorchPipelineConfig
 from osn_gs.core.torch_trainer import TorchOSNGSTrainer, TorchTrainingConfig
-from osn_gs.data.colmap_scene import load_colmap_scene
+from osn_gs.data.colmap_scene import load_colmap_scene, load_colmap_scene_with_eval_split
+from osn_gs.eval.held_out_metrics import evaluate_held_out_cameras
 from osn_gs.gaussian.torch_density_control import TorchDensityControlConfig
 from osn_gs.interop.colab_args import (
     build_osn_gs_train_parser,
@@ -57,6 +58,15 @@ def main() -> None:
         uncertain_samples_v = min(uncertain_samples_v, 2)
         if max_uncertain_gaussians == 0:
             max_uncertain_gaussians = 128
+    if args.eval and train_resolution_scale > 1:
+        print(
+            f"OSN-GS --eval: ignoring train_resolution_scale={train_resolution_scale} "
+            "(--low_vram or --train_resolution_scale would otherwise apply an EXTRA "
+            "training-time downscale on top of the loader's own baseline-matched "
+            "resolution, breaking the same-resolution A/B).",
+            flush=True,
+        )
+        train_resolution_scale = 1
 
     densify_grad_threshold = float(args.densify_grad_threshold)
     if densify_grad_threshold <= 0.0:
@@ -149,15 +159,29 @@ def main() -> None:
     if not args.source_path:
         raise ValueError("OSN-GS requires --source_path/-s pointing to a COLMAP dataset root.")
 
-    scene = load_colmap_scene(
-        args.source_path,
-        device=device,
-        image_device=image_device,
-        image_dir_name=args.images,
-        sparse_dir_name=args.sparse_dir,
-        image_downscale=args.image_downscale,
-        max_images=args.max_images,
-    )
+    eval_split = None
+    if args.eval:
+        eval_split = load_colmap_scene_with_eval_split(
+            args.source_path,
+            device=device,
+            image_dir_name=args.images,
+            sparse_dir_name=args.sparse_dir,
+            resolution=args.resolution,
+            resolution_scale=args.resolution_scale,
+            eval=True,
+            llffhold=args.llffhold,
+        )
+        scene = eval_split.train_scene
+    else:
+        scene = load_colmap_scene(
+            args.source_path,
+            device=device,
+            image_device=image_device,
+            image_dir_name=args.images,
+            sparse_dir_name=args.sparse_dir,
+            image_downscale=args.image_downscale,
+            max_images=args.max_images,
+        )
 
     result = trainer.train(scene, output_dir)
     print(
@@ -169,6 +193,36 @@ def main() -> None:
         f"uncertain={int(result.state.model.is_uncertain.sum().item())}, "
         f"output={result.output_dir}"
     )
+
+    if eval_split is not None:
+        held_out = evaluate_held_out_cameras(
+            trainer.rasterizer, result.state.model, eval_split.test_cameras, eval_split.test_images, device=device,
+        )
+        print(
+            "OSN-GS held-out eval "
+            f"(cameras={held_out['camera_count']}, resolution={eval_split.resolution}, "
+            f"llffhold={args.llffhold}): "
+            f"psnr_mean={held_out['psnr_mean']:.3f} ssim_mean={held_out['ssim_mean']:.4f}",
+            flush=True,
+        )
+        if not args.disable_output_files:
+            import json
+
+            report_path = Path(result.output_dir) / "held_out_eval.json"
+            report_path.write_text(
+                json.dumps(
+                    {
+                        "iteration": result.state.iteration,
+                        "resolution": list(eval_split.resolution),
+                        "downscale_factor": eval_split.downscale_factor,
+                        "llffhold": args.llffhold,
+                        **held_out,
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            print(f"OSN-GS held-out eval report: {report_path}", flush=True)
 
 
 if __name__ == "__main__":
