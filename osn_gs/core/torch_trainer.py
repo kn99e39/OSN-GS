@@ -55,6 +55,8 @@ class TorchTrainingConfig:
     sh_increment_interval: int = 1000
     # Compatibility name: this is now a quality-check interval, not a global rebuild.
     surface_rebuild_interval: int = 1000
+    # 0 checks every patch. Positive values rotate a bounded maintenance set.
+    surface_maintenance_patch_budget: int = 16
     surface_residual_ratio_threshold: float = 0.03
     surface_residual_patience: int = 3
     surface_local_min_gaussians: int = 64
@@ -71,6 +73,8 @@ class TorchTrainingConfig:
     stream_max_gaussians: int = 0
     stream_nurbs: bool = True
     stream_cache_dir: str = ""
+    # Bounds full-scene pinned-memory snapshots waiting for serialization/I/O.
+    stream_queue_size: int = 2
     write_output_files: bool = True
     resume_checkpoint: str = ""
     prefer_cuda: bool = True
@@ -106,6 +110,7 @@ class TorchOSNGSTrainer:
         self._streamed_nurbs_signature: tuple[int, tuple[int, ...]] | None = None
         self._stream_queue: queue.Queue[Any] | None = None
         self._stream_thread: threading.Thread | None = None
+        self._streamed_iterations: dict[int, bool] = {}
         print(f"OSN-GS rasterizer backend: {self.rasterizer.backend_source}", flush=True)
 
     def train(self, scene: TorchScene, output_dir: str | Path) -> TorchTrainingResult:
@@ -206,6 +211,7 @@ class TorchOSNGSTrainer:
                     local_min_gaussians=self.training_config.surface_local_min_gaussians,
                     local_min_component=self.training_config.surface_local_min_component,
                     enable_local_correction=self.training_config.enable_local_surface_correction,
+                    patch_ids=self._maintenance_patch_ids(state),
                 )
                 if report["topology_changed"]:
                     self._sync_surface_optimizer(state)
@@ -278,6 +284,18 @@ class TorchOSNGSTrainer:
             self.save_outputs(state, output_dir / "final", scene.cameras[0])
         return TorchTrainingResult(state=state, output_dir=output_dir)
 
+    def _maintenance_patch_ids(self, state: TorchPipelineState) -> tuple[int, ...] | None:
+        """Rotate a bounded patch set at each maintenance checkpoint."""
+
+        count = len(state.surface_patches)
+        budget = max(0, int(self.training_config.surface_maintenance_patch_budget))
+        if budget == 0 or budget >= count:
+            return None
+        interval = max(1, int(self.training_config.surface_rebuild_interval))
+        maintenance_pass = max(0, int(state.iteration) // interval - 1)
+        start = (maintenance_pass * budget) % count
+        return tuple((start + offset) % count for offset in range(budget))
+
     def _needs_metric_scalars(self, iteration: int) -> bool:
         """True when this iteration's loss/PSNR host scalars will be read.
 
@@ -346,7 +364,7 @@ class TorchOSNGSTrainer:
     def _ensure_stream_worker(self) -> None:
         if self._stream_thread is not None:
             return
-        self._stream_queue = queue.Queue(maxsize=8)
+        self._stream_queue = queue.Queue(maxsize=max(1, int(self.training_config.stream_queue_size)))
         self._stream_thread = threading.Thread(target=self._stream_worker, name="osn-gs-stream", daemon=True)
         self._stream_thread.start()
 
@@ -359,20 +377,30 @@ class TorchOSNGSTrainer:
         self._stream_thread = None
 
     def _stream_snapshot(self, state: TorchPipelineState, include_nurbs: bool = False) -> None:
-        if not self._should_stream_iteration(state.iteration):
+        iteration = int(state.iteration)
+        if not self._should_stream_iteration(iteration):
+            return
+        previous = self._streamed_iterations.get(iteration)
+        if previous is not None and (previous or not include_nurbs):
             return
         try:
-            payload = self._stream_payload(state, include_nurbs=include_nurbs)
             self._ensure_stream_worker()
             assert self._stream_queue is not None
-            try:
-                self._stream_queue.put_nowait((int(state.iteration), include_nurbs, payload))
-            except queue.Full:
-                print(f"[WS] stream queue full; skipped iteration {state.iteration}", flush=True)
+            if self._stream_queue.full():
+                print(f"[WS] stream queue full; skipped iteration {iteration}", flush=True)
+                return
+            payload = self._stream_payload(state, include_nurbs=include_nurbs)
+            copy_event = self._stream_copy_event(state.model.device)
+            self._stream_queue.put_nowait((iteration, include_nurbs, payload, copy_event))
+            self._streamed_iterations[iteration] = bool(include_nurbs)
+            if len(self._streamed_iterations) > 16:
+                self._streamed_iterations.pop(min(self._streamed_iterations), None)
+        except queue.Full:
+            print(f"[WS] stream queue full; skipped iteration {iteration}", flush=True)
         except Exception as exc:
             now = time.time()
             if now - self._stream_last_error_at > 10:
-                print(f"[WS] stream snapshot failed at iteration {state.iteration}: {exc}", flush=True)
+                print(f"[WS] stream snapshot failed at iteration {iteration}: {exc}", flush=True)
                 self._stream_last_error_at = now
 
     def _stream_worker(self) -> None:
@@ -382,11 +410,14 @@ class TorchOSNGSTrainer:
             try:
                 if item is None:
                     return
-                iteration, include_nurbs, payload = item
+                iteration, include_nurbs, payload, copy_event = item
+                if copy_event is not None:
+                    copy_event.synchronize()
                 payload = self._materialize_stream_payload(payload)
-                self._cache_stream_snapshot(iteration, payload)
+                message = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+                self._cache_stream_snapshot(iteration, payload, message=message)
                 if self.training_config.stream_url:
-                    self._get_stream_socket().send(json.dumps(payload, separators=(",", ":")))
+                    self._get_stream_socket().send(message)
                     capped = " capped" if payload["metadata"]["capped"] else ""
                     nurbs = " + nurbs" if include_nurbs and "nurbs_surface" in payload else ""
                     print(
@@ -403,6 +434,26 @@ class TorchOSNGSTrainer:
             finally:
                 self._stream_queue.task_done()
 
+    def _stream_copy_event(self, device) -> Any | None:
+        """Record completion of all non-blocking CUDA-to-pinned-CPU copies."""
+
+        device_type = getattr(device, "type", str(device).split(":", 1)[0])
+        if device_type != "cuda" or not self.torch.cuda.is_available():
+            return None
+        event = self.torch.cuda.Event()
+        event.record(self.torch.cuda.current_stream(device=device))
+        return event
+
+    def _snapshot_tensor(self, value: Any) -> Any:
+        """Clone a snapshot, using pinned CPU memory for asynchronous CUDA copies."""
+
+        source = value.detach()
+        if source.device.type == "cuda":
+            target = self.torch.empty(source.shape, dtype=source.dtype, device="cpu", pin_memory=True)
+            target.copy_(source, non_blocking=True)
+            return target
+        return source.cpu().clone()
+
     def _materialize_stream_payload(self, value: Any) -> Any:
         """Convert CPU tensor snapshots to JSON-compatible values in the worker."""
 
@@ -414,7 +465,9 @@ class TorchOSNGSTrainer:
             return [self._materialize_stream_payload(item) for item in value]
         return value
 
-    def _cache_stream_snapshot(self, iteration: int, payload: dict[str, Any]) -> None:
+    def _cache_stream_snapshot(
+        self, iteration: int, payload: dict[str, Any], message: str | None = None
+    ) -> None:
         """Persist stream payloads so a later notebook cell can bulk-send them."""
 
         cache_dir = str(self.training_config.stream_cache_dir or "").strip()
@@ -423,7 +476,9 @@ class TorchOSNGSTrainer:
         path = Path(cache_dir)
         path.mkdir(parents=True, exist_ok=True)
         target = path / f"{int(iteration):08d}.json"
-        target.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        if message is None:
+            message = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+        target.write_text(message, encoding="utf-8")
 
     def _stream_payload(self, state: TorchPipelineState, include_nurbs: bool = False) -> dict[str, Any]:
         torch = self.torch
@@ -432,13 +487,13 @@ class TorchOSNGSTrainer:
             xyz_all = model.get_xyz
             total_count = int(xyz_all.shape[0])
             idx = self._stream_indices(total_count, xyz_all.device)
-            xyz = xyz_all[idx].detach().float().cpu()
-            scaling = model.get_scaling[idx].detach().float().cpu()
-            rotation = model.get_rotation[idx].detach().float().cpu()
-            opacity = model.get_opacity[idx].detach().float().reshape(-1).cpu()
-            color = torch.clamp(sh_dc_to_rgb(model.get_features_dc[idx, 0, :].detach().float()), 0.0, 1.0).cpu()
+            xyz = self._snapshot_tensor(xyz_all[idx].float())
+            scaling = self._snapshot_tensor(model.get_scaling[idx].float())
+            rotation = self._snapshot_tensor(model.get_rotation[idx].float())
+            opacity = self._snapshot_tensor(model.get_opacity[idx].float().reshape(-1))
+            color = self._snapshot_tensor(torch.clamp(sh_dc_to_rgb(model.get_features_dc[idx, 0, :].detach().float()), 0.0, 1.0))
             sh_degree = int(model.active_sh_degree)
-            sh_coefficients = model.get_features[idx, : (sh_degree + 1) ** 2, :].detach().float().cpu()
+            sh_coefficients = self._snapshot_tensor(model.get_features[idx, : (sh_degree + 1) ** 2, :].float())
 
         count = int(xyz.shape[0])
         payload: dict[str, Any] = {
@@ -474,12 +529,12 @@ class TorchOSNGSTrainer:
 
     def _nurbs_stream_payload(self, state: TorchPipelineState) -> dict[str, Any]:
         surface = state.surface
-        grid = surface.control_grid.detach().cpu()
+        grid = self._snapshot_tensor(surface.control_grid)
         self._streamed_nurbs_signature = (
             int(state.iteration),
             tuple(int(value) for value in surface.control_grid.shape),
         )
-        weights = surface.weights.detach().cpu()
+        weights = self._snapshot_tensor(surface.weights)
         payload = {
             "type": "visible_nurbs_intermediate",
             "iteration": int(state.iteration),
@@ -494,8 +549,8 @@ class TorchOSNGSTrainer:
                 {
                     "patch_id": patch_id,
                     "control_grid_shape": [int(value) for value in patch.control_grid.shape],
-                    "control_grid": patch.control_grid.detach().cpu().reshape(-1, 3),
-                    "weights": patch.weights.detach().cpu().reshape(-1),
+                    "control_grid": self._snapshot_tensor(patch.control_grid).reshape(-1, 3),
+                    "weights": self._snapshot_tensor(patch.weights).reshape(-1),
                     "degree_u": int(patch.degree_u),
                     "degree_v": int(patch.degree_v),
                 }
@@ -520,25 +575,26 @@ class TorchOSNGSTrainer:
         regions = state.voxel_regions
         if regions is None:
             return None
-        centers = regions.region_centers.detach().cpu()
-        normals = regions.region_normals.detach().cpu()
-        boundary = regions.boundary_mask.detach().cpu()
-        voxel_indices = regions.voxel_indices.detach().cpu()
-        region_levels = regions.region_levels.detach().cpu()
-        region_density = regions.region_density.detach().cpu()
-        region_bounds = regions.region_bounds.detach().cpu()
+
+        def snapshot(value, *, flatten_value: bool = False):
+            cpu = self._snapshot_tensor(value) if flatten else value.detach().cpu()
+            if flatten_value:
+                cpu = cpu.reshape(-1)
+            return cpu if flatten else cpu.tolist()
+
+        boundary = regions.boundary_mask.detach()
         payload: dict[str, Any] = {
             "type": "voxel_surface_regions",
-            "count": int(centers.shape[0]),
+            "count": int(regions.region_centers.shape[0]),
             "boundary_count": int(boundary.sum().item()),
-            "centers": (centers.reshape(-1) if flatten else centers).tolist(),
-            "normals": (normals.reshape(-1) if flatten else normals).tolist(),
-            "boundary_mask": boundary.tolist(),
-            "voxel_indices": (voxel_indices.reshape(-1) if flatten else voxel_indices).tolist(),
-            "region_patch_ids": regions.region_patch_ids.detach().cpu().tolist(),
-            "region_levels": region_levels.tolist(),
-            "region_density": region_density.tolist(),
-            "region_bounds": (region_bounds.reshape(-1) if flatten else region_bounds).tolist(),
+            "centers": snapshot(regions.region_centers, flatten_value=flatten),
+            "normals": snapshot(regions.region_normals, flatten_value=flatten),
+            "boundary_mask": snapshot(boundary),
+            "voxel_indices": snapshot(regions.voxel_indices, flatten_value=flatten),
+            "region_patch_ids": snapshot(regions.region_patch_ids),
+            "region_levels": snapshot(regions.region_levels),
+            "region_density": snapshot(regions.region_density),
+            "region_bounds": snapshot(regions.region_bounds, flatten_value=flatten),
             "flattened": bool(flatten),
         }
         return payload

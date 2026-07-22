@@ -1,4 +1,4 @@
-# 24. Renderer Multi-Patch 검증
+# 24. 렌더러 다중 패치 검증
 
 날짜: 2026-07-15
 
@@ -20,7 +20,7 @@ active baseline notebook이나 gaussian-splatting project를 수정하지 않고
 - repository에는 single-patch, multi-patch, flattened-grid, malformed-patch를 다루는 Node smoke test가 있다.
 - 이 환경에는 node가 없어 runtime 실행은 하지 못했다. browser나 WebGPU runtime test도 시도하지 않았다.
 
-## 남은 Priority 0 작업
+## 남은 우선순위 0 작업
 
 - Patch isolate/toggle UI.
 - assigned patch ID에 따른 Gaussian coloring.

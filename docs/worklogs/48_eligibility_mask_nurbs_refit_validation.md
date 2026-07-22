@@ -1,4 +1,4 @@
-# Eligibility 분류 마스크의 실제 NURBS refit 검증 — end-to-end, 진단 전용
+# Eligibility 분류 마스크의 실제 NURBS 재피팅 검증 — 종단간, 진단 전용
 
 작성일: 2026-07-22
 상태: 검증 완료, 보고. **production estimator는 여전히 미수정 — 사용자 승인 대기.**

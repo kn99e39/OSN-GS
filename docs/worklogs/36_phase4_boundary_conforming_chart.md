@@ -1,8 +1,8 @@
-# 36. Phase 4 Boundary-Conforming Chart Generator
+# 36. Phase 4 경계 정합 차트 생성기
 
 날짜: 2026-07-20
 상태: 구현 및 검증 완료. 사용자의 명시적 승인 없이 Phase 5를 시작하지 않는다.
-governing document: OSN_GS_Final_Boundary_First_NURBS_Direction.md, Phase 4.
+기준 문서: `OSN_GS_Final_Boundary_First_NURBS_Direction.md`, Phase 4.
 
 ## 완료한 범위
 
@@ -12,7 +12,7 @@ governing document: OSN_GS_Final_Boundary_First_NURBS_Direction.md, Phase 4.
 - slice별 bounds, control grid, seam diagnostics, topology checks, boundary_anchor_max_error 및 실제 fitted NURBS에서 평가한 U/V iso-line polyline을 JSON provenance로 export한다.
 - support_domain_metrics의 raster fragmentation artifact를 수정했다. 이제 patch_union_metrics의 adaptive-density rasterization(_patch_xy_mask)을 재사용한다.
 
-## 발견 사항: hard C0 시도는 accuracy 회귀를 일으켜 되돌림
+## 발견 사항: hard C0 시도는 정확도 회귀를 일으켜 되돌림
 
 중간 버전은 free LSQ fit 후 각 wedge의 boundary control-point column을 인접 slice와 동일하게 덮어써 C0 continuity를 강제했다. seam gap은 약 1e-7까지 줄었지만 planar_hole의 accuracy가 악화됐다.
 
@@ -36,17 +36,17 @@ governing document: OSN_GS_Final_Boundary_First_NURBS_Direction.md, Phase 4.
 - plane, sine, crease, close_parallel_sheets, density_gradient는 모두 Phase 3 trimmed fallback으로 라우팅되며 기존 수치와 동일하다.
 - legacy/Stage 1/Stage 1-F production file은 committed baseline(71a4ae0)과 diff가 없다.
 
-## Guardrails와 남은 작업
+## 안전장치와 남은 작업
 
 - benchmark 전용이며 trainer default나 legacy/Stage 1 비교 경로를 변경하지 않는다.
 - 결정론적 seam placement는 angle zero를 사용한다. curvature/confidence 기반 배치와 G1/C1 continuity는 후속 과제다.
 - 2% hole significance threshold는 planar_hole과 density_gradient 두 사례로 조정한 값이므로 추가 labeled case에서 재검토해야 한다.
 
-## Gate
+## 게이트
 
 Phase 4는 O-grid, topology routing, Jacobian, seam measurement, iso-line, trimmed-baseline comparison 조건을 충족한다. 사용자가 명시적으로 승인하기 전에는 Phase 5를 시작하지 않는다.
 
-## 업데이트, 2026-07-20: unified osn-gs benchmark로 통합
+## 업데이트, 2026-07-20: 통합 OSN-GS 벤치마크로 통합
 
 세 개의 phase별 script(component_report.py, phase3_report.py, phase4_report.py)를 제거했다. boundary-first pipeline은 legacy/voxel_patch_stage1과 동일한 unified benchmark entry point에서 세 번째 --constructor 선택지가 된다.
 

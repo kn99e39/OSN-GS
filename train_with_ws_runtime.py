@@ -74,8 +74,6 @@ def snapshot_payload(gaussians, iteration):
         opacity = gaussians.get_opacity[idx].detach().float().reshape(-1).cpu()
         fdc = gaussians.get_features_dc[idx, 0, :].detach().float().cpu()
         color = torch.clamp(0.5 + SH_C0 * fdc, 0.0, 1.0)
-        sh_degree = int(gaussians.active_sh_degree)
-        sh_coefficients = gaussians.get_features[idx, : (sh_degree + 1) ** 2, :].detach().float().cpu()
     count = int(xyz.shape[0])
     return {
         'type': 'snapshot',
@@ -87,8 +85,6 @@ def snapshot_payload(gaussians, iteration):
         'colors': color.reshape(-1).tolist(),
         'opacities': opacity.reshape(-1).tolist(),
         'rotations': rotation.reshape(-1).tolist(),
-        'shDegree': sh_degree,
-        'shCoefficients': sh_coefficients.reshape(-1).tolist(),
         'metadata': {
             'source': 'colab-training',
             'totalCount': total_count,

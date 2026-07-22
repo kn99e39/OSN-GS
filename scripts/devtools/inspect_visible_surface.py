@@ -7,18 +7,20 @@ sparse reconstruction, places initial (certain) Gaussians at those points, runs 
 voxel bootstrap + NURBS fit exactly like `train.py` does at iteration 0, and then
 writes:
 
-  <output>/stream_cache/00000000.json   -- same schema TorchOSNGSTrainer streams,
-                                            so it can be bulk-streamed to the
-                                            renderer notebook cell for visual
-                                            inspection without any training.
+  <output>/renderer_snapshot.json       -- same schema TorchOSNGSTrainer streams,
+                                            for renderer inspection without any
+                                            training.
   <output>/surface_quality.json         -- per-patch normalized point-to-surface
                                             residual (foot-point projection), for
                                             judging fit quality without a renderer.
   <output>/surface_quality.txt          -- human-readable summary of the above.
 
 Usage:
-    .venv/Scripts/python.exe scripts/devtools/inspect_visible_surface.py \
-        -s DATASET --output outputs/visible_surface_inspect
+    osn-gs inspect-surface
+
+The default dataset and output paths, and all fitting defaults, intentionally
+match the local OSN-GS branch of ``colab_train_3dgs.ipynb``:
+``DATASET`` and ``output/osn_gs_scene/inspect-surface``.
 """
 
 import argparse
@@ -30,17 +32,38 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from osn_gs.core.torch_pipeline import TorchOSNGSPipeline, TorchPipelineConfig
 from osn_gs.data.colmap_scene import read_colmap_points3d
-from osn_gs.interop.colab_args import add_surface_fit_arguments, surface_fit_config_kwargs
+from osn_gs.interop.colab_args import (
+    add_stage1_constructor_arguments,
+    add_surface_fit_arguments,
+    stage1_constructor_config_kwargs,
+    surface_fit_config_kwargs,
+)
 from osn_gs.utils.torch_ops import default_device, require_torch, sh_dc_to_rgb
+
+
+_ROOT = Path(__file__).resolve().parents[2]
+_NOTEBOOK_DATA_ROOT = _ROOT / "DATASET"
+_NOTEBOOK_MODEL_ROOT = _ROOT / "output" / "osn_gs_scene"
+_DEFAULT_OUTPUT_DIR = _NOTEBOOK_MODEL_ROOT / "inspect-surface"
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Build and inspect the Stage 1 visible NURBS surface from a dataset's sparse points only."
     )
-    parser.add_argument("-s", "--source_path", required=True, help="COLMAP scene root with sparse/0/points3D.*")
+    parser.add_argument(
+        "-s",
+        "--source_path",
+        default=str(_NOTEBOOK_DATA_ROOT),
+        help="COLMAP scene root with sparse/0/points3D.* (default: notebook DATA_ROOT local path).",
+    )
     parser.add_argument("--sparse_dir", type=str, default="sparse/0", help="Sparse COLMAP folder under --source_path.")
-    parser.add_argument("--output", type=str, default="outputs/visible_surface_inspect", help="Output directory.")
+    parser.add_argument(
+        "--output",
+        type=str,
+        default=str(_DEFAULT_OUTPUT_DIR),
+        help="Inspection artifact directory (default: notebook MODEL_ROOT/inspect-surface).",
+    )
     parser.add_argument("--device", type=str, default="", help="cuda, cpu, or empty for auto.")
     parser.add_argument("--max_points", type=int, default=0, help="Optional cap on sparse points used. 0 uses all.")
 
@@ -63,6 +86,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--voxel_boundary_angle_degrees", type=float, default=35.0)
     parser.add_argument("--voxel_min_points_per_region", type=int, default=1)
     parser.add_argument("--voxel_normal_chunk_size", type=int, default=4096)
+    add_stage1_constructor_arguments(parser)
 
     parser.add_argument("--covariance_init", type=str, default="knn", choices=("knn", "constant"))
     parser.add_argument("--covariance_knn_chunk_size", type=int, default=0)
@@ -97,6 +121,7 @@ def build_pipeline_config(args: argparse.Namespace) -> TorchPipelineConfig:
         covariance_max_scale_ratio=args.covariance_max_scale_ratio,
         covariance_scale_multiplier=args.covariance_scale_multiplier,
         **surface_fit_config_kwargs(args),
+        **stage1_constructor_config_kwargs(args),
     )
 
 
@@ -245,10 +270,9 @@ def main() -> None:
     state = pipeline.initialize(points, colors)
     quality_report = evaluate_surface_quality(pipeline, state)
 
-    stream_dir = output_dir / "stream_cache"
-    stream_dir.mkdir(parents=True, exist_ok=True)
     payload = build_stream_payload(state, quality_report)
-    (stream_dir / "00000000.json").write_text(
+    snapshot_path = output_dir / "renderer_snapshot.json"
+    snapshot_path.write_text(
         json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8"
     )
 
@@ -272,10 +296,10 @@ def main() -> None:
     (output_dir / "surface_quality.txt").write_text(summary_text, encoding="utf-8")
 
     print(summary_text)
-    print(f"Stream cache: {stream_dir / '00000000.json'}", flush=True)
+    print(f"Renderer snapshot: {snapshot_path}", flush=True)
     print(
-        "Bulk-stream this into the renderer notebook cell (set BULK_STREAM_CACHE_DIR to the "
-        "'stream_cache' folder above) to view the surface, or inspect surface_quality.txt/.json directly.",
+        "Load renderer_snapshot.json in a renderer-compatible snapshot path to view the surface, "
+        "or inspect surface_quality.txt/.json directly.",
         flush=True,
     )
 

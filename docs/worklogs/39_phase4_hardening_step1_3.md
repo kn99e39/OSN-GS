@@ -1,4 +1,4 @@
-# Phase 4 Hardening, Step 1-3: seam/Jacobian/boundary 진단 지표 + 멀티 씬 baseline
+# Phase 4 하드닝, Step 1-3: seam/Jacobian/boundary 진단 지표 + 다중 씬 기준선
 
 작성일: 2026-07-21
 상태: hardening plan의 Step 1-3 완료. 다음은 Step 4(저위험 seed 변경).
@@ -19,7 +19,7 @@
 
 동작 변화 없음 확인: `planar_hole`의 chamfer_rms/false_fill 불변(0.005800/0.167), 전체 테스트 86/86 통과.
 
-## 즉시 발견된 근본 원인: O-grid inner-pole degeneracy
+## 즉시 발견된 근본 원인: O-grid 내부 극점 퇴화
 
 새 지표를 `planar_hole`(seed=0)에 켜자마자 orientation-flip 샘플 5개가 나타났는데, 전부 seam `3->4`/`4->5`에만 몰려 있었다. 각 슬라이스의 전체 UV grid에 대해 in-plane Jacobian 부호를 매핑해보니(`planar_hole`은 완전 평면이라 z=0이므로 이 매핑이 유효하다) flip이 정확히 `(u~=0, v~=0)` 코너 — 구멍(inner boundary)에 가장 가깝고 동시에 seam(u=0)에도 맞닿은 지점 — 에서만, 그것도 4/5번 슬라이스에서만 발생했다(나머지 6개는 `min_jacobian_singular_value` 0.17~0.20, `max_jacobian_condition` 2.9~7.7로 건강한 반면 4/5번은 각각 0.010~0.012, 46~66).
 
@@ -37,7 +37,7 @@ seed 0에 국한된 우연이 아니라 구조적 문제임을 확인: 테스트
 
 전체 테스트: 99/99 통과 (기존 86 + 신규 13).
 
-## Step 3 — 멀티 씬 baseline (신규 씬 4개)
+## Step 3 — 다중 씬 기준선 (신규 씬 4개)
 
 `nurbs_constructor_benchmark/scenes.py`/`support_domains.py`에 `planar_hole_offcenter`(구멍이 원점에서 벗어남), `planar_hole_elliptical`(타원형 inner/outer boundary), `planar_hole_density_gradient`(같은 원형 annulus지만 안쪽에 점이 몰린 밀도), `curved_annulus`(annulus support 위에 sine 높이) 4개를 추가했다 — Step 6의 gate threshold가 `planar_hole` 하나에만 overfit되지 않도록 하기 위함이다.
 

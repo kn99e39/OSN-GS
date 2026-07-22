@@ -1,4 +1,4 @@
-# 38. Renderer SH Streaming
+# 38. 렌더러 SH 스트리밍
 
 날짜: 2026-07-20
 

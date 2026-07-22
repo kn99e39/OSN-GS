@@ -1,4 +1,4 @@
-# 21. UV Trimming (Surface Support)
+# 21. UV 트리밍 (표면 지지 영역)
 
 날짜: 2026-07-15
 

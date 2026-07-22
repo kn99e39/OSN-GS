@@ -1,4 +1,4 @@
-# Phase 4 Hardening, Step 4 (1차): equal-arc-length segment 배치 — 시도 후 기각
+# Phase 4 하드닝, Step 4 (1차): 동일 호길이 세그먼트 배치 — 시도 후 기각
 
 작성일: 2026-07-21
 상태: Step 4 진행 중. 첫 번째 후보(outer arc-length 기반 segment 배치)는 실측 후 기각. 다음 후보로 이어감.

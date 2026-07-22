@@ -141,7 +141,7 @@ Do not spend time retrying those commands inside the restricted sandbox. Treat t
 ## Multi-Agent Handoff Rules
 
 - The user is working with multiple agents, including Codex and Claude. Keep `docs/README.md` updated as the primary follow-up/worklog file whenever implementation direction, important defaults, or known risks change.
-- Keep `docs/architecture.md` focused on framework-level design decisions. Keep `Agent.md` focused on environment, workflow, and agent-operation rules.
+- Keep `docs/architecture.md` focused on framework-level design decisions. Keep `AGENTS.md` focused on environment, workflow, and agent-operation rules.
 - When changing notebook training behavior, record the user-visible knobs and their intended semantics in `docs/README.md`.
 - Do not rely on chat-only memory for decisions such as "NURBS/Voxel must stay strongly integrated" or "uncertain-to-certain promotion is forbidden".
 
@@ -156,5 +156,6 @@ Do not spend time retrying those commands inside the restricted sandbox. Treat t
 
 - For substantial multi-part work, create `docs/worklogs/` if needed.
 - After each completed implementation area, add a short Markdown report containing: work performed, result, evaluation, and remaining risks.
+- Write worklogs in Korean. Keep headings, status, conclusions, decisions, metrics interpretation, and follow-up risks in Korean; technical identifiers, commands, paths, and literal API/CLI names may remain in English.
 - Keep these reports concise and link the final status from `docs/README.md` so Codex and Claude can continue from the same evidence.
 

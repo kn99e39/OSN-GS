@@ -1,4 +1,4 @@
-# 30. Notebook Train MSVC Environment
+# 30. 노트북 학습 MSVC 환경
 
 날짜: 2026-07-16
 

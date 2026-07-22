@@ -1,4 +1,4 @@
-# 4. Streaming, Export, and Resume
+# 4. 스트리밍, 내보내기 및 재개
 
 ## 작업 내용
 

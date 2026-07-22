@@ -149,7 +149,7 @@ The workspace already contains a reference `gaussian-splatting` checkout, so tho
 ## 2026-07-10 Multi-Agent Follow-Up Context
 
 - The user is now collaborating with both Codex and Claude. Keep implementation decisions, environment constraints, and current task direction in Markdown so another agent can continue without relying on chat history.
-- `docs/README.md` is the primary handoff/worklog document. `Agent.md` stores agent workflow rules and Windows Remote-SSH caveats. `docs/architecture.md` stores framework-level design decisions.
+- `docs/README.md` is the primary handoff/worklog document. `AGENTS.md` stores agent workflow rules and Windows Remote-SSH caveats. `docs/architecture.md` stores framework-level design decisions.
 - Do not treat NURBS or voxel processing as optional debug extras. The user clarified that NURBS and voxel regioning should remain strongly integrated into the OSN-GS learning framework, even while optimizing throughput.
 - Training throughput work should focus on reducing blocking I/O, stream/cache overhead, and optimizer-state churn rather than disabling NURBS/Voxel reconstruction.
 
@@ -180,7 +180,7 @@ The workspace already contains a reference `gaussian-splatting` checkout, so tho
 - `TorchNURBSSurface.evaluate()` now evaluates a real rational tensor-product NURBS (Cox-de Boor basis on a clamped uniform knot vector, weighted by `weights`) instead of bilinear interpolation over the control grid. Degree auto-clamps when a grid axis has fewer control points than the configured degree.
 - `osn_gs/surface/torch_voxel_regions.py` normal estimation and boundary detection are fully vectorized (batched/chunked SVD, 6 vectorized neighbor-offset passes) instead of a Python loop per region; behavior verified equivalent on CPU, and the win grows substantially on GPU where the old code paid per-region kernel-launch overhead.
 - `--low_vram` was fixed in `scripts/train_osn_gs_torch.py` (the flag was referenced but not registered in that script's own argparse, causing an immediate `AttributeError`; `train.py`'s parser in `osn_gs/interop/colab_args.py` was unaffected).
-- The original numpy-only prototype framework (non-`torch_*` files across `osn_gs/core`, `osn_gs/gaussian`, `osn_gs/surface`, `osn_gs/losses`, `osn_gs/optim`, parts of `osn_gs/data`, `osn_gs/render/prototype_renderer.py`, parts of `osn_gs/utils`) was deleted along with its two already-broken consumers (`scripts/train_osn_gs.py`, `tests/test_framework_smoke.py`) and two already-executed one-off migration scripts under `scripts/devtools/`. See `Agent.md` for the exact file list. All `osn_gs/**/__init__.py` now export only `torch_*` symbols.
+- The original numpy-only prototype framework (non-`torch_*` files across `osn_gs/core`, `osn_gs/gaussian`, `osn_gs/surface`, `osn_gs/losses`, `osn_gs/optim`, parts of `osn_gs/data`, `osn_gs/render/prototype_renderer.py`, parts of `osn_gs/utils`) was deleted along with its two already-broken consumers (`scripts/train_osn_gs.py`, `tests/test_framework_smoke.py`) and two already-executed one-off migration scripts under `scripts/devtools/`. See `AGENTS.md` for the exact file list. All `osn_gs/**/__init__.py` now export only `torch_*` symbols.
 
 ## 2026-07-10 Surface/ADC/I-O Stabilization
 
@@ -404,3 +404,21 @@ The local Graphdeco notebook cells read/write patched Python sources with explic
 ## 2026-07-21 Notebook 저장 출력 오류 수정
 
 - 5000 iteration 저장 시 voxel region Tensor가 JSON 직렬화를 막아 nurbs_surface.json과 checkpoint 저장 전에 중단되던 문제를 수정했다. 노트북은 subprocess 실패 시 마지막 출력 tail을 표시한다. See docs/worklogs/44_notebook_save_output_error.md.
+
+## 2026-07-22 Phase 4-D 정준 레이아웃 재평가
+
+- 현재 production Phase-2 경계 추정기에서 worst_wedge_optimized는 offcenter 일부 수치를 개선하지만 wedge-wide fold를 제거하지 못하고, elliptical 및 density-gradient 회귀가 남아 기본 경로로 채택하지 않았다. uniform_angle은 계속 production 기준선이며 selector/retry/fallback은 도입하지 않는다. 다음 단계는 사용자 승인 후 단일 결정론적 annulus-layout objective/제약을 재설계하는 것이다. 근거는 docs/worklogs/52_phase4d_production_estimator_multiseed_reevaluation.md 및 OSN_GS_Phase4_Hardening_Plan.md에 기록했다.
+
+## 2026-07-22 인자 없는 inspect-surface 검사
+
+- `osn-gs inspect-surface`는 이제 인자 없이 실행할 수 있다. 로컬 노트북 Dataset 셀의 `DATA_ROOT=NOTEBOOK_ROOT / 'DATASET'`과 OSN-GS Train 셀의 Stage 1/NURBS/voxel/covariance 기본값을 사용한다.
+- 기본 출력은 학습 `stream_cache`와 분리된 `output/osn_gs_scene/inspect-surface/`이다. 이 폴더에 `renderer_snapshot.json`, `surface_quality.json`, `surface_quality.txt`를 기록한다. `-s`와 `--output`으로 필요할 때만 재정의한다.
+- 상세 검증 및 남은 위험은 `docs/worklogs/54_argument_free_inspect_surface.md`에 기록했다.
+
+## 2026-07-22 Priority 8 학습 성능 및 품질 경로
+
+- ADC clone/split/prune를 단일 shape transaction으로 통합해 parameter tensor와 Adam state 재구성을 pass당 최대 여러 번에서 1번으로 줄였다.
+- snapshot capture는 기본 2-slot bounded pinned-memory queue와 CUDA event를 사용한다. `STREAM_QUEUE_SIZE`/`--stream_queue_size`가 대기 snapshot 수를 정하며, 같은 iteration의 final snapshot은 중복 전송하지 않고 cache/WebSocket JSON도 한 번만 직렬화한다.
+- surface maintenance는 `OSN_SURFACE_MAINTENANCE_PATCH_BUDGET`/`--surface_maintenance_patch_budget`(기본 16)만큼 patch를 round-robin 검사한다. 0은 모든 patch 검사다.
+- training view는 순차 순환 대신 seed 재현 가능한 epoch별 무작위 순열(without replacement)을 사용한다.
+- CUDA smoke와 전체 150-test 회귀는 통과했다. 동일 해상도 10k baseline A/B는 남은 acceptance 검증이다. See `docs/worklogs/57_priority8_training_performance.md`.

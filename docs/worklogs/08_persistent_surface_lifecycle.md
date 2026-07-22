@@ -1,4 +1,4 @@
-# 8. Persistent Surface Lifecycle
+# 8. 영속 표면 수명주기
 
 날짜: 2026-07-10
 

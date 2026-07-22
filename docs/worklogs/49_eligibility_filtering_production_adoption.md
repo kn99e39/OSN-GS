@@ -1,4 +1,4 @@
-# Boundary-leaf eligibility 분류를 production `extract_component_boundary` 기본값으로 적용
+# 경계 리프 eligibility 분류를 production `extract_component_boundary` 기본값으로 적용
 
 작성일: 2026-07-22
 상태: **적용 완료 (production 코드 변경).** 사용자 승인("그게 좋겠다. 적용하고 보고해볼래?")에 따라 진행.

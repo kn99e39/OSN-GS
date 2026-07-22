@@ -1,4 +1,4 @@
-# 31. Unified PowerShell CLI
+# 31. 통합 PowerShell CLI
 
 날짜: 2026-07-16
 

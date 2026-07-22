@@ -1,4 +1,4 @@
-# 20. Ground-Truth NURBS Metrics: Three Construction Concerns
+# 20. 정답 NURBS 지표: 세 가지 구성상 고려 사항
 
 날짜: 2026-07-15
 

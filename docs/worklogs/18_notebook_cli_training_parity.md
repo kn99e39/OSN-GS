@@ -1,4 +1,4 @@
-# 18. Notebook / CLI Training Parity
+# 18. 노트북 / CLI 학습 동등성
 
 날짜: 2026-07-15
 

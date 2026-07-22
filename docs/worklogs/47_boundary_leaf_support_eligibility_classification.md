@@ -1,4 +1,4 @@
-# Boundary-leaf support ELIGIBILITY 분류(ACTIVE_OBSERVED/UNCERTAIN/INACTIVE/COMPLEX) — 분석 전용
+# 경계 리프 지지 ELIGIBILITY 분류(ACTIVE_OBSERVED/UNCERTAIN/INACTIVE/COMPLEX) — 분석 전용
 
 작성일: 2026-07-21
 상태: 분석·prototype 완료, 보고. **production estimator는 여전히 미수정 — 사용자 승인 대기.**
@@ -52,7 +52,7 @@ worklog 46의 convex hull clip이 `density_gradient`/`sparse_outer_rim`에서 "u
 - 어떤 씬에서도 INACTIVE가 나오지 않았다(전부 ACTIVE_OBSERVED 아니면 UNCERTAIN) — 요청대로 INACTIVE 판정이 보수적으로 작동한다는 뜻이지만, 동시에 이 pass의 실제 데이터로는 INACTIVE 분기가 통합 테스트로 한 번도 실행 안 됐다는 뜻이기도 하다(단위 테스트로는 별도 검증함).
 - `ellipse_high_ecc`(가늘고 긴 타원)는 여전히 가장 어려운 케이스다(active_only false_fill=0.110) — worklog 45/46에서도 계속 나타난 패턴과 일치.
 
-## 결과: 기존 4개 annulus 씬 (estimator-only, refit 안 함)
+## 결과: 기존 4개 annulus 씬 (추정기 전용, 재피팅 안 함)
 
 | 씬 | 분류 (A/U/I/C) | refined cells (원본 / active_only / active+uncertain) |
 |---|---|---|

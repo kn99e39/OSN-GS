@@ -1,4 +1,4 @@
-# Phase 4 Hardening, Step 4-D: worst-wedge seam-angle optimizer — 지금까지 중 최선의 결과, 완전한 승리는 아님
+# Phase 4 하드닝, Step 4-D: worst-wedge seam-angle 최적화기 — 지금까지 중 최선의 결과, 완전한 승리는 아님
 
 작성일: 2026-07-21
 상태: 구현·검증 완료. 아직 기본값 채택은 안 함 — 사용자 결정 대기.
@@ -8,7 +8,7 @@
 
 Step 4-B(seam-offset sweep), Step 4-C(Hermite seed) 둘 다 고정된, 씬에 무관한 규칙으로는 결정적 승자를 못 만들었다. 이 결과 자체가 사용자가 가져온 2차 리뷰의 핵심 지적을 뒷받침했다: 진짜 목표는 "arc length를 균등하게" 하는 게 아니라, worst wedge의 inner-corner collapse와 aspect-ratio distortion을 억제하는 것이다. 사용자가 Step 4-D 진행을 명시적으로 확인해서 착수했다.
 
-## 접근: 전역 DP가 아니라 local coordinate descent
+## 접근: 전역 DP가 아닌 로컬 좌표 하강법
 
 정확한 전역 최적화(72개 정도의 각도 bin에 대한 cyclic partition DP)는 `O(bins^3 * segments)`로 8-wedge 문제치고 과도하다고 판단해서 기각했다. 대신, 기존 `uniform_angle`의 경계 각도에서 시작해서 매 pass(기본 3회)마다 각 경계 인덱스를 순회하며, 그 경계를 움직였을 때 영향받는 딱 두 개의 wedge(양옆)에 대해서만 다음 지표를 계산한다.
 

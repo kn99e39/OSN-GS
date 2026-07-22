@@ -1,4 +1,4 @@
-# Phase 4 Hardening, Step 4-C: Hermite/derivative-aware Coons seed — 미미한 효과, 채택하지 않음
+# Phase 4 하드닝, Step 4-C: Hermite/도함수 인지 Coons 초기값 — 미미한 효과, 채택하지 않음
 
 작성일: 2026-07-21
 상태: Step 4-A/4-B/4-C 전부 시도 완료, 결정적 승자 없음. Step 4-D(chart-layout 최적화)는 범위가 더 크므로 사용자 확인 후 진행.

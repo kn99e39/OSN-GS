@@ -1,4 +1,4 @@
-# Phase 1 boundary-voxel plane-AABB polygon 과대추정 — 분석 + 최소 prototype (production 미적용)
+# Phase 1 경계 복셀 plane-AABB polygon 과대추정 — 분석 + 최소 프로토타입 (production 미적용)
 
 작성일: 2026-07-21
 상태: 분석·prototype 완료, 보고. **`torch_voxel_hierarchy.py`/`torch_component_boundary.py`(production estimator)는 전혀 수정하지 않았다 — 사용자 재확인 대기.**
@@ -14,7 +14,7 @@ worklog 45가 outward bias의 주범을 Phase 1의 `coarse_mask`(voxel plane-AAB
 
 **중요한 부수 발견**: flat(z=0) 합성 씬에서는 모든 leaf의 z축 두께가 0이라 root AABB의 z 경계에 항상 닿는다 — `compute_leaf_face_adjacency`의 root-boundary 체크(`abs(lo[axis]-root_lo[axis])<=eps`)가 z축에 대해 무조건 걸리므로, **이 프로젝트의 모든 flat 합성 씬에서 사실상 전체 leaf가 100% boundary leaf로 분류된다** (x/y 위치와 무관하게). 실제 4개 annulus 씬으로 재확인: `planar_hole`(leaves=10, boundary=10), `offcenter`(7/7), `elliptical`(10/10), `density_gradient`(10/10) — 전부 100%. 이는 버그가 아니라 flat 씬의 구조적 특성이고, curved/3D 씬이라면 진짜 interior leaf가 생길 것이다. 이번 prototype이 "boundary leaf만 clip"이라고 해도, 지금 이 프로젝트의 flat 합성 벤치마크 씬들에서는 사실상 전체 leaf에 적용되는 셈이다 — interior leaf 불변 invariant는 코드로는 지켜지지만 flat 씬에서는 그 경로가 거의 실행되지 않는다는 점을 밝혀둔다.
 
-## Step A/B: convex-hull 기반 conservative clipping prototype
+## Step A/B: convex-hull 기반 보수적 clipping 프로토타입
 
 `nurbs_constructor_benchmark/boundary_bias_analysis.py`에 추가(production 코드 미변경, 분석 모듈 내부에서만 동작):
 
@@ -23,7 +23,7 @@ worklog 45가 outward bias의 주범을 Phase 1의 `coarse_mask`(voxel plane-AAB
 - Clip은 **교집합**이라 원본보다 절대 넓어질 수 없다 — "outward bias를 줄인다"는 목표와 정확히 방향이 맞고, 새로운 outward 실패 모드를 만들 수 없는 구조.
 - 후보 우선순위는 계획대로 convex hull(candidate 1)만 먼저 구현·평가했다. alpha-shape/occupancy-grid contour(candidate 2), sparse-voxel fallback(candidate 3)은 결과를 보고 필요성 판단 후 진행하기로 미뤘다.
 
-## Step C 결과: 7개 analytic-GT 씬 before/after
+## Step C 결과: 7개 analytic-GT 씬 전/후
 
 `threshold_field`(KDE, **변경 없음**)는 그대로 두고 `coarse_mask`만 clip 전/후로 비교(`refined_mask = threshold_field & coarse_mask`이므로 최종 결과에 미치는 실제 영향까지 측정):
 

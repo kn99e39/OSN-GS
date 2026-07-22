@@ -1,4 +1,4 @@
-# 32. Benchmark GT Renderer Folder 분리
+# 32. 벤치마크 GT 렌더러 폴더 분리
 
 날짜: 2026-07-16
 

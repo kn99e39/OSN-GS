@@ -1,4 +1,4 @@
-# 27. Local Support-Tau 분석
+# 27. 로컬 Support-Tau 분석
 
 날짜: 2026-07-15
 

@@ -1,4 +1,4 @@
-# 22. D-SSIM Image Loss (Baseline Quality-Gap Cause 1)
+# 22. D-SSIM 이미지 손실 (기준 품질 격차 원인 1)
 
 날짜: 2026-07-15
 

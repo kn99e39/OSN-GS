@@ -1,4 +1,4 @@
-# 29. Support-Domain Constructor Benchmark
+# 29. 지지 영역 생성자 벤치마크
 
 날짜: 2026-07-15
 

@@ -1,4 +1,4 @@
-# 26. NURBS Constructor TODO 감사
+# 26. NURBS 생성자 TODO 감사
 
 날짜: 2026-07-15
 

@@ -1,15 +1,15 @@
-# 37. Boundary-First Refactor Pass + Unified Benchmark CLI
+# 37. Boundary-First 리팩터링 패스 + 통합 벤치마크 CLI
 
 날짜: 2026-07-20
 상태: 완료.
-governing document: OSN_GS_Final_Boundary_First_NURBS_Direction.md.
+기준 문서: `OSN_GS_Final_Boundary_First_NURBS_Direction.md`.
 
 Phase 4 완료 후 다음 두 가지 후속 요청을 처리했다(worklog 31 참조).
 
 1. Phase 1–4 module 전반에서 강제 overwrite와 임시/ad-hoc code를 제거하는 refactoring pass
 2. Phase 1–4 pipeline을 개별 phase script가 아닌 실제 osn-gs benchmark CLI에 통합
 
-## 1. Refactoring pass
+## 1. 리팩터링 패스
 
 모든 Phase 1–4 module(torch_surface_components.py, torch_component_boundary.py, torch_trimmed_component_fitter.py, torch_chart_topology.py, torch_annulus_chart.py)과 benchmark report script를 재점검하여 forced overwrite, dead code, stale comment를 제거했다. torch_annulus_chart.py의 hard-C0 잔여 코드는 Phase 4 review에서 이미 제거되어 있었다. 다른 module에서는 문제를 발견하지 못했다.
 
@@ -19,7 +19,7 @@ session 시작 시 modified-but-unreviewed로 표시된 OSN_GS_Final_Boundary_Fi
 
 동작 보존을 검증했다. 전체 test suite 86/86 통과했고, phase3_report와 phase4_report를 planar_hole에서 재실행한 결과 worklog 31의 수치와 byte-identical했다(chamfer=0.0058, false_fill=0.167, seam gap=0.012/0.064).
 
-## 2. Unified benchmark CLI
+## 2. 통합 벤치마크 CLI
 
 사용자의 stale rectangle+trim NURBS render screenshot을 통해 실제 사용 명령인 osn-gs benchmark가 Phase 1–4 결과를 반영하지 않는다는 사실을 확인했다. runner.py의 --constructor는 TorchOSNGSPipeline을 통한 legacy/voxel_patch_stage1만 지원했고, Phase 1–4는 module path를 직접 알아야 실행할 수 있는 세 개의 별도 script로 남아 있었다.
 

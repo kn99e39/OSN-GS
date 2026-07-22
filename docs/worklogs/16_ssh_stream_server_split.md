@@ -1,4 +1,4 @@
-# 16. SSH Stream Server 분리
+# 16. SSH 스트림 서버 분리
 
 ## 수행 내용
 
@@ -28,7 +28,7 @@ snapshot JSON payload format은 변하지 않았다. browser ping message에는 
 - 독립 stream server는 활성 Python environment에 websockets package가 필요하다.
 - server는 의도적으로 127.0.0.1에만 bind한다. 원격 renderer 접근에는 SSH port forwarding이 필요하다.
 
-## 2026-07-15 Notebook Interrupt Cleanup
+## 2026-07-15 노트북 인터럽트 정리
 
 - notebook Train cell은 이제 _run_monitored_process() 안에서 KeyboardInterrupt를 잡아 active train.py subprocess를 종료한 뒤 interrupt를 다시 전달한다.
 - 먼저 process.terminate()를 호출하고 최대 10초 기다리며, 종료되지 않으면 process.kill()로 전환한다.

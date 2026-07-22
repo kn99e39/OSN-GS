@@ -1,4 +1,4 @@
-# 6. ADC Parity Expansion
+# 6. ADC 동등성 확장
 
 ## 작업 내용
 

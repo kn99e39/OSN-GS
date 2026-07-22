@@ -1,4 +1,4 @@
-# 25. Renderer Local-Test Handoff
+# 25. 렌더러 로컬 테스트 인계
 
 WebGPU를 사용할 수 있는 local machine에서 실행한다. active notebook이나 gaussian-splatting은 수정하지 않는다.
 

@@ -1,4 +1,4 @@
-# 14. Synthetic NURBS Constructor Benchmark
+# 14. 합성 NURBS 생성자 벤치마크
 
 날짜: 2026-07-13
 

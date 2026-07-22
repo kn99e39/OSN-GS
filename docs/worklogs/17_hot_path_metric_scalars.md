@@ -1,4 +1,4 @@
-# 17. Hot-Path Metric Scalar Extraction Removed
+# 17. 핫패스 지표 스칼라 추출 제거
 
 날짜: 2026-07-15
 

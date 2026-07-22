@@ -101,6 +101,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Inspect persistent NURBS patch quality every N iterations; this does not globally rebuild voxels.",
     )
     parser.add_argument("--surface_loss_patch_budget", type=int, default=16, help="NURBS patches evaluated per iteration. 0 evaluates all patches.")
+    parser.add_argument("--surface_maintenance_patch_budget", type=int, default=16, help="NURBS patches inspected per maintenance pass. 0 checks all patches.")
     parser.add_argument("--surface_residual_ratio_threshold", type=float, default=0.03)
     parser.add_argument("--surface_residual_patience", type=int, default=3)
     parser.add_argument("--surface_local_min_gaussians", type=int, default=64)
@@ -117,6 +118,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--stream_iterations", nargs="*", type=int, default=[])
     parser.add_argument("--stream_max_gaussians", type=int, default=0)
     parser.add_argument("--stream_cache_dir", type=str, default="", help="Directory for cached stream snapshot JSON files.")
+    parser.add_argument("--stream_queue_size", type=int, default=2, help="Maximum pinned-memory snapshots awaiting serialization/I/O.")
     parser.add_argument("--disable_stream_nurbs", action="store_true")
     parser.add_argument("--disable_output_files", action="store_true")
     parser.add_argument("--resume_checkpoint", type=str, default="")
@@ -205,6 +207,7 @@ def main() -> None:
         iterations=args.iterations,
         surface_rebuild_interval=max(0, int(args.surface_update_interval)),
         surface_loss_patch_budget=max(0, int(args.surface_loss_patch_budget)),
+        surface_maintenance_patch_budget=max(0, int(args.surface_maintenance_patch_budget)),
         surface_residual_ratio_threshold=max(0.0, float(args.surface_residual_ratio_threshold)),
         surface_residual_patience=max(1, int(args.surface_residual_patience)),
         surface_local_min_gaussians=max(4, int(args.surface_local_min_gaussians)),
@@ -220,6 +223,7 @@ def main() -> None:
         stream_iterations=tuple(sorted({int(value) for value in args.stream_iterations if int(value) > 0})),
         stream_max_gaussians=max(0, int(args.stream_max_gaussians)),
         stream_cache_dir=args.stream_cache_dir,
+        stream_queue_size=max(1, int(args.stream_queue_size)),
         stream_nurbs=not args.disable_stream_nurbs,
         write_output_files=not args.disable_output_files,
         resume_checkpoint=args.resume_checkpoint,

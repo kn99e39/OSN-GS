@@ -1,4 +1,4 @@
-# 2. Voxel Boundary Patch Binding
+# 2. 복셀 경계 패치 결속
 
 ## 작업 내용
 

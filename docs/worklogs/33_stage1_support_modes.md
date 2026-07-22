@@ -1,4 +1,4 @@
-# Stage 1 Voxel-Per-Patch Support Modes (`stage1_support_mode`)
+# Stage 1 복셀-패치별 지지 모드 (`stage1_support_mode`)
 
 2026-07-19. Stage 1-F(경계 density 정제)까지 구현된 시점의 support mask 모드 정리.
 각 모드가 무엇을 하고, 언제 쓰고, 어떤 비용을 갖는지 기록한다. 수치는 constructor
@@ -9,7 +9,7 @@ benchmark(points=600, seed=0, min=10/max=150/depth=6) 기준이며 전체 표는
 만들고(내부 raw Gaussian에 피팅), patch의 rectangular UV chart를
 `uv_support_mask`로 잘라낸다. `stage1_support_mode`는 그 mask의 출처를 정한다.
 
-## `none` — untrimmed
+## `none` — 미트리밍
 
 - mask 없음. patch chart가 [0,1]² 전체를 그대로 덮는다.
 - 용도: mask 효과 자체를 분리 측정하는 ablation 대조군.
@@ -17,7 +17,7 @@ benchmark(points=600, seed=0, min=10/max=150/depth=6) 기준이며 전체 표는
   자리에서만 생긴다. seam성 가짜 hole은 가장 적다(chart가 서로 덮어버리므로).
 - planar_hole: false-fill 0.342, hole IoU 0.610.
 
-## `voxel` — exact plane-AABB polygon
+## `voxel` — 정확한 plane-AABB polygon
 
 - 각 leaf의 local PCA plane과 voxel AABB의 정확한 교차 polygon(사각~육각형)을
   patch UV frame으로 투영해 rasterize한 mask. 데이터 분포는 보지 않는다.
@@ -27,7 +27,7 @@ benchmark(points=600, seed=0, min=10/max=150/depth=6) 기준이며 전체 표는
 - 한계: **voxel 내부의 데이터 없는 영역**(hole 경계 voxel의 hole 쪽 절반 등)도
   polygon이 덮는다. planar_hole: false-fill 0.338, hole IoU 0.572.
 
-## `voxel_density` — polygon + density-refined boundary (기본값, Stage 1-F)
+## `voxel_density` — polygon + 밀도 보정 경계 (기본값, Stage 1-F)
 
 - leaf face adjacency로 boundary leaf(외부/미해결 face 접촉)를 검출하고,
   **boundary leaf에만** density 정제를 적용한다. interior leaf는 `voxel`과 동일.
@@ -50,7 +50,7 @@ benchmark(points=600, seed=0, min=10/max=150/depth=6) 기준이며 전체 표는
 - 공격 설정 bw=1.5/th=1.5: false-fill 0.130까지 내려가지만 density_gradient가
   0.769로 더 후퇴. th≤1.0은 polygon-only로 수렴.
 
-## 폐기된 모드: `voxel_data` (occupancy AND)
+## 폐기된 모드: `voxel_data` (점유 영역 AND)
 
 Stage 1-F 이전에 잠시 있던 중간 구현. polygon에 leaf 자신의 UV 이진
 occupancy(count 적응 coarse grid)를 그대로 AND했다. boundary/interior 구분이

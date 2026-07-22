@@ -626,6 +626,7 @@ class TorchOSNGSPipeline:
         local_min_component: int = 16,
         enable_local_correction: bool = True,
         refresh_uv: bool = True,
+        patch_ids: tuple[int, ...] | None = None,
     ) -> dict[str, Any]:
         """Inspect persistent NURBS patches and locally split sustained failures.
 
@@ -660,8 +661,19 @@ class TorchOSNGSPipeline:
         candidates: list[int] = []
         residuals: dict[int, float] = {}
         uv_refreshed = 0
+        if patch_ids is None:
+            selected_patch_ids = tuple(range(len(state.surface_patches)))
+        else:
+            selected_patch_ids = tuple(
+                dict.fromkeys(
+                    int(patch_id)
+                    for patch_id in patch_ids
+                    if 0 <= int(patch_id) < len(state.surface_patches)
+                )
+            )
 
-        for patch_id, patch in enumerate(state.surface_patches):
+        for patch_id in selected_patch_ids:
+            patch = state.surface_patches[patch_id]
             indices = torch.nonzero(
                 certain & (model.cluster_ids == patch_id), as_tuple=False
             ).reshape(-1)
@@ -701,10 +713,13 @@ class TorchOSNGSPipeline:
 
         support_masks_refreshed = 0
         if refresh_uv and uv_refreshed and int(self.config.surface_trim_resolution) > 0:
-            self._assign_uv_support_masks(model, state.surface_patches)
-            support_masks_refreshed = len(state.surface_patches)
+            self._assign_uv_support_masks(model, state.surface_patches, patch_ids=selected_patch_ids)
+            support_masks_refreshed = len(selected_patch_ids)
 
-        state.surface_patch_residuals = residuals
+        if patch_ids is None:
+            state.surface_patch_residuals = residuals
+        else:
+            state.surface_patch_residuals.update(residuals)
         added_patches = 0
         corrected: list[int] = []
         if enable_local_correction:
@@ -984,7 +999,10 @@ class TorchOSNGSPipeline:
         )
 
     def _assign_uv_support_masks(
-        self, model: TorchGaussianModel, patches: list[TorchNURBSSurface]
+        self,
+        model: TorchGaussianModel,
+        patches: list[TorchNURBSSurface],
+        patch_ids: tuple[int, ...] | None = None,
     ) -> None:
         """Trim each patch to the UV region actually backed by observed Gaussians.
 
@@ -1002,7 +1020,9 @@ class TorchOSNGSPipeline:
         uv = model.surface_uv.detach()
         cluster_ids = model.cluster_ids.detach()
         n_patches = len(patches)
-        for patch_id, patch in enumerate(patches):
+        selected_patch_ids = range(n_patches) if patch_ids is None else patch_ids
+        for patch_id in selected_patch_ids:
+            patch = patches[patch_id]
             assigned = cluster_ids == patch_id
             if patch_id == 0:
                 assigned = assigned | (cluster_ids < 0) | (cluster_ids >= n_patches)

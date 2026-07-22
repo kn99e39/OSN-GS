@@ -1,4 +1,4 @@
-# 28. UV Trim-Mask Lifecycle
+# 28. UV 트림 마스크 수명주기
 
 날짜: 2026-07-15
 

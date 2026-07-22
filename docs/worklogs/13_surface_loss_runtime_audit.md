@@ -1,4 +1,4 @@
-# 13. Surface Loss Runtime Audit
+# 13. 표면 손실 런타임 감사
 
 날짜: 2026-07-14
 

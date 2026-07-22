@@ -1,4 +1,4 @@
-# 12. Surface Loss Patch Minibatch
+# 12. 표면 손실 패치 미니배치
 
 날짜: 2026-07-14
 

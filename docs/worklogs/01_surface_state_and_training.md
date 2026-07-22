@@ -1,4 +1,4 @@
-# 1. Surface State Preservation and Trainable NURBS
+# 1. 표면 상태 보존 및 학습 가능한 NURBS
 
 ## 작업 내용
 

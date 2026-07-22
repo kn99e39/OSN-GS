@@ -1,4 +1,4 @@
-# 9. CUDA Build Preflight
+# 9. CUDA 빌드 사전 점검
 
 날짜: 2026-07-14
 

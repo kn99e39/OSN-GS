@@ -1,4 +1,4 @@
-# Phase 4 Hardening, Step 4-A/4-B: 진단 무결성 패치 + seam-offset sweep
+# Phase 4 하드닝, Step 4-A/4-B: 진단 무결성 패치 + seam-offset 탐색
 
 작성일: 2026-07-21
 상태: Step 4-A 완료(진단 무결성 패치). Step 4-B(seam-offset sweep) 시도했으나 결정적 승자 없음, 채택하지 않음.
@@ -19,7 +19,7 @@
 
 검증: 새 단위 테스트 7개(`OrientationHolonomyUnitTest`, `ScaleNormalizedJacobianUnitTest`), 전체 106/106 통과. `planar_hole`/`planar_hole_offcenter` 재실행 결과 기존 baseline과 완전히 동일 — Step 4-A는 순수 진단 추가라는 목표를 지켰다.
 
-## Step 4-B: Seam-offset sweep — 시도했으나 결정적 승자 없음
+## Step 4-B: Seam-offset 탐색 — 시도했으나 결정적 승자 없음
 
 `build_annulus_chart`에 `seam_phase_offset` 파라미터(기본 0.0, `uniform_angle` 모드에서만 의미 있음)를 추가하고, 8개 wedge 폭은 그대로 유지한 채 전체 seam phase만 회전시키는 방식을 시도했다. wedge 개수/폭이 안 바뀌므로 `arc_length_outer`보다 구조적으로 훨씬 안전한 후보였다.
 

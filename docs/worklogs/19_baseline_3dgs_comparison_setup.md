@@ -1,4 +1,4 @@
-# 19. Baseline Graphdeco 3DGS: Selector + Buildable On This System
+# 19. 기준 Graphdeco 3DGS: 선택자 및 현 시스템 빌드 가능 상태
 
 날짜: 2026-07-15
 

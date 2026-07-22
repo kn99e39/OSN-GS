@@ -1,4 +1,4 @@
-# 7. Density-Adaptive Voxel NURBS
+# 7. 밀도 적응형 복셀 NURBS
 
 날짜: 2026-07-10
 

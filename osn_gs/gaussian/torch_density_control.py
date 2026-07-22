@@ -143,31 +143,50 @@ def apply_adaptive_density_control(
             clone_mask = torch.zeros_like(clone_mask)
             split_mask = torch.zeros_like(split_mask)
 
-    cloned = _clone_selected(model, clone_mask, available)
+    clone_idx = _limited_indices(clone_mask, available)
+    cloned = int(clone_idx.numel())
     if available is not None:
         available = max(0, available - cloned)
-    split = _split_selected(model, split_mask, max(1, int(config.split_samples)), available)
+    split_samples = max(1, int(config.split_samples))
+    parent_limit = None if available is None else max(0, available // split_samples)
+    split_idx = _limited_indices(split_mask, parent_limit)
+    split = int(split_idx.numel()) * split_samples
 
-    current_certain = ~model.is_uncertain
-    current_scale_max = model.get_scaling.detach().max(dim=1).values
-    opacity = model.get_opacity.detach().reshape(-1)
+    candidate = _shape_transaction_candidates(model, clone_idx, split_idx, split_samples)
+    current_certain = ~candidate["is_uncertain"]
+    current_scale_max = torch.exp(candidate["scaling"]).max(dim=1).values
+    opacity = torch.sigmoid(candidate["opacity"]).reshape(-1)
     opacity_mask = current_certain & (opacity < float(config.prune_opacity_threshold))
     screen_mask = torch.zeros_like(opacity_mask)
     world_mask = torch.zeros_like(opacity_mask)
+    split_parent_mask = torch.zeros_like(opacity_mask)
+    split_parent_mask[split_idx] = True
+    # The old append path reset screen radii after the first growth operation.
+    # Preserve that behavior while collapsing all edits into one transaction.
+    candidate_radii = torch.zeros_like(opacity_mask, dtype=torch.float32)
+    if cloned + split == 0:
+        candidate_radii[: len(model)] = model.max_radii2D
     size_pruning_active = iteration > int(config.screen_size_prune_from_iter)
     if size_pruning_active and config.max_screen_size > 0:
-        screen_mask = current_certain & (model.max_radii2D > float(config.max_screen_size))
+        screen_mask = current_certain & (candidate_radii > float(config.max_screen_size))
         if config.max_scale_ratio > 0:
             world_mask = current_certain & (
                 current_scale_max > float(config.max_scale_ratio) * float(scene_extent)
             )
-    prune_mask = opacity_mask | screen_mask | world_mask
+    # Split parents had already disappeared before prune-reason accounting.
+    eligible_prune = ~split_parent_mask
+    opacity_mask &= eligible_prune
+    screen_mask &= eligible_prune
+    world_mask &= eligible_prune
+    prune_mask = split_parent_mask | opacity_mask | screen_mask | world_mask
     pruned_opacity = int(opacity_mask.sum().item())
     pruned_screen = int((screen_mask & ~opacity_mask).sum().item())
     pruned_world = int((world_mask & ~opacity_mask & ~screen_mask).sum().item())
 
-    pruned = _prune_mask(model, prune_mask)
-    if pruned == 0:
+    pruned = int((opacity_mask | screen_mask | world_mask).sum().item())
+    if bool(prune_mask.any()) or cloned + split > 0:
+        _commit_shape_transaction(model, candidate, ~prune_mask)
+    else:
         model._reset_density_stats(len(model))
     return TorchDensityControlReport(
         cloned=cloned,
@@ -177,7 +196,6 @@ def apply_adaptive_density_control(
         pruned_screen=pruned_screen,
         pruned_world=pruned_world,
     )
-
 
 def apply_uncertain_density_control(
     model: TorchGaussianModel,
@@ -193,63 +211,75 @@ def apply_uncertain_density_control(
     return TorchDensityControlReport(uncertain_pruned=pruned)
 
 
-def _clone_selected(model: TorchGaussianModel, mask, available: int | None = None) -> int:
-    if available is not None and available <= 0:
-        return 0
-    idx = _limited_indices(mask, available)
-    if idx.numel() == 0:
-        return 0
-    model.append_gaussians_raw(
-        xyz=model._xyz.detach()[idx],
-        features_dc=model._features_dc.detach()[idx],
-        features_rest=model._features_rest.detach()[idx],
-        opacity=model._opacity.detach()[idx],
-        scaling=model._scaling.detach()[idx],
-        rotation=model._rotation.detach()[idx],
-        confidence=model._confidence.detach()[idx],
-        uncertain_mask=model.is_uncertain[idx],
-        surface_uv=model.surface_uv[idx],
-        cluster_ids=model.cluster_ids[idx],
-    )
-    return int(idx.numel())
+def _shape_transaction_candidates(model: TorchGaussianModel, clone_idx, split_idx, samples: int) -> dict:
+    """Build clone/split candidates without mutating model tensors."""
 
-
-def _split_selected(model: TorchGaussianModel, mask, samples: int, available: int | None = None) -> int:
     torch = require_torch()
-    if available is not None and available <= 0:
-        return 0
-    parent_limit = None if available is None else max(0, available // samples)
-    idx = _limited_indices(mask, parent_limit)
-    if idx.numel() == 0:
-        return 0
+    raw = {
+        "xyz": model._xyz.detach(),
+        "features_dc": model._features_dc.detach(),
+        "features_rest": model._features_rest.detach(),
+        "opacity": model._opacity.detach(),
+        "scaling": model._scaling.detach(),
+        "rotation": model._rotation.detach(),
+        "confidence": model._confidence.detach(),
+        "is_uncertain": model.is_uncertain,
+        "surface_uv": model.surface_uv,
+        "cluster_ids": model.cluster_ids,
+    }
+    additions = {key: [] for key in raw}
+    if clone_idx.numel() > 0:
+        for key, value in raw.items():
+            additions[key].append(value[clone_idx])
+    if split_idx.numel() > 0:
+        parent_scale = model.get_scaling.detach()[split_idx]
+        repeated_scale = parent_scale.repeat_interleave(samples, dim=0)
+        offsets = torch.randn_like(repeated_scale) * repeated_scale
+        parent_rotation = model.get_rotation.detach()[split_idx].repeat_interleave(samples, dim=0)
+        vector = parent_rotation[:, 1:]
+        cross = 2.0 * torch.cross(vector, offsets, dim=1)
+        offsets = offsets + parent_rotation[:, :1] * cross + torch.cross(vector, cross, dim=1)
+        split_values = {
+            "xyz": raw["xyz"][split_idx].repeat_interleave(samples, dim=0) + offsets,
+            "features_dc": raw["features_dc"][split_idx].repeat_interleave(samples, dim=0),
+            "features_rest": raw["features_rest"][split_idx].repeat_interleave(samples, dim=0),
+            "opacity": raw["opacity"][split_idx].repeat_interleave(samples, dim=0),
+            "scaling": torch.log(torch.clamp(repeated_scale / (0.8 * samples), min=1e-6)),
+            "rotation": raw["rotation"][split_idx].repeat_interleave(samples, dim=0),
+            "confidence": raw["confidence"][split_idx].repeat_interleave(samples, dim=0),
+            "is_uncertain": raw["is_uncertain"][split_idx].repeat_interleave(samples, dim=0),
+            "surface_uv": raw["surface_uv"][split_idx].repeat_interleave(samples, dim=0),
+            "cluster_ids": raw["cluster_ids"][split_idx].repeat_interleave(samples, dim=0),
+        }
+        for key, value in split_values.items():
+            additions[key].append(value)
+    return {
+        key: torch.cat([value, *additions[key]], dim=0) if additions[key] else value
+        for key, value in raw.items()
+    }
 
-    parent_scale = model.get_scaling.detach()[idx]
-    repeated_scale = parent_scale.repeat_interleave(samples, dim=0)
-    offsets = torch.randn_like(repeated_scale) * repeated_scale
-    parent_rotation = model.get_rotation.detach()[idx].repeat_interleave(samples, dim=0)
-    vector = parent_rotation[:, 1:]
-    cross = 2.0 * torch.cross(vector, offsets, dim=1)
-    offsets = offsets + parent_rotation[:, :1] * cross + torch.cross(vector, cross, dim=1)
-    new_xyz = model._xyz.detach()[idx].repeat_interleave(samples, dim=0) + offsets
-    new_scaling = torch.log(torch.clamp(repeated_scale / (0.8 * samples), min=1e-6))
-    model.append_gaussians_raw(
-        xyz=new_xyz,
-        features_dc=model._features_dc.detach()[idx].repeat_interleave(samples, dim=0),
-        features_rest=model._features_rest.detach()[idx].repeat_interleave(samples, dim=0),
-        opacity=model._opacity.detach()[idx].repeat_interleave(samples, dim=0),
-        scaling=new_scaling,
-        rotation=model._rotation.detach()[idx].repeat_interleave(samples, dim=0),
-        confidence=model._confidence.detach()[idx].repeat_interleave(samples, dim=0),
-        uncertain_mask=model.is_uncertain[idx].repeat_interleave(samples, dim=0),
-        surface_uv=model.surface_uv[idx].repeat_interleave(samples, dim=0),
-        cluster_ids=model.cluster_ids[idx].repeat_interleave(samples, dim=0),
+
+def _commit_shape_transaction(model: TorchGaussianModel, candidate: dict, keep_mask) -> None:
+    """Apply all ADC growth and pruning with one parameter/Adam-state rebuild."""
+
+    torch = require_torch()
+    old_count = len(model)
+    old_keep = torch.as_tensor(keep_mask[:old_count], dtype=torch.bool, device=model.device)
+    optimizer_keep_indices = torch.nonzero(old_keep, as_tuple=False).reshape(-1)
+    selected = {key: value[keep_mask] for key, value in candidate.items()}
+    model.replace_tensors(
+        xyz=selected["xyz"],
+        features_dc=selected["features_dc"],
+        features_rest=selected["features_rest"],
+        opacity=selected["opacity"],
+        scaling=selected["scaling"],
+        rotation=selected["rotation"],
+        confidence=selected["confidence"],
+        uncertain_mask=selected["is_uncertain"],
+        surface_uv=selected["surface_uv"],
+        cluster_ids=selected["cluster_ids"],
+        optimizer_keep_indices=optimizer_keep_indices,
     )
-
-    prune_original = torch.zeros((len(model),), dtype=torch.bool, device=model.device)
-    prune_original[idx] = True
-    _prune_mask(model, prune_original)
-    return int(idx.numel() * samples)
-
 
 def _prune_mask(model: TorchGaussianModel, prune_mask) -> int:
     torch = require_torch()

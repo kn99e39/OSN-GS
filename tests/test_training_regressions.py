@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import queue
 import tempfile
 import unittest
 from pathlib import Path
@@ -8,6 +9,7 @@ import torch
 
 from osn_gs.core.torch_pipeline import TorchOSNGSPipeline, TorchPipelineConfig
 from osn_gs.core.torch_trainer import TorchOSNGSTrainer, TorchTrainingConfig
+from osn_gs.data.torch_scene import TorchScene
 from osn_gs.gaussian.torch_density_control import (
     TorchDensityControlConfig,
     apply_adaptive_density_control,
@@ -229,6 +231,97 @@ class TrainingRegressionTest(unittest.TestCase):
         )
         self.assertTrue(torch.equal(state.model._xyz.grad[:-1], torch.ones_like(state.model._xyz.grad[:-1])))
         self.assertTrue(torch.equal(state.model._xyz.grad[-1], torch.zeros_like(state.model._xyz.grad[-1])))
+
+    def test_adc_clone_split_and_prune_use_one_shape_transaction(self):
+        _, state = self._state(count=6)
+        model = state.model
+        model.training_setup(GaussianParameterGroups())
+        model.denom.fill_(1.0)
+        model.xyz_gradient_accum.zero_()
+        model.xyz_gradient_accum[:2] = 1.0
+        model._scaling.data[0].fill_(torch.log(torch.tensor(1e-3)))
+        model._scaling.data[1].fill_(torch.log(torch.tensor(0.1)))
+        calls = 0
+        original = model.replace_tensors
+
+        def counted(*args, **kwargs):
+            nonlocal calls
+            calls += 1
+            return original(*args, **kwargs)
+
+        model.replace_tensors = counted
+        report = apply_adaptive_density_control(
+            model,
+            TorchDensityControlConfig(
+                densify_grad_threshold=0.1,
+                percent_dense=0.01,
+                split_samples=2,
+                max_screen_size=0,
+                max_scale_ratio=0,
+            ),
+            scene_extent=1.0,
+            iteration=1000,
+        )
+        self.assertEqual(calls, 1)
+        self.assertEqual(report.cloned, 1)
+        self.assertEqual(report.split, 2)
+        self.assertEqual(len(model), 8)
+
+    def test_view_sampling_uses_reproducible_epoch_shuffle(self):
+        cameras = list(range(7))
+        scene = TorchScene(None, None, cameras, torch.zeros((7, 1)), "cpu", view_sampling_seed=17)
+        first = [scene._view_indices(iteration, 1)[0] for iteration in range(1, 8)]
+        second = [scene._view_indices(iteration, 1)[0] for iteration in range(8, 15)]
+        replay = TorchScene(None, None, cameras, torch.zeros((7, 1)), "cpu", view_sampling_seed=17)
+        replay_first = [replay._view_indices(iteration, 1)[0] for iteration in range(1, 8)]
+        self.assertEqual(sorted(first), list(range(7)))
+        self.assertEqual(sorted(second), list(range(7)))
+        self.assertNotEqual(first, second)
+        self.assertEqual(first, replay_first)
+
+    def test_maintenance_patch_budget_rotates(self):
+        _, state = self._state()
+        trainer = TorchOSNGSTrainer.__new__(TorchOSNGSTrainer)
+        trainer.training_config = TorchTrainingConfig(
+            surface_rebuild_interval=1000,
+            surface_maintenance_patch_budget=3,
+        )
+        state.iteration = 1000
+        first = trainer._maintenance_patch_ids(state)
+        state.iteration = 2000
+        second = trainer._maintenance_patch_ids(state)
+        self.assertEqual(first, (0, 1, 2))
+        self.assertEqual(second, (3, 4, 5))
+
+    def test_stream_snapshot_deduplicates_same_iteration(self):
+        _, state = self._state(count=4)
+        trainer = TorchOSNGSTrainer.__new__(TorchOSNGSTrainer)
+        trainer.torch = torch
+        trainer.training_config = TorchTrainingConfig(
+            stream_cache_dir="unused",
+            stream_every=1,
+            stream_queue_size=2,
+        )
+        trainer._stream_queue = queue.Queue(maxsize=2)
+        trainer._stream_thread = object()
+        trainer._streamed_iterations = {}
+        trainer._stream_last_error_at = 0.0
+        trainer._ensure_stream_worker = lambda: None
+        trainer._stream_copy_event = lambda device: None
+        trainer._stream_payload = lambda current, include_nurbs=False: {"iteration": current.iteration}
+        state.iteration = 10
+        trainer._stream_snapshot(state, include_nurbs=True)
+        trainer._stream_snapshot(state, include_nurbs=True)
+        self.assertEqual(trainer._stream_queue.qsize(), 1)
+
+    def test_cpu_snapshot_tensor_is_an_immutable_clone(self):
+        trainer = TorchOSNGSTrainer.__new__(TorchOSNGSTrainer)
+        trainer.torch = torch
+        source = torch.arange(6, dtype=torch.float32)
+        snapshot = trainer._snapshot_tensor(source)
+        source.zero_()
+        self.assertTrue(torch.equal(snapshot, torch.arange(6, dtype=torch.float32)))
+        self.assertNotEqual(snapshot.data_ptr(), source.data_ptr())
 
     def test_checkpoint_round_trip_restores_raw_state(self):
         _, state = self._state()
