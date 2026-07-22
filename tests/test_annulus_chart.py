@@ -86,6 +86,51 @@ class ChartTopologyClassifierTest(unittest.TestCase):
 
 
 @unittest.skipUnless(torch is not None, "PyTorch is required")
+class EligibilityFilteringTopologySafetyTest(unittest.TestCase):
+    """Regression guard for worklog 49: adopting eligibility-filtered
+    boundary support (worklog 45-48) as the ``extract_component_boundary``
+    default broke hole/ring topology on 3 of 4 real annulus scenes when no
+    gap-closing dilation was applied to the (now tighter) eligibility mask
+    -- individually hull-clipped/dropped boundary leaves lost raster contact
+    with their ring neighbors, merging the hole into the exterior background
+    (``classify_boundary_result`` flipped ``annulus`` -> ``disk_like``/
+    ``complex``). ``eligibility_gap_closing_cells`` (default 1, separate
+    from the plain-path ``coarse_gap_closing_cells=2``) fixes this."""
+
+    def _extract(self, points, **overrides):
+        from osn_gs.surface.torch_component_boundary import extract_component_boundary
+        from osn_gs.surface.torch_surface_components import build_surface_components
+        from osn_gs.surface.torch_voxel_hierarchy import build_voxel_gaussian_hierarchy
+
+        hierarchy = build_voxel_gaussian_hierarchy(points, voxel_min_gaussian_count=10, voxel_max_gaussian_count=150, voxel_max_depth=6)
+        component_set = build_surface_components(hierarchy, points)
+        self.assertEqual(component_set.component_count(), 1)
+        component = component_set.components[0]
+        kwargs = dict(resolution=64, density_threshold=3.0)
+        kwargs.update(overrides)
+        return extract_component_boundary(component, hierarchy, points, **kwargs)
+
+    def test_default_eligibility_gap_closing_keeps_hole_topology(self):
+        from osn_gs.surface.torch_chart_topology import classify_boundary_result
+
+        result = self._extract(_annulus())
+        self.assertEqual(classify_boundary_result(result), "annulus")
+
+    def test_zero_eligibility_gap_closing_can_break_hole_topology(self):
+        # Documents the actual failure mode found in worklog 49 -- without
+        # ANY gap-closing on the eligibility path, the hole ring can lose
+        # connectivity and the hole merges into the exterior background.
+        # ``count=600`` (sparser than the module's default 900-point
+        # ``_annulus()``) is what actually reproduces it -- verified by
+        # direct measurement, not assumed; the denser default fixture does
+        # not trigger this failure mode.
+        from osn_gs.surface.torch_chart_topology import classify_boundary_result
+
+        result = self._extract(_annulus(count=600), eligibility_gap_closing_cells=0)
+        self.assertNotEqual(classify_boundary_result(result), "annulus")
+
+
+@unittest.skipUnless(torch is not None, "PyTorch is required")
 class AnnulusOGridChartTest(unittest.TestCase):
     def _build(self, points, **overrides):
         from osn_gs.surface.torch_annulus_chart import build_annulus_chart

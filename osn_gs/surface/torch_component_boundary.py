@@ -15,9 +15,16 @@ with.
 
 Pipeline per component:
 
-1. **Coarse support** — union of every member leaf's plane-AABB intersection
-   polygon (Stage 1-C's exact polygon, reused unmodified), each projected
+1. **Coarse support** — by default (``filter_boundary_leaf_eligibility=True``,
+   worklog 45-49), BOUNDARY member leaves are first classified ACTIVE_OBSERVED/
+   UNCERTAIN/INACTIVE/COMPLEX (``osn_gs.surface.torch_boundary_eligibility``);
+   only ACTIVE_OBSERVED leaves get their plane-AABB intersection polygon
+   (Stage 1-C's exact polygon) convex-hull-clipped to their own member
+   Gaussians, INACTIVE leaves are dropped, and interior/UNCERTAIN/COMPLEX
+   leaves keep the original unclipped polygon. Each polygon is projected
    into the component's own UV frame and rasterized, then OR-ed together.
+   This fixes Phase 1's plane-AABB union systematically over-estimating
+   support on boundary leaves regardless of actual point occupancy.
 2. **Refined support** — an unweighted, per-sample-adaptive-bandwidth KDE
    over the component's own raw Gaussian points (same construction as Stage
    1-F, §torch_boundary_refinement.py, now evaluated once per component
@@ -39,6 +46,10 @@ This module is additive and benchmark/analysis-facing only (like Phase 1's
 from dataclasses import dataclass, field
 from typing import Any
 
+from osn_gs.surface.torch_boundary_eligibility import (
+    DEFAULT_ELIGIBILITY_THRESHOLDS,
+    build_eligibility_filtered_coarse_mask,
+)
 from osn_gs.surface.torch_boundary_refinement import (
     density_grid,
     kde_density,
@@ -222,8 +233,44 @@ def extract_component_boundary(
     density_threshold: float = 2.0,
     tiny_loop_area_cells: int = 4,
     coarse_gap_closing_cells: int = 2,
+    filter_boundary_leaf_eligibility: bool = True,
+    eligibility_thresholds: dict[str, float] = DEFAULT_ELIGIBILITY_THRESHOLDS,
+    eligibility_gap_closing_cells: int = 1,
 ) -> ComponentBoundaryResult:
     """Extract the outer/hole boundary structure of one Phase 1 component.
+
+    ``filter_boundary_leaf_eligibility`` (default ``True`` -- adopted per
+    ``docs/worklogs/45-49`` after end-to-end validation against the real
+    ``build_annulus_chart`` fit, not just raster-mask comparisons): the
+    plain per-leaf polygon union over-estimates support on BOUNDARY leaves
+    (worklog 45's root cause). When enabled, boundary leaves are classified
+    ACTIVE_OBSERVED/UNCERTAIN/INACTIVE/COMPLEX
+    (``osn_gs.surface.torch_boundary_eligibility``) and only
+    ``ACTIVE_OBSERVED`` leaves are convex-hull-clipped; ``INACTIVE`` leaves
+    are dropped; everything else (interior leaves, UNCERTAIN, COMPLEX)
+    keeps its original polygon. Set to ``False`` to reproduce the exact
+    pre-worklog-45 behavior (plain union, no classification) for regression
+    comparison. This only changes the mask FED INTO ``coarse_mask_for_
+    combine`` below -- the raw ``coarse_mask`` field (used for the
+    ``coarse_support_cells``/``false_fill_cells`` diagnostics) is always the
+    unfiltered plain union, unaffected by this flag.
+
+    ``eligibility_gap_closing_cells`` (default 1, only used when
+    ``filter_boundary_leaf_eligibility=True`` -- a SEPARATE, smaller value
+    than ``coarse_gap_closing_cells`` below, found necessary by direct
+    measurement, not assumed): individually hull-clipped/dropped boundary
+    leaves can lose raster contact with their neighbors, breaking the ring
+    of leaves around a hole and merging it into the exterior background.
+    With no gap-closing at all (k=0) this actually happened on 3 of 4
+    validation scenes (worklog 49) -- ``classify_boundary_result`` flipped
+    from ``annulus`` to ``disk_like``/``complex``. The PLAIN
+    ``coarse_gap_closing_cells`` value (2, tuned for the unfiltered mask)
+    is too strong here: applying it to the already-tighter eligibility mask
+    re-inflates it almost back to the unfiltered baseline (measured:
+    planar_hole's refined-cell count went from 2605 undilated to 3051 at
+    k=2, vs. 3059 for the old unfiltered default), erasing most of the
+    accuracy gain. k=1 keeps topology correct on all 4 validation scenes
+    AND keeps most of the false-fill improvement (worklog 49).
 
     ``coarse_gap_closing_cells`` (default 2, tuned for ``resolution=64`` --
     re-verify if resolution changes materially): each member leaf's
@@ -262,11 +309,19 @@ def extract_component_boundary(
             continue
         polygon_uv = frame.apply(polygon_world, clamp=False)
         coarse_mask = coarse_mask | rasterize_convex_polygon_uv(polygon_uv, resolution)
-    coarse_mask_for_combine = coarse_mask
-    if coarse_gap_closing_cells > 0:
-        k = int(coarse_gap_closing_cells)
+
+    coarse_mask_for_combine = (
+        build_eligibility_filtered_coarse_mask(
+            component, hierarchy, points, frame, resolution, thresholds=eligibility_thresholds,
+        )
+        if filter_boundary_leaf_eligibility
+        else coarse_mask
+    )
+    effective_gap_closing = eligibility_gap_closing_cells if filter_boundary_leaf_eligibility else coarse_gap_closing_cells
+    if effective_gap_closing > 0:
+        k = int(effective_gap_closing)
         coarse_mask_for_combine = torch.nn.functional.max_pool2d(
-            coarse_mask.float()[None, None], kernel_size=2 * k + 1, stride=1, padding=k
+            coarse_mask_for_combine.float()[None, None], kernel_size=2 * k + 1, stride=1, padding=k
         )[0, 0] > 0.5
 
     # --- 2.2 Refined support: one component-wide adaptive-bandwidth KDE.
@@ -339,6 +394,7 @@ def extract_component_boundary(
         "member_leaf_count": len(component.member_leaf_ids),
         "component_point_count": int(component_points.shape[0]),
         "coarse_gap_closing_cells": int(coarse_gap_closing_cells),
+        "filter_boundary_leaf_eligibility": bool(filter_boundary_leaf_eligibility),
     }
 
     return ComponentBoundaryResult(

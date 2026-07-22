@@ -72,7 +72,14 @@ class ComponentBoundaryExtractionTest(unittest.TestCase):
         self.assertFalse(bool((result.refined_mask & ~result.coarse_mask_dilated).any()))
 
     def test_coarse_gap_closing_cells_zero_falls_back_to_raw_coarse_mask(self):
-        result = self._extract(_plane_with_hole(), coarse_gap_closing_cells=0)
+        # filter_boundary_leaf_eligibility=False isolates the PLAIN-mask
+        # dilation toggle this test targets -- with eligibility filtering on
+        # (the default since worklog 45-49), coarse_gap_closing_cells=0
+        # alone would not disable dilation, since the eligibility path uses
+        # its own separate eligibility_gap_closing_cells (default 1, needed
+        # to keep hole/ring topology intact -- see extract_component_
+        # boundary's docstring and worklog 49).
+        result = self._extract(_plane_with_hole(), coarse_gap_closing_cells=0, filter_boundary_leaf_eligibility=False)
         self.assertTrue(torch.equal(result.coarse_mask, result.coarse_mask_dilated))
         self.assertFalse(bool((result.refined_mask & ~result.coarse_mask).any()))
 
