@@ -524,7 +524,7 @@ def _second_difference_penalty(n_u: int, n_v: int, dtype: Any, device: Any) -> A
     return penalty
 
 
-def _solve_control_grid_lsq(
+def _lsq_normal_system(
     points: Any,
     uv: Any,
     surface: TorchNURBSSurface,
@@ -532,13 +532,19 @@ def _solve_control_grid_lsq(
     tikhonov_lambda: float,
     chunk_size: int,
     point_weights: Any | None,
-) -> Any:
-    """Solve the regularized linear system for the control grid at fixed UVs.
+) -> tuple[Any, Any, float]:
+    """Assemble the regularized normal-equations system (matrix, rhs) for one
+    surface's control grid at fixed UVs, WITHOUT solving it.
 
-    Valid while rational weights are all 1 (true at fitting time): the surface is
-    then exactly linear in the control points, ``S(u, v) = B(u, v) · P``. The
-    Tikhonov term anchors to the current (seed) grid instead of zero so sparsely
-    covered control points follow the smooth seed rather than collapsing to origin.
+    Factored out of ``_solve_control_grid_lsq`` (Phase 5 Step 5-A,
+    ``docs/worklogs/55``) so a coupled multi-surface fit
+    (``fit_coupled_wedge_ring_lsq``) can accumulate several surfaces' own
+    local systems into one shared global system before a single joint solve,
+    instead of each surface solving independently. Returns ``(matrix, rhs,
+    total_weight)`` at the SAME per-surface scale ``_solve_control_grid_lsq``
+    used (matrix/rhs still need dividing by ``total_weight`` and combining
+    with the smoothness/Tikhonov terms -- callers that solve a single surface
+    should keep using ``_solve_control_grid_lsq``, which now calls this).
     """
 
     torch = require_torch()
@@ -565,7 +571,35 @@ def _solve_control_grid_lsq(
             normal_matrix = normal_matrix + rows.T @ rows
             normal_rhs = normal_rhs + rows.T @ chunk_points
             total_weight += float(end - start)
+    return normal_matrix, normal_rhs, total_weight
 
+
+def _solve_control_grid_lsq(
+    points: Any,
+    uv: Any,
+    surface: TorchNURBSSurface,
+    smoothness_lambda: float,
+    tikhonov_lambda: float,
+    chunk_size: int,
+    point_weights: Any | None,
+) -> Any:
+    """Solve the regularized linear system for the control grid at fixed UVs.
+
+    Valid while rational weights are all 1 (true at fitting time): the surface is
+    then exactly linear in the control points, ``S(u, v) = B(u, v) · P``. The
+    Tikhonov term anchors to the current (seed) grid instead of zero so sparsely
+    covered control points follow the smooth seed rather than collapsing to origin.
+    """
+
+    torch = require_torch()
+    n_u = int(surface.control_grid.shape[0])
+    n_v = int(surface.control_grid.shape[1])
+    n = n_u * n_v
+    dtype, device = surface.control_grid.dtype, surface.control_grid.device
+
+    normal_matrix, normal_rhs, total_weight = _lsq_normal_system(
+        points, uv, surface, smoothness_lambda, tikhonov_lambda, chunk_size, point_weights
+    )
     scale = max(total_weight, 1e-8)
     penalty = _second_difference_penalty(n_u, n_v, dtype, device)
     seed = surface.control_grid.detach().reshape(n, 3)
@@ -651,6 +685,163 @@ def fit_torch_visible_surface_lsq(
         diagnostics.final_weights = surface.weights.detach().clone()
         return surface, uv, diagnostics
     return surface, uv
+
+
+def fit_coupled_wedge_ring_lsq(
+    wedge_points: list[Any],
+    wedge_initial_uv: list[Any],
+    resolution_u: int = 8,
+    resolution_v: int = 4,
+    degree_u: int = 2,
+    degree_v: int = 2,
+    smoothness_lambda: float = 1e-4,
+    tikhonov_lambda: float = 1e-4,
+    correction_rounds: int = 2,
+    chunk_size: int = 4096,
+    projection_iterations: int = 4,
+    collect_diagnostics: bool = False,
+) -> list[tuple[TorchNURBSSurface, Any]] | list[tuple[TorchNURBSSurface, Any, NURBSFitDiagnostics]]:
+    """Phase 5 Step 5-A (``docs/worklogs/55``): jointly fit ``len(wedge_points)``
+    surfaces arranged in a cyclic ring -- matching the annulus O-grid's own
+    convention that wedge ``k``'s ``u=1`` edge is the SAME physical boundary
+    as wedge ``(k+1) % segments``'s ``u=0`` edge -- with each shared boundary
+    column solved as ONE joint variable instead of two independently-fit
+    columns later averaged.
+
+    This is NOT the previously-rejected hard-C0 pattern (see
+    ``build_annulus_chart``'s "NOT hard-enforced" docstring block): that
+    pattern fit each wedge fully independently to its own local optimum, then
+    overwrote the shared boundary columns post-hoc, so the interior was
+    optimized against a boundary it never actually saw. Here the shared
+    boundary control points are unknowns in ONE linear system from the first
+    solve onward, so both wedges' interiors are fit consistently against the
+    boundary they will actually share.
+
+    Only the boundary COLUMNS (``u=0``/``u=1``, i.e. ``resolution_v`` control
+    points each) are shared variables; each wedge's own interior columns stay
+    private, independently-regularized unknowns (this function's own
+    smoothness/Tikhonov terms never span across a seam) -- deliberately
+    narrower coupling than a cross-seam smoothness stencil would give, since
+    that (soft G1/tangent continuity across the seam) is explicitly scoped as
+    a separate, only-if-needed Step 5-B, not bundled into this function.
+
+    Each wedge is seeded independently exactly as ``fit_torch_visible_surface_lsq``
+    seeds a single surface (IDW off its own ``wedge_initial_uv``); by
+    construction (``build_annulus_chart``'s shared Coons boundary radii) two
+    adjacent wedges' seeded boundary columns already agree before any solve,
+    so accumulating both wedges' Tikhonov anchors into the one shared
+    variable is consistent from round 0 onward, not just after the first
+    joint solve.
+    """
+
+    torch = require_torch()
+    segments = len(wedge_points)
+    if segments < 2:
+        raise ValueError("fit_coupled_wedge_ring_lsq needs at least 2 wedges to form a ring.")
+    wedge_points = [
+        torch.as_tensor(p, dtype=torch.float32, device=p.device if hasattr(p, "device") else None)
+        for p in wedge_points
+    ]
+    wedge_initial_uv = [
+        torch.as_tensor(uv, dtype=torch.float32, device=wedge_points[k].device)
+        for k, uv in enumerate(wedge_initial_uv)
+    ]
+
+    surfaces = [
+        fit_torch_visible_surface(
+            wedge_points[k],
+            resolution_u=resolution_u,
+            resolution_v=resolution_v,
+            chunk_size=chunk_size,
+            degree_u=degree_u,
+            degree_v=degree_v,
+            initial_uv=wedge_initial_uv[k],
+        )
+        for k in range(segments)
+    ]
+    n_u = int(surfaces[0].control_grid.shape[0])
+    n_v = int(surfaces[0].control_grid.shape[1])
+    dtype, device = surfaces[0].control_grid.dtype, surfaces[0].control_grid.device
+    n_interior_cols = max(n_u - 2, 0)
+    total_boundary = segments * n_v
+    total_interior = segments * n_interior_cols * n_v
+    total = total_boundary + total_interior
+
+    # local_to_global[k] maps wedge k's flattened (n_u*n_v,) local grid index
+    # to its unique global variable index -- column 0 -> the boundary BEFORE
+    # wedge k (shared with wedge k-1's column n_u-1), column n_u-1 -> the
+    # boundary AFTER wedge k (shared with wedge k+1's column 0), interior
+    # columns 1..n_u-2 -> wedge-private variables.
+    local_to_global = []
+    for k in range(segments):
+        idx = torch.empty((n_u, n_v), dtype=torch.long, device=device)
+        idx[0, :] = k * n_v + torch.arange(n_v, device=device)
+        idx[n_u - 1, :] = ((k + 1) % segments) * n_v + torch.arange(n_v, device=device)
+        for i in range(1, n_u - 1):
+            idx[i, :] = total_boundary + (k * n_interior_cols + (i - 1)) * n_v + torch.arange(n_v, device=device)
+        local_to_global.append(idx.reshape(-1))
+
+    diagnostics_list: list[NURBSFitDiagnostics | None] = [
+        NURBSFitDiagnostics(
+            wedge_points[k].detach().clone(), None, wedge_initial_uv[k].detach().clone(),
+            surfaces[k].control_grid.detach().clone(), [],
+            surfaces[k].control_grid.detach().clone(), surfaces[k].weights.detach().clone(),
+        )
+        if collect_diagnostics else None
+        for k in range(segments)
+    ]
+
+    uv = list(wedge_initial_uv)
+    with torch.no_grad():
+        for _ in range(max(1, int(correction_rounds))):
+            global_matrix = torch.zeros((total, total), dtype=dtype, device=device)
+            global_rhs = torch.zeros((total, 3), dtype=dtype, device=device)
+            for k in range(segments):
+                # Unlike the single-surface path, a too-sparse wedge is not
+                # skipped entirely here: its interior variables must still
+                # receive the smoothness/Tikhonov regularization below or the
+                # global system becomes singular in that wedge's block.
+                matrix, rhs, weight = _lsq_normal_system(
+                    wedge_points[k], uv[k], surfaces[k], smoothness_lambda, tikhonov_lambda, chunk_size, None
+                )
+                scale = max(weight, 1e-8)
+                penalty = _second_difference_penalty(n_u, n_v, dtype, device)
+                seed = surfaces[k].control_grid.detach().reshape(n_u * n_v, 3)
+                local_system = (
+                    matrix / scale
+                    + float(smoothness_lambda) * penalty
+                    + float(tikhonov_lambda) * torch.eye(n_u * n_v, dtype=dtype, device=device)
+                )
+                local_rhs = rhs / scale + float(tikhonov_lambda) * seed
+                m = local_to_global[k]
+                flat_index = (m.unsqueeze(1) * total + m.unsqueeze(0)).reshape(-1)
+                global_matrix.view(-1).index_add_(0, flat_index, local_system.reshape(-1))
+                global_rhs.index_add_(0, m, local_rhs)
+            try:
+                solution = torch.linalg.solve(global_matrix, global_rhs)
+            except Exception:
+                solution = torch.linalg.lstsq(global_matrix, global_rhs).solution
+
+            for k in range(segments):
+                surfaces[k].control_grid = solution[local_to_global[k]].reshape(n_u, n_v, 3)
+                control_grid_after_lsq = surfaces[k].control_grid.detach().clone()
+                uv[k] = project_torch_points_to_nurbs(
+                    wedge_points[k], surfaces[k], iterations=int(projection_iterations), chunk_size=chunk_size
+                )
+                if diagnostics_list[k] is not None:
+                    diagnostics_list[k].rounds.append(
+                        NURBSFitRoundDiagnostics(control_grid_after_lsq, uv[k].detach().clone())
+                    )
+
+    results = []
+    for k in range(segments):
+        if diagnostics_list[k] is not None:
+            diagnostics_list[k].final_control_grid = surfaces[k].control_grid.detach().clone()
+            diagnostics_list[k].final_weights = surfaces[k].weights.detach().clone()
+            results.append((surfaces[k], uv[k], diagnostics_list[k]))
+        else:
+            results.append((surfaces[k], uv[k]))
+    return results
 
 
 def project_torch_points_to_nurbs(

@@ -215,6 +215,59 @@ class AnnulusOGridChartTest(unittest.TestCase):
             self.assertGreater(s.fit_metrics["min_area_jacobian"], 0.0)
             self.assertTrue(math.isfinite(s.fit_metrics["point_to_surface_rms"]))
 
+    def test_coupled_boundary_fit_is_now_the_default(self):
+        # Phase 5 Step 5-A: PRODUCTION ADOPTED (2026-07-22, docs/worklogs/55)
+        # -- coupled_boundary_fit defaults to True, so a plain call with no
+        # override must already use the joint shared-boundary solve.
+        baseline = self._build(_annulus())
+        explicit_on = self._build(_annulus(), coupled_boundary_fit=True)
+        self.assertEqual(
+            [s.fit_metrics["point_to_surface_rms"] for s in baseline.slices],
+            [s.fit_metrics["point_to_surface_rms"] for s in explicit_on.slices],
+        )
+        self.assertTrue(baseline.topology_checks["shared_boundary_constraint"])
+
+    def test_coupled_boundary_fit_false_recovers_independent_fit(self):
+        # The pre-Step-5-A independent per-wedge fit stays available as an
+        # explicit fallback/ablation path, not deleted.
+        result = self._build(_annulus(), coupled_boundary_fit=False)
+        self.assertFalse(result.topology_checks["shared_boundary_constraint"])
+        segments = len(result.slices)
+        # Without coupling, adjacent wedges' shared-seam columns are each
+        # independently fit and need not match exactly (unlike the coupled
+        # case in test_coupled_boundary_fit_shares_exact_seam_control_points
+        # below).
+        mismatched = 0
+        for k in range(segments):
+            this_last_column = result.slices[k].surface.control_grid[-1]
+            next_first_column = result.slices[(k + 1) % segments].surface.control_grid[0]
+            if not torch.allclose(this_last_column, next_first_column, atol=1e-5, rtol=1e-5):
+                mismatched += 1
+        self.assertGreater(mismatched, 0)
+
+    def test_coupled_boundary_fit_shares_exact_seam_control_points(self):
+        # Phase 5 Step 5-A's core claim: adjacent wedges' shared seam
+        # boundary control-point COLUMN must be the exact same values (joint
+        # variables), not merely close after independent fitting.
+        result = self._build(_annulus(), coupled_boundary_fit=True)
+        self.assertEqual(len(result.slices), 8)
+        self.assertTrue(result.topology_checks["shared_boundary_constraint"])
+        segments = len(result.slices)
+        for k in range(segments):
+            this_last_column = result.slices[k].surface.control_grid[-1]
+            next_first_column = result.slices[(k + 1) % segments].surface.control_grid[0]
+            torch.testing.assert_close(this_last_column, next_first_column, atol=1e-5, rtol=1e-5)
+
+    def test_coupled_boundary_fit_produces_finite_healthy_fit(self):
+        # Smoke test: joint solve must not introduce NaN/degenerate slices.
+        result = self._build(_annulus(), coupled_boundary_fit=True)
+        for s in result.slices:
+            self.assertGreater(s.fit_metrics["min_area_jacobian"], 0.0)
+            self.assertTrue(math.isfinite(s.fit_metrics["point_to_surface_rms"]))
+        ranges = sorted(s.angle_range for s in result.slices)
+        for (_, hi), (lo2, _) in zip(ranges, ranges[1:]):
+            self.assertAlmostEqual(hi, lo2, places=4)
+
     def test_worst_wedge_optimized_placement_produces_finite_healthy_fit(self):
         # Smoke test: Step 4-D's local optimizer must not introduce
         # NaN/degenerate slices on a normal scene.
@@ -226,6 +279,19 @@ class AnnulusOGridChartTest(unittest.TestCase):
         # Angle ranges must still partition [0, 2pi) with no gaps/overlaps,
         # exactly like uniform_angle (the optimizer only moves boundaries,
         # never removes the partition invariant).
+        ranges = sorted(s.angle_range for s in result.slices)
+        for (_, hi), (lo2, _) in zip(ranges, ranges[1:]):
+            self.assertAlmostEqual(hi, lo2, places=4)
+
+    def test_profile_constrained_placement_produces_finite_healthy_fit(self):
+        # Smoke test: Step 4-D re-evaluation's (worklog 52/53) profile-based
+        # optimizer must not introduce NaN/degenerate slices on a normal
+        # scene, same bar as worst_wedge_optimized above.
+        result = self._build(_annulus(), segment_placement="profile_constrained")
+        self.assertEqual(len(result.slices), 8)
+        for s in result.slices:
+            self.assertGreater(s.fit_metrics["min_area_jacobian"], 0.0)
+            self.assertTrue(math.isfinite(s.fit_metrics["point_to_surface_rms"]))
         ranges = sorted(s.angle_range for s in result.slices)
         for (_, hi), (lo2, _) in zip(ranges, ranges[1:]):
             self.assertAlmostEqual(hi, lo2, places=4)
@@ -280,17 +346,18 @@ class AnnulusOGridChartTest(unittest.TestCase):
         self.assertIsNotNone(cq["phase2_boundary_conformance"]["inner"])
         self.assertIsNotNone(cq["phase2_boundary_conformance"]["outer"])
 
-    def test_known_bad_seed_reproduces_inner_corner_degeneracy(self):
-        # Regression/detection guard: this exact scene (test _annulus fixture,
-        # seed=14) reproduces the O-grid inner-pole degeneracy documented in
-        # OSN_GS_Phase4_Hardening_Plan.md -- 8 samples with an orientation-
-        # flipped in-plane Jacobian, confined to the (u~=0, v~=0) corner
-        # nearest the hole/seam. This proves the new metrics actually detect
-        # a REAL failure mode, not just synthetic constructions. When a
-        # future Step 4 fix (e.g. arc-length reparameterization) addresses
-        # this, this test's expected count should be revisited -- it is a
-        # detection guard, not a claim that 8 is an acceptable steady state.
-        result = self._build(_annulus(seed=14))
+    def test_known_bad_seed_reproduces_inner_corner_degeneracy_under_independent_fit(self):
+        # Regression/detection guard for the PRE-Step-5-A independent
+        # per-wedge fit (explicit coupled_boundary_fit=False, since that
+        # mode is no longer the default): this exact scene (test _annulus
+        # fixture, seed=14) reproduces the O-grid inner-pole degeneracy
+        # documented in the (now-retired) Phase 4 hardening plan -- 8 samples
+        # with an orientation-flipped in-plane Jacobian, confined to the
+        # (u~=0, v~=0) corner nearest the hole/seam. This proves the new
+        # metrics actually detect a REAL failure mode, not just synthetic
+        # constructions. This is a detection guard for the fallback path,
+        # not a claim that 8 is an acceptable steady state for it.
+        result = self._build(_annulus(seed=14), coupled_boundary_fit=False)
         self.assertEqual(result.topology_checks["total_orientation_flip_samples"], 8)
         flipped_slices = [s for s in result.slices if s.fit_metrics["orientation_flip_count"] > 0]
         self.assertTrue(flipped_slices)
@@ -298,6 +365,16 @@ class AnnulusOGridChartTest(unittest.TestCase):
             # Confined to samples very near the inner boundary -- a healthy
             # slice's own min singular value should be far from this one's.
             self.assertLess(s.fit_metrics["min_jacobian_singular_value"], 0.05)
+
+    def test_known_bad_seed_is_resolved_by_default_coupled_fit(self):
+        # Phase 5 Step 5-A (docs/worklogs/55): the SAME known-bad seed=14
+        # fixture above, under the new default (coupled_boundary_fit=True,
+        # implicit), must no longer reproduce the inner-corner degeneracy --
+        # this is the exact regression-fixed confirmation the worklog 55
+        # multi-scene evaluation found (flips -> 0), reproduced here on this
+        # specific unit-test fixture.
+        result = self._build(_annulus(seed=14))
+        self.assertEqual(result.topology_checks["total_orientation_flip_samples"], 0)
 
     def test_rejects_too_few_segments(self):
         from osn_gs.surface.torch_annulus_chart import build_annulus_chart
@@ -389,6 +466,94 @@ class WorstWedgeOptimizerUnitTest(unittest.TestCase):
         )
         for original, moved in zip(boundary_angles.tolist(), optimized.tolist()):
             self.assertLess(abs(original - moved), angle_step * 0.5)
+
+
+@unittest.skipUnless(torch is not None, "PyTorch is required")
+class ProfileConstrainedOptimizerUnitTest(unittest.TestCase):
+    """White-box tests on ``_optimize_profile_constrained_seam_angles``
+    (Step 4-D re-evaluation, ``docs/worklogs/52``/53) -- the same
+    injected-failure discipline as ``WorstWedgeOptimizerUnitTest``, plus a
+    test targeting the specific gap that made ``worst_wedge_optimized``
+    ineligible: an unbounded wedge width let one wedge consume most of the
+    ring on ``planar_hole_density_gradient`` (worklog 52's "Layout / support
+    diagnostics" table)."""
+
+    def test_moves_boundary_away_from_a_narrow_corner(self):
+        from osn_gs.surface.torch_annulus_chart import _optimize_profile_constrained_seam_angles
+
+        segments = 8
+        two_pi = 2.0 * torch.pi
+        angle_step = two_pi / segments
+        boundary_angles = torch.remainder(torch.arange(segments, dtype=torch.float32) * angle_step, two_pi)
+
+        sample_angle = torch.rand(4000) * two_pi
+        delta = torch.remainder(sample_angle + torch.pi, two_pi) - torch.pi
+        inner_r = torch.where(delta.abs() < 0.3, 0.05 + 0.5 * delta.abs(), torch.full_like(delta, 0.3))
+        outer_r = torch.full_like(sample_angle, 0.8)
+
+        optimized = _optimize_profile_constrained_seam_angles(
+            boundary_angles, sample_angle, inner_r, sample_angle, outer_r,
+            outer_loop_is_explicit=True, characteristic_length=0.5, segments=segments,
+        )
+
+        def _distance_to_zero(theta: float) -> float:
+            return min(theta, two_pi - theta)
+
+        before = min(_distance_to_zero(float(a)) for a in boundary_angles)
+        after = min(_distance_to_zero(float(a)) for a in optimized)
+        self.assertAlmostEqual(before, 0.0, places=4)
+        self.assertGreater(after, 0.15)
+
+    def test_no_op_on_a_perfectly_uniform_profile(self):
+        from osn_gs.surface.torch_annulus_chart import _optimize_profile_constrained_seam_angles
+
+        segments = 8
+        two_pi = 2.0 * torch.pi
+        angle_step = two_pi / segments
+        boundary_angles = torch.remainder(torch.arange(segments, dtype=torch.float32) * angle_step, two_pi)
+
+        sample_angle = torch.rand(4000) * two_pi
+        inner_r = torch.full_like(sample_angle, 0.3)
+        outer_r = torch.full_like(sample_angle, 0.8)
+
+        optimized = _optimize_profile_constrained_seam_angles(
+            boundary_angles, sample_angle, inner_r, sample_angle, outer_r,
+            outer_loop_is_explicit=True, characteristic_length=0.5, segments=segments,
+        )
+        for original, moved in zip(boundary_angles.tolist(), optimized.tolist()):
+            self.assertLess(abs(original - moved), angle_step * 0.5)
+
+    def test_upper_width_bound_prevents_one_wedge_consuming_the_ring(self):
+        # Regression guard for the exact failure that made worst_wedge_optimized
+        # ineligible: a sparse/thin local region must not cause an adjacent
+        # wedge to expand past max_angular_width_fraction of the nominal
+        # width, unlike the old optimizer which had no upper bound at all.
+        from osn_gs.surface.torch_annulus_chart import _optimize_profile_constrained_seam_angles
+
+        segments = 8
+        two_pi = 2.0 * torch.pi
+        angle_step = two_pi / segments
+        boundary_angles = torch.remainder(torch.arange(segments, dtype=torch.float32) * angle_step, two_pi)
+
+        sample_angle = torch.rand(6000) * two_pi
+        # A narrow, very thin (near-collapsed) region around angle=0 mimics
+        # density_gradient's sparse/thin sector -- the old optimizer had
+        # nothing stopping it from ballooning a neighboring wedge to try to
+        # "absorb" this region's instability.
+        delta = torch.remainder(sample_angle + torch.pi, two_pi) - torch.pi
+        thin = delta.abs() < 0.05
+        inner_r = torch.where(thin, torch.full_like(delta, 0.45), torch.full_like(delta, 0.3))
+        outer_r = torch.where(thin, torch.full_like(delta, 0.46), torch.full_like(delta, 0.8))
+
+        optimized = _optimize_profile_constrained_seam_angles(
+            boundary_angles, sample_angle, inner_r, sample_angle, outer_r,
+            outer_loop_is_explicit=True, characteristic_length=0.5, segments=segments,
+        )
+        sorted_angles = torch.remainder(optimized, two_pi).sort().values
+        widths = torch.remainder(sorted_angles.roll(-1) - sorted_angles, two_pi)
+        widths = torch.where(widths == 0.0, torch.full_like(widths, two_pi), widths)
+        max_width = angle_step * 2.5  # matches the optimizer's own default fraction
+        self.assertTrue(bool((widths <= max_width + 1e-4).all()))
 
 
 @unittest.skipUnless(torch is not None, "PyTorch is required")

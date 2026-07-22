@@ -9,6 +9,7 @@ import torch
 from osn_gs.core.torch_pipeline import TorchOSNGSPipeline, TorchPipelineConfig
 from osn_gs.surface.torch_nurbs import (
     TorchNURBSSurface,
+    fit_coupled_wedge_ring_lsq,
     fit_torch_visible_surface,
     fit_torch_visible_surface_lsq,
     project_torch_points_to_nurbs,
@@ -167,6 +168,64 @@ class LeastSquaresFitTest(unittest.TestCase):
         for patch in state.surface_patches:
             self.assertEqual(patch.degree_u, 3)
             self.assertEqual(patch.degree_v, 2)
+
+
+class CoupledWedgeRingFitTest(unittest.TestCase):
+    """Phase 5 Step 5-A (docs/worklogs/55): white-box tests on
+    ``fit_coupled_wedge_ring_lsq`` -- the core claim is that adjacent
+    wedges' shared seam boundary column is the exact same joint variable,
+    not two independently-fit columns that merely end up close."""
+
+    def test_shared_seam_columns_are_exactly_equal(self):
+        torch.manual_seed(0)
+        segments = 4
+        wedge_points = []
+        wedge_uv = []
+        for k in range(segments):
+            uv = torch.rand(200, 2)
+            pts = torch.stack(
+                [uv[:, 0] + k, uv[:, 1], 0.05 * torch.sin(uv[:, 0] * 3.0 + k)], dim=1
+            )
+            wedge_points.append(pts)
+            wedge_uv.append(uv)
+
+        results = fit_coupled_wedge_ring_lsq(
+            wedge_points, wedge_uv, resolution_u=6, resolution_v=4, degree_u=2, degree_v=2
+        )
+        self.assertEqual(len(results), segments)
+        surfaces = [r[0] for r in results]
+        for k in range(segments):
+            this_last_column = surfaces[k].control_grid[-1]
+            next_first_column = surfaces[(k + 1) % segments].control_grid[0]
+            torch.testing.assert_close(this_last_column, next_first_column, atol=1e-5, rtol=1e-5)
+        for surface, uv in results:
+            self.assertTrue(torch.isfinite(surface.control_grid).all())
+            self.assertTrue(torch.isfinite(surface.evaluate(uv)).all())
+
+    def test_handles_minimal_two_wedge_ring_without_error(self):
+        # Degenerate/robustness check: the smallest possible ring (2 wedges,
+        # each sharing two distinct seams with the other) must still solve.
+        torch.manual_seed(1)
+        segments = 2
+        wedge_points = [torch.rand(100, 3) for _ in range(segments)]
+        wedge_uv = [torch.rand(100, 2) for _ in range(segments)]
+        results = fit_coupled_wedge_ring_lsq(wedge_points, wedge_uv, resolution_u=5, resolution_v=3)
+        self.assertEqual(len(results), segments)
+        for surface, uv in results:
+            self.assertTrue(torch.isfinite(surface.control_grid).all())
+
+    def test_collect_diagnostics_returns_per_wedge_diagnostics(self):
+        torch.manual_seed(2)
+        segments = 3
+        wedge_points = [torch.rand(150, 3) for _ in range(segments)]
+        wedge_uv = [torch.rand(150, 2) for _ in range(segments)]
+        results = fit_coupled_wedge_ring_lsq(
+            wedge_points, wedge_uv, resolution_u=5, resolution_v=3, collect_diagnostics=True
+        )
+        self.assertEqual(len(results), segments)
+        for surface, uv, diagnostics in results:
+            self.assertTrue(torch.isfinite(diagnostics.final_control_grid).all())
+            self.assertGreaterEqual(len(diagnostics.rounds), 1)
 
 
 class MaintenanceUVRefreshTest(unittest.TestCase):

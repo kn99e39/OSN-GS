@@ -57,6 +57,7 @@ from typing import Any
 from osn_gs.surface.torch_nurbs import (
     NURBSFitDiagnostics,
     TorchNURBSSurface,
+    fit_coupled_wedge_ring_lsq,
     fit_torch_visible_surface_lsq,
 )
 from osn_gs.surface.torch_surface_components import SurfaceComponent
@@ -528,6 +529,161 @@ def _optimize_worst_wedge_seam_angles(
     return torch.remainder(angles, two_pi)
 
 
+def _robust_local_radius(
+    angle_wrapped: Any, radius: Any, theta: float, window: float,
+    quantile: float = 0.5, min_points: int = 3, eps: float = _EPS,
+) -> float:
+    """Robust radius estimate at ``theta`` from scattered ``(angle, radius)``
+    samples: median (or ``quantile``) of the samples within a cyclic angular
+    window, widening the window when too few samples fall inside it.
+
+    Used in place of a single-window min/max (worklog 52's critique of the
+    prior worst-wedge optimizer): when the samples are themselves explicit
+    Phase-2 loop points (already lying approximately ON the boundary, not
+    interior fill), a windowed min/max amplifies the loop extraction's own
+    raster/marching-squares staircase noise (this is the same noise source
+    documented in ``build_annulus_chart``'s hard-C0 rejection above), while a
+    windowed median suppresses it. Widening on sparse support means low local
+    point density lowers confidence in a fine-grained estimate rather than
+    silently returning a value from an empty or near-empty window (worklog
+    52 item 4: density is a confidence signal, not a selector).
+    """
+
+    torch = require_torch()
+    two_pi = 2.0 * torch.pi
+    w = max(window, eps)
+    for _ in range(6):  # widen at most a few times; caps at the full circle
+        delta = torch.remainder(angle_wrapped - theta + torch.pi, two_pi) - torch.pi
+        near = delta.abs() <= w
+        count = int(near.sum())
+        if count >= min_points or w >= two_pi:
+            if count == 0:
+                return float(radius.quantile(quantile))
+            return float(radius[near].quantile(quantile))
+        w = min(w * 2.0, two_pi)
+    return float(radius.quantile(quantile))
+
+
+def _optimize_profile_constrained_seam_angles(
+    boundary_angles: Any,
+    inner_loop_angle: Any,
+    inner_loop_radius: Any,
+    outer_loop_angle: Any,
+    outer_loop_radius: Any,
+    outer_loop_is_explicit: bool,
+    characteristic_length: float,
+    segments: int,
+    passes: int = 3,
+    candidates_per_boundary: int = 9,
+    min_angular_width_fraction: float = 0.3,
+    max_angular_width_fraction: float = 2.5,
+    sample_count: int = 5,
+    conformance_weight: float = 1.0,
+    min_inner_width_fraction: float = 0.05,
+    eps: float = _EPS,
+) -> Any:
+    """Phase 4 hardening Step 4-D re-evaluation (``docs/worklogs/52``):
+    canonical objective revision, replacing ``_optimize_worst_wedge_seam_angles``'s
+    endpoint/min-only proxy with the profile-based objective that worklog's
+    "Canonical objective revision proposal" section specified.
+
+    Differences from the prior (``worst_wedge_optimized``) optimizer, each
+    tracing to a specific worklog 52 finding:
+
+    1. Inner/outer radius come from a robust local quantile (median for
+       explicit loop points, a high quantile for the density-cell fallback)
+       instead of a raw windowed min/max -- less sensitive to one sparse or
+       noisy sample dominating the proxy (worklog 52 "Root cause" section).
+    2. Each candidate wedge is scored at ``sample_count`` angles spanning its
+       *interior*, not only its two boundary endpoints -- a narrow collapse
+       in the middle of a wide wedge is no longer invisible to the search.
+    3. Both a lower AND an upper angular-width bound are enforced (the prior
+       optimizer only had a lower bound, which is exactly why it could let
+       one wedge consume most of the ring on ``planar_hole_density_gradient``
+       -- worklog 52's "Layout / support diagnostics" section).
+    4. A soft floor on the *physical* inner tangential width
+       (``min_inner_width_fraction * characteristic_length``) penalizes
+       absolute-scale collapse that a purely dimensionless ``kappa`` ratio
+       can miss (both ``d`` and ``w_inner`` can be tiny together).
+    5. An observed outer-loop conformance term (Phase-2 geometry only, never
+       GT) penalizes wedges whose linear Coons chord poorly represents the
+       true outer-loop curvature across the wedge's interior -- addressing
+       worklog 52's other finding that the prior optimizer had no outer-loop
+       term and so never improved (and sometimes worsened) outer conformance.
+
+    Still a bounded local coordinate-descent search, same structure/cost as
+    the optimizer it replaces -- not a global optimum, and evaluated under
+    the same discipline (no production default change without a clean
+    multi-scene/multi-seed regression check).
+    """
+
+    torch = require_torch()
+    two_pi = 2.0 * torch.pi
+    angles = boundary_angles.clone()
+    base_width = two_pi / segments
+    min_width = base_width * min_angular_width_fraction
+    max_width = base_width * max_angular_width_fraction
+    inner_quantile = 0.5  # hole loop points already lie on the boundary
+    outer_quantile = 0.5 if outer_loop_is_explicit else 0.9
+    fractions = torch.linspace(0.0, 1.0, sample_count).tolist()
+
+    def _inner_at(theta: float, window: float) -> float:
+        return _robust_local_radius(inner_loop_angle, inner_loop_radius, theta % two_pi, window, quantile=inner_quantile)
+
+    def _outer_at(theta: float, window: float) -> float:
+        return _robust_local_radius(outer_loop_angle, outer_loop_radius, theta % two_pi, window, quantile=outer_quantile)
+
+    def _wedge_score(theta_lo: float, theta_hi: float) -> float:
+        if theta_hi <= theta_lo:
+            theta_hi += two_pi
+        width = theta_hi - theta_lo
+        window = max(0.15 * width, eps)
+        inner_lo, inner_hi = _inner_at(theta_lo, window), _inner_at(theta_hi, window)
+        outer_lo, outer_hi = _outer_at(theta_lo, window), _outer_at(theta_hi, window)
+        inner_floor = min_inner_width_fraction * characteristic_length
+        worst_kappa = 0.0
+        worst_conformance = 0.0
+        for frac in fractions:
+            theta_s = theta_lo + frac * width
+            r_in = _inner_at(theta_s, window)
+            r_out = _outer_at(theta_s, window)
+            d = max(r_out - r_in, eps)
+            w_inner = max(r_in * width, eps)
+            kappa = max(d, w_inner) / (min(d, w_inner) + eps)
+            if w_inner < inner_floor:
+                kappa *= 1.0 + (inner_floor - w_inner) / max(inner_floor, eps)
+            worst_kappa = max(worst_kappa, kappa)
+            outer_chord = outer_lo + frac * (outer_hi - outer_lo)
+            worst_conformance = max(worst_conformance, abs(r_out - outer_chord) / max(characteristic_length, eps))
+        return worst_kappa + conformance_weight * worst_conformance
+
+    for _ in range(passes):
+        for k in range(segments):
+            prev_idx = (k - 1) % segments
+            next_idx = (k + 1) % segments
+            theta_prev = float(angles[prev_idx])
+            theta_current = float(angles[k])
+            theta_next = float(angles[next_idx])
+            cur_local = float(torch.remainder(torch.tensor(theta_current - theta_prev), two_pi))
+            next_local = cur_local + float(torch.remainder(torch.tensor(theta_next - theta_current), two_pi))
+            lo_bound = max(min_width, next_local - max_width)
+            hi_bound = min(next_local - min_width, max_width)
+            if hi_bound <= lo_bound:
+                continue  # cannot satisfy both width bounds safely this round
+            best_local, best_score = cur_local, float("inf")
+            for cand_local in torch.linspace(lo_bound, hi_bound, candidates_per_boundary).tolist():
+                theta_b = theta_prev + cand_local
+                score = max(
+                    _wedge_score(theta_prev, theta_b),
+                    _wedge_score(theta_b, theta_prev + next_local),
+                )
+                if score < best_score:
+                    best_score, best_local = score, cand_local
+            angles[k] = float(theta_prev + best_local)
+
+    return torch.remainder(angles, two_pi)
+
+
 def build_annulus_chart(
     component: SurfaceComponent,
     points: Any,
@@ -547,6 +703,7 @@ def build_annulus_chart(
     collect_diagnostic_samples: bool = False,
     seam_phase_offset: float = 0.0,
     hermite_boundary_seed: bool = False,
+    coupled_boundary_fit: bool = True,
 ) -> AnnulusChartResult:
     """Build an O-grid of ``segments`` radial NURBS charts for one annulus component.
 
@@ -602,6 +759,42 @@ def build_annulus_chart(
     matching radius value. Explicitly scoped to seam CONTINUITY only --
     it does not address the inner-corner Jacobian collapse mechanism
     (``Su -> 0``), which a smoother seed does not change.
+
+    ``coupled_boundary_fit`` (Phase 5 Step 5-A, ``docs/worklogs/55``,
+    **default ``True`` -- PRODUCTION ADOPTED, 2026-07-22, user-approved**):
+    fits every wedge's surface in ONE joint linear system
+    (``fit_coupled_wedge_ring_lsq``) instead of each wedge independently, so
+    that each pair of adjacent wedges' shared seam boundary columns are
+    solved as ONE variable rather than two independently-fit columns. This
+    is NOT the previously-rejected hard-C0 post-hoc-overwrite pattern (see
+    the per-slice loop below) -- the shared unknowns are joint from the
+    first solve onward, so each wedge's interior is fit consistently against
+    the boundary it actually shares. Only the boundary columns are shared;
+    interior columns and the smoothness/Tikhonov regularization stay
+    wedge-private (no cross-seam smoothness term -- that would be Step 5-B,
+    soft G1/tangent continuity, on hold pending a separate user decision).
+    Adopted after a clean 4-scene x 5-seed evaluation (``docs/worklogs/55``):
+    orientation flips dropped to exactly 0 in every scene/seed tested
+    (region-segmented seam-adjacent/inner/outer/patch-interior counts all
+    zero -- the fold is removed, not relocated), chamfer_rms flat-or-improved
+    everywhere, false_fill roughly flat. Set ``coupled_boundary_fit=False``
+    to recover the pre-Step-5-A independent per-wedge fit (kept as a tested
+    fallback/ablation path, not deleted) -- see
+    `OSN_GS_Phase5_Boundary_Aligned_Extension_Plan.md`.
+
+    ``"profile_constrained"`` (Phase 4 hardening Step 4-D re-evaluation,
+    ``docs/worklogs/52``/53): the canonical objective revision proposed
+    after ``"worst_wedge_optimized"`` was found NOT eligible as a default
+    (it relocated rather than fixed the worst offcenter seeds and severely
+    regressed ``planar_hole_density_gradient``). Same local coordinate-
+    descent structure, but the per-wedge score now comes from
+    ``_optimize_profile_constrained_seam_angles``: robust local-quantile
+    radial profiles from the actual Phase-2 hole/outer loops (not a raw
+    windowed min/max), interior-sampled (not endpoint-only) worst-case
+    kappa, an explicit upper angular-width bound alongside the existing
+    lower one, an absolute-scale inner-width floor, and an observed
+    outer-loop conformance term. Evaluated under the same multi-scene/
+    multi-seed gate as every prior Step 4 candidate before being trusted.
     """
 
     torch = require_torch()
@@ -640,6 +833,39 @@ def build_annulus_chart(
     cell_angle_wrapped = torch.remainder(cell_angle, two_pi)
     angle_step = two_pi / segments
 
+    # Step 4-D re-evaluation (worklog 52/53) inputs, computed unconditionally
+    # (cheap) since they are only USED when segment_placement ==
+    # "profile_constrained": polar decomposition of the explicit Phase-2
+    # hole loop (always available) and, if given, the explicit outer loop --
+    # these are the actual boundary loops, not the density-cell/point-cloud
+    # proxy the prior optimizer relied on exclusively.
+    hole_loop_relative = boundary_frame.apply(hole_boundary_world, clamp=False) - origin_uv
+    hole_loop_angle = torch.remainder(torch.atan2(hole_loop_relative[:, 1], hole_loop_relative[:, 0]), two_pi)
+    hole_loop_radius = hole_loop_relative.norm(dim=1)
+    outer_loop_is_explicit = outer_boundary_world_points is not None and len(outer_boundary_world_points) > 0
+    if outer_loop_is_explicit:
+        outer_boundary_world_for_profile = torch.tensor(
+            outer_boundary_world_points, dtype=component_points.dtype, device=component_points.device
+        )
+        outer_loop_relative = boundary_frame.apply(outer_boundary_world_for_profile, clamp=False) - origin_uv
+        outer_loop_angle = torch.remainder(torch.atan2(outer_loop_relative[:, 1], outer_loop_relative[:, 0]), two_pi)
+        outer_loop_radius = outer_loop_relative.norm(dim=1)
+    else:
+        # No explicit outer loop available: fall back to the density-refined
+        # cell cloud (same source the prior optimizer used), read at a high
+        # quantile (see _optimize_profile_constrained_seam_angles) rather
+        # than a raw max.
+        outer_loop_angle = cell_angle_wrapped[cell_supported] if bool(cell_supported.any()) else point_angle_wrapped
+        outer_loop_radius = cell_radius[cell_supported] if bool(cell_supported.any()) else point_radius
+    # Preliminary, placement-independent characteristic length (final
+    # per-boundary-array value below still supersedes this for the fit's own
+    # Jacobian normalization) -- needed here because the optimizer's
+    # absolute-scale inner-width floor must exist before boundary_angles is
+    # decided at all.
+    preliminary_characteristic_length = float(outer_loop_radius.quantile(0.9) - hole_loop_radius.quantile(0.1))
+    if not (preliminary_characteristic_length > 0.0):
+        preliminary_characteristic_length = float(point_radius.max().clamp_min(_EPS))
+
     # Coons-style shared boundary values (§4.3 "Seed: Coons patch 또는
     # transfinite interpolation"): compute inner/outer radius ONCE per slice
     # BOUNDARY angle (not per slice interior), in a small window straddling
@@ -654,7 +880,7 @@ def build_annulus_chart(
         boundary_angles = _outer_radius_weighted_boundary_angles(
             cell_angle_wrapped, cell_radius, cell_supported, point_angle_wrapped, point_radius, segments
         )
-    elif segment_placement in ("uniform_angle", "worst_wedge_optimized"):
+    elif segment_placement in ("uniform_angle", "worst_wedge_optimized", "profile_constrained"):
         boundary_angles = torch.remainder(
             torch.arange(segments, dtype=own_uv.dtype, device=own_uv.device) * angle_step + seam_phase_offset, two_pi
         )
@@ -664,6 +890,15 @@ def build_annulus_chart(
             boundary_angles = _optimize_worst_wedge_seam_angles(
                 boundary_angles, cell_angle_wrapped, cell_radius, cell_supported,
                 point_angle_wrapped, point_radius, segments,
+            )
+        elif segment_placement == "profile_constrained":
+            # Step 4-D re-evaluation (worklog 52/53): refine the
+            # uniform_angle starting point via the profile-based objective
+            # instead -- see _optimize_profile_constrained_seam_angles.
+            boundary_angles = _optimize_profile_constrained_seam_angles(
+                boundary_angles, hole_loop_angle, hole_loop_radius,
+                outer_loop_angle, outer_loop_radius, outer_loop_is_explicit,
+                preliminary_characteristic_length, segments,
             )
     else:
         raise ValueError(f"Unknown segment_placement: {segment_placement!r}")
@@ -711,6 +946,14 @@ def build_annulus_chart(
     slices: list[AnnulusChartSlice] = []
     inner_edges_world: list[Any] = []
     outer_edges_world: list[Any] = []
+    # Phase 5 Step 5-A (worklog 55): when ``coupled_boundary_fit`` is set,
+    # every wedge's own points/initial_uv are prepared first (this loop),
+    # then fit in ONE joint call (``fit_coupled_wedge_ring_lsq``) instead of
+    # each wedge calling ``fit_torch_visible_surface_lsq`` independently --
+    # the shared seam boundary columns become joint variables. Per-slice
+    # metrics (residual, Jacobian, etc.) are computed in a second pass below
+    # once every wedge's own (surface, uv, diagnostics) is available.
+    wedge_prep: list[dict[str, Any]] = []
     for k in range(segments):
         theta_lo = float(boundary_angles[k])
         theta_hi = float(boundary_angles[(k + 1) % segments])
@@ -785,34 +1028,26 @@ def build_annulus_chart(
         )
         initial_uv = torch.stack([local_s, local_t], dim=1)
 
-        surface, uv, diagnostics = fit_torch_visible_surface_lsq(
-            slice_points,
-            resolution_u=slice_resolution_u,
-            resolution_v=slice_resolution_v,
-            degree_u=degree_u,
-            degree_v=degree_v,
-            initial_uv=initial_uv,
-            collect_diagnostics=True,
-        )
-        # NOT hard-enforced as literal shared control points. An earlier
-        # version of this function overwrote control_grid[:, 0]/[:, -1] (and
-        # the u=0/u=1 radial edges) with identical values on both sides of a
-        # seam, which does give exact (~1e-7) C0 continuity -- but measured
-        # WORSE on both required accuracy metrics than the free LSQ fit below,
-        # regardless of whether the imposed boundary curve was a 2-point
-        # chord (planar_hole: chamfer 0.0058 -> 0.0061, false-fill 0.180 ->
-        # 0.200) or sampled from the actual Phase 2 loop points at every
-        # slice angle (chamfer -> 0.0095, false-fill -> 0.311 -- WORSE again,
-        # because Phase 2's loop points are raster-cell centers with their
-        # own staircase quantization noise, and forcing the fit through that
-        # noisy curve added error the smooth chord did not). Since neither
-        # hard-constraint variant beat "fit freely, then measure the gap",
-        # and the plan (§4.5) explicitly scopes v1 as "measure, don't force,
-        # C0" with continuity as later refinement, this stays a FREE fit; the
-        # Coons-seeded ``initial_uv`` above is the only continuity mechanism.
-        # ``seed_boundary_anchor_error`` is kept as a diagnostic (how far the
-        # free fit's own boundary drifted from the Coons chord seed) without
-        # being enforced.
+        # Shared control points are NOT enforced via post-hoc overwrite. An
+        # earlier version of this function overwrote control_grid[:, 0]/
+        # [:, -1] (the u=0/u=1 radial edges) with identical values on both
+        # sides of a seam AFTER each wedge was independently fit -- exact
+        # (~1e-7) C0 continuity, but measured WORSE on both required accuracy
+        # metrics than the free LSQ fit (planar_hole: chamfer 0.0058 ->
+        # 0.0061, false-fill 0.180 -> 0.200, or worse still sourcing the
+        # forced boundary from Phase 2's own raster loop points: chamfer ->
+        # 0.0095, false-fill -> 0.311). That post-hoc-overwrite pattern
+        # stays rejected. ``coupled_boundary_fit`` (default True, Phase 5
+        # Step 5-A, worklog 55) is architecturally different and IS the
+        # production default: shared boundary control points are joint fit
+        # VARIABLES from the first solve onward (``fit_coupled_wedge_ring_lsq``),
+        # not values clobbered after independent fitting -- each wedge's
+        # interior is optimized consistently against the boundary it
+        # actually shares, never against one it never saw. Set
+        # ``coupled_boundary_fit=False`` to recover the pre-Step-5-A
+        # independent per-wedge fit. ``seed_boundary_anchor_error`` is kept
+        # as a diagnostic either way (how far the fit's own boundary sits
+        # from the Coons chord seed).
         edge_angles = torch.linspace(theta_lo, theta_hi, slice_resolution_u, dtype=own_uv.dtype, device=own_uv.device)
         edge_fraction = torch.linspace(0.0, 1.0, slice_resolution_u, dtype=own_uv.dtype, device=own_uv.device)
         inner_radius_edge = inner_lo + edge_fraction * (inner_hi - inner_lo)
@@ -822,6 +1057,46 @@ def build_annulus_chart(
         outer_edge = boundary_frame.to_world(origin_uv.unsqueeze(0) + direction * outer_radius_edge[:, None])
         inner_edges_world.append(inner_edge.detach())
         outer_edges_world.append(outer_edge.detach())
+
+        wedge_prep.append(
+            dict(
+                theta_lo=theta_lo, theta_hi=theta_hi,
+                inner_radius=inner_radius, outer_radius=outer_radius,
+                indices=indices, slice_points=slice_points, initial_uv=initial_uv,
+                inner_edge=inner_edge, outer_edge=outer_edge,
+            )
+        )
+
+    if coupled_boundary_fit:
+        fit_results = fit_coupled_wedge_ring_lsq(
+            [w["slice_points"] for w in wedge_prep],
+            [w["initial_uv"] for w in wedge_prep],
+            resolution_u=slice_resolution_u,
+            resolution_v=slice_resolution_v,
+            degree_u=degree_u,
+            degree_v=degree_v,
+            collect_diagnostics=True,
+        )
+    else:
+        fit_results = [
+            fit_torch_visible_surface_lsq(
+                w["slice_points"],
+                resolution_u=slice_resolution_u,
+                resolution_v=slice_resolution_v,
+                degree_u=degree_u,
+                degree_v=degree_v,
+                initial_uv=w["initial_uv"],
+                collect_diagnostics=True,
+            )
+            for w in wedge_prep
+        ]
+
+    for k, w in enumerate(wedge_prep):
+        surface, uv, diagnostics = fit_results[k]
+        theta_lo, theta_hi = w["theta_lo"], w["theta_hi"]
+        slice_points = w["slice_points"]
+        inner_edge, outer_edge = w["inner_edge"], w["outer_edge"]
+
         residual = (surface.evaluate(uv).detach() - slice_points).norm(dim=1)
         boundary_uv = torch.cat((
             torch.stack((torch.linspace(0.0, 1.0, slice_resolution_u, device=own_uv.device), torch.zeros(slice_resolution_u, device=own_uv.device)), dim=1),
@@ -845,9 +1120,9 @@ def build_annulus_chart(
             AnnulusChartSlice(
                 slice_index=k,
                 angle_range=(theta_lo, theta_hi),
-                inner_radius=inner_radius,
-                outer_radius=outer_radius,
-                gaussian_indices=component.gaussian_indices[indices],
+                inner_radius=w["inner_radius"],
+                outer_radius=w["outer_radius"],
+                gaussian_indices=component.gaussian_indices[w["indices"]],
                 surface=surface,
                 uv=uv.detach(),
                 diagnostics=diagnostics,
@@ -865,9 +1140,11 @@ def build_annulus_chart(
         "total_orientation_flip_samples": sum(s.fit_metrics["orientation_flip_count"] for s in slices),
         "min_slice_point_count": min(s.fit_metrics["point_count"] for s in slices),
         "seed_boundary_anchor_max_error": max(s.fit_metrics["seed_boundary_anchor_error"] for s in slices),
-        # NOT hard-enforced (see the free-fit vs. hard-constraint comparison
-        # in the per-slice loop above); C0 is measured via `seams`, not forced.
-        "shared_boundary_constraint": False,
+        # True only when coupled_boundary_fit=True (Step 5-A): shared seam
+        # boundary control points are then joint fit variables, not values
+        # forced after independent fitting (still no hard C1; `seams` still
+        # measures the actual resulting continuity either way).
+        "shared_boundary_constraint": bool(coupled_boundary_fit),
     }
 
     inner_reference = hole_boundary_world if hole_boundary_world.numel() else None

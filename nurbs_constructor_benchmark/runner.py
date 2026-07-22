@@ -297,6 +297,7 @@ def evaluate_scene_boundary_first(
         annulus_segment_placement=args.bf_annulus_segment_placement,
         annulus_seam_phase_offset=args.bf_seam_phase_offset,
         annulus_hermite_boundary_seed=args.bf_hermite_boundary_seed,
+        annulus_coupled_boundary_fit=not args.bf_disable_coupled_boundary_fit,
         export_dir=export_dir,
     )
     construct_seconds = time.perf_counter() - construct_start
@@ -480,9 +481,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--bf-annulus-segments", type=int, default=8, help="[boundary_first] Phase 4 O-grid wedge count for annulus-topology components.")
     parser.add_argument(
         "--bf-annulus-segment-placement",
-        choices=("uniform_angle", "outer_radius_weighted_segment_placement", "worst_wedge_optimized"),
+        choices=("uniform_angle", "outer_radius_weighted_segment_placement", "worst_wedge_optimized", "profile_constrained"),
         default="uniform_angle",
-        help="[boundary_first] Phase 4 hardening Step 4: 'uniform_angle' (original), 'outer_radius_weighted_segment_placement' (equal arc length along the outer boundary), or 'worst_wedge_optimized' (Step 4-D local coordinate-descent refinement) -- see OSN_GS_Phase4_Hardening_Plan.md.",
+        help="[boundary_first] Phase 4 hardening Step 4: 'uniform_angle' (original), 'outer_radius_weighted_segment_placement' (equal arc length along the outer boundary), 'worst_wedge_optimized' (Step 4-D local coordinate-descent refinement, not adopted -- see docs/worklogs/52), or 'profile_constrained' (Step 4-D re-evaluation with a robust profile-based objective -- see docs/worklogs/53) -- see OSN_GS_Phase4_Hardening_Plan.md.",
     )
     parser.add_argument(
         "--bf-seam-phase-offset", type=float, default=0.0,
@@ -490,7 +491,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--bf-hermite-boundary-seed", action="store_true",
-        help="[boundary_first] Phase 4 hardening Step 4-C: cubic-Hermite (shared-slope) Coons boundary seed instead of pure linear -- targets seam continuity only (see OSN_GS_Phase4_Hardening_Plan.md).",
+        help="[boundary_first] Phase 4 hardening Step 4-C: cubic-Hermite (shared-slope) Coons boundary seed instead of pure linear -- targets seam continuity only (see docs/worklogs/42).",
+    )
+    parser.add_argument(
+        "--bf-disable-coupled-boundary-fit", action="store_true",
+        help="[boundary_first] Phase 5 Step 5-A (production default since 2026-07-22, docs/worklogs/55): pass this to fall back to the pre-Step-5-A independent per-wedge fit instead of the joint shared-seam-boundary solve -- see OSN_GS_Phase5_Boundary_Aligned_Extension_Plan.md.",
     )
     parser.add_argument("--resolution-u", type=int, default=8)
     parser.add_argument("--resolution-v", type=int, default=4)

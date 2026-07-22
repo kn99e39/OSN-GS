@@ -1,28 +1,21 @@
 # Intruction: 각 TODO 항목에 대해 목표 달성이 확인된 경우, 해당 문서에서 그 항목에 대한 내용은 삭제하도록 한다.
 
-# TODO: baseline 3DGS 대비 Scene 품질 하락 — 남은 후보
+# TODO: baseline 3DGS 대비 Scene 품질 격차 — 남은 동해상도 A/B 검증
 
-동일 데이터셋 10k에서 OSN-GS가 원본 Graphdeco 3DGS(`gaussian-splatting/`)보다 품질이 낮은 문제. 실행환경 노트북+CUDA(ADC 정상). 정적 코드 대조로 후보를 좁혔고, **최우선 원인이던 image loss의 SSIM 부재는 해결함** — 원본과 동일한 `(1-0.2)·L1 + 0.2·(1-SSIM)` 도입, SSIM은 원본 3DGS와 수치 일치(`docs/worklogs/22_ssim_image_loss.md`). NURBS anchor가 보이는 Gaussian을 구속하던 문제도 방향성 정정으로 해소했다(`docs/worklogs/23_nurbs_direction_correction.md`). 아래는 남은 2차 후보(미검증).
+정적 원인 후보였던 image loss 차이는 원본과 같은 L1+D-SSIM으로 정정했고, NURBS가 visible Gaussian을 끌던 역방향 anchor도 제거했으며, 학습 view는 이제 seed 재현 가능한 epoch별 무작위 순열로 sample한다. 기존 5k 결과는 OSN-GS가 `--low_vram` 반해상도이고 baseline은 full resolution이라 품질 격차의 공정한 증거로 사용할 수 없다.
 
-## 남은 후보 1 — 학습 뷰 샘플링이 무작위가 아니라 결정론적 순환 (2차)
-
-- 원본: 매 iteration `randint`로 무작위 카메라, 스택 소진 시 재셔플(`gaussian-splatting/train.py:89-94`).
-- 우리: `(iteration + offset) % count`로 순차 순환(`osn_gs/data/torch_scene.py:38`). gradient 다양성이 줄고, 100(densify)/3000(opacity reset) 같은 주기 이벤트와 카메라 순서가 고정 위상으로 맞물려 편향이 생길 수 있다.
-- 방향: iteration seed 기반 무작위 순열 샘플링(without replacement, epoch 셔플)로 교체.
-
-## 참고 (원인 아님, 원본과 동치 확인됨)
-
-- per-param LR 값·xyz exponential 스케줄, opacity reset(0.01/3000), clone/split 수식, prune 임계(0.005), SH degree 1000마다 증가, background 기본 검정.
+- [ ] 동일 dataset·동일 해상도·동일 iteration/save/eval 조건으로 OSN-GS와 Graphdeco 3DGS 10k A/B를 다시 실행한다.
+- [ ] train-view PSNR뿐 아니라 동일 holdout camera의 PSNR/SSIM과 Gaussian 수, 평균 iteration 시간, ADC spike를 함께 기록한다.
+- [ ] 변경 전 checkpoint가 동일 조건으로 남아 있지 않으므로 수치 동일성 대신 deterministic replay와 구조 회귀를 보장하고, 품질 acceptance는 위 A/B로 판정한다.
 
 ---
 
 # NURBS 표면 생성 품질: 세 안건 평가 도구 + 개선 타깃
 
-`nurbs_constructor_benchmark`가 이제 GT 대비 세 안건을 분리 측정한다(`docs/worklogs/20_ground_truth_nurbs_metrics.md`, `nurbs_constructor_benchmark/README.md`). 개선 작업은 이 지표로 before/after를 재는 것을 전제로 한다. 현재 baseline(600pts, seed0, lsq)에서 드러난 우선 타깃:
+`nurbs_constructor_benchmark`가 이제 GT 대비 세 안건을 분리 측정한다(`docs/worklogs/20_ground_truth_nurbs_metrics.md`, `nurbs_constructor_benchmark/README.md`). 개선 작업은 이 지표로 before/after를 재는 것을 전제로 한다.
 
-- **Patch Topology — `crease` 과분할**: patches=4(GT 2), `topology_label_ari=0.223`. voxel boundary가 능선을 필요 이상으로 잘게 쪼갬(`docs/voxel_role.md`, `torch_voxel_regions.py`의 `voxel_boundary_angle_degrees`/connected-component). 목표: ARI↑, patch_count→2. Patch control-grid aspect ratio already follows each patch PCA extent; the remaining limit is the global `base_u` cap on very elongated patches. (`docs/README.md`, 2026-07-15)
-- **Surface Support metric -- density_gradient calibration**: UV trimming is complete (plane 0.239->0.089, sine 0.184->0.092, crease->0.004; uncovered unchanged). The remaining 0.66 extrapolation is a metric-calibration issue: global median NN spacing is dominated by the dense cluster. Replace it with a local-density-adaptive support tau. (`docs/worklogs/21_uv_trimming.md`)
-- Accuracy(chamfer_rms)는 네 scene 모두 0.023~0.028로 무난 — 즉 **주 문제는 정확도가 아니라 support와 topology**임을 지표가 말해준다.
+- **Surface Support metric -- density_gradient calibration**: 레거시 기준 남은 0.66 extrapolation 문제(global median NN spacing이 조밀 클러스터에 지배됨)는 아직 해소되지 않았다. 현재 production 기본 constructor(`boundary_first`)에서 재확인(2026-07-22)해도 `density_gradient` 씬의 `extrapolation_global=0.558`로 유사하게 높다 — Phase 2가 KDE 기반 support 추정으로 방식 자체는 바뀌었지만, 희소/비균일 관측 밀도에서 extrapolation을 과대 추정하는 근본 문제는 남아 있다.
+- Accuracy(chamfer_rms)는 여전히 무난한 수준 — 주 문제는 support/topology 쪽에 남아 있다.
 
 ---
 
@@ -153,6 +146,21 @@ Gaussian + coarse NURBS
 - [ ] hole preservation을 configurable policy로 둔다. 기본 cleanup이 실제 hole을 메우지 않게 한다.
 - [ ] mask version과 UV-binding version을 함께 기록해 lifecycle mismatch를 탐지한다.
 
+### Annulus O-grid의 outer-boundary conformance가 구조적으로 나쁨, 아직 한 번도 타겟된 적 없음 (2026-07-22)
+
+- [ ] `build_annulus_chart`의 `phase2_boundary_conformance` 지표 기준, outer(바깥) loop conformance가 inner(hole) loop보다 항상 훨씬 나쁘다. 2026-07-22 재실측(coupled boundary fit 적용된 현재 production 기본값 기준, `planar_hole`/`planar_hole_offcenter`/`planar_hole_elliptical`/`planar_hole_density_gradient`, seed=0, count=600):
+
+  | scene | inner chamfer/coverage | outer chamfer/coverage |
+  |---|---|---|
+  | planar_hole | 0.021 / 0.985 | 0.099 / 0.610 |
+  | planar_hole_offcenter | 0.020 / 1.000 | 0.069 / 0.693 |
+  | planar_hole_elliptical | 0.021 / 0.928 | 0.073 / 0.646 |
+  | planar_hole_density_gradient | 0.026 / 0.964 | 0.098 / 0.518 |
+
+- Phase 4 하드닝 Step 3(`docs/worklogs/39_phase4_hardening_step1_3.md`)에서 처음 발견된 이후 Step 6/6-B(`docs/worklogs/50`, `51`)와 Step 4-D 재평가(`docs/worklogs/52`, `53`)까지 매번 재확인됐지만, 시도된 모든 수정(arc-length seed, seam-phase offset, Hermite seed, worst_wedge_optimized, profile_constrained, coupled boundary fit)은 전부 inner-corner/seam 메커니즘만 겨냥했고 outer conformance를 직접 타겟한 적은 한 번도 없다.
+- Phase 1의 per-leaf plane-AABB polygon union이 outer 방향으로 과대 확장되는 것이 근본 원인 후보로 지목됐다(`docs/worklogs/45`, `46`) — convex-hull clipping 프로토타입이 부분적으로 도움이 됐으나 sparse-boundary scene에서 새 under-coverage를 만들어 채택되지 않았고, 그 대신 채택된 boundary-leaf eligibility classifier(`docs/worklogs/47`-`49`)는 전체 false_fill/coverage는 개선했지만 이 outer-conformance 지표 자체를 별도로 개선하지는 못했다(위 표가 그 증거).
+- **Phase 5 연관성**: Phase 5의 extension chart(`OSN_GS_Phase5_Boundary_Aligned_Extension_Plan.md` §5.1-5.4)는 바로 이 boundary 추정치를 boundary tangent/local frame의 시드로 사용하므로, outer conformance가 나쁜 채로 Phase 5로 넘어가면 그 오차가 extension chart 품질에 직접 전파될 위험이 있다. Phase 5 본편 착수 전에 검토 필요.
+
 ### Synthetic boundary benchmark
 
 대상 scene:
@@ -199,7 +207,7 @@ PCA UV가 실패하는 경우를 단순 LSQ 실패로 분류하지 않는다. `U
 
 대상 scene:
 
-- [ ] crease
+- [x] crease -- 해결 확인 (2026-07-22): production 기본 constructor(`boundary_first`)에서 `patches=2(gt 2)`, `topology_label_ari=1.000` 실측. 아래 레거시 회귀 타깃 문단은 이 확인으로 종료.
 - [ ] T-junction
 - [ ] disconnected surfaces
 - [ ] close parallel sheets
@@ -218,7 +226,11 @@ PCA UV가 실패하는 경우를 단순 LSQ 실패로 분류하지 않는다. `U
 - [ ] close parallel sheet 간 잘못된 adjacency
 - [ ] front/back normal ambiguity
 
-현재 `crease`의 patches=4, GT=2, `topology_label_ari=0.223` 과분할을 첫 회귀 타깃으로 유지한다. 단, normal-angle threshold 하나를 완화해 해결하지 말고 다른 scene의 under-segmentation과 함께 평가한다.
+### 곡률 있는 컴포넌트의 topology 오분류 (실데이터 영향 우려, 2026-07-22)
+
+- [ ] `curved_annulus`(sine 곡률 + hole 1개)가 Phase 1(`build_surface_components`)에서 `annulus`로 인식되지 않고 `disk_like`/`complex` 컴포넌트 2개로 쪼개짐 -- `--bf-normal-threshold-degrees`/`--bf-offset-threshold-ratio` 조정과 무관하게 재현됨(`docs/worklogs/39_phase4_hardening_step1_3.md`, `docs/worklogs/43_phase4_hardening_step4d_worst_wedge_optimizer.md`, `OSN_GS_Phase5_Boundary_Aligned_Extension_Plan.md`). Phase 4/5(chart generator, coupled boundary fit)의 책임 범위가 아니라 Phase 1 component builder 자체의 구조적 한계로 판단됨.
+- [ ] 반대 방향 오분류도 확인됨(2026-07-22, `osn-gs benchmark --scenes mild_curved_sheet` 직접 실행): hole이 전혀 없는 단일 곡면(`mild_curved_sheet`, GT=1)이 오히려 `annulus`로 오분류되어 O-grid 8-wedge로 쪼개짐(`patches=8(gt 1)`, `topology_label_ari=0.000`) -- Phase 2의 hole-loop 검출이 곡률이 있는 컴포넌트에서 존재하지 않는 hole을 spurious하게 만들어내는 것으로 보임. `curved_annulus`와 반대 방향(hole 없음→있음으로 오판)이지만 같은 근본 원인(곡률이 있을 때 Phase 1/2의 loop/topology 판정이 불안정)을 공유하는 것으로 추정.
+- **영향 평가(에이전트 판단, 사용자 질의에 대한 답)**: 실데이터에서 "곡률 + occlusion으로 인한 hole"은 평면보다 오히려 흔한 조합이며, 이 실패 모드는 크래시 없이 조용히 품질을 깎아먹는 유형(시각적으로 렌더를 봐야 발견됨, chamfer_rms 등 집계 지표만으로는 안 잡힘)이라 실데이터 적용 시 영향이 작지 않을 것으로 예상됨. 다만 이는 Phase 1(Surface-Cell Component Builder)의 책임 범위이며, Phase 4/5 쪽에서 국소적으로 패치하기보다 Phase 1 자체를 다시 열어 근본 원인을 찾는 것이 맞는 방향으로 판단됨(현재 미착수).
 
 ### Gaussian covariance 기반 topology boundary
 
@@ -376,15 +388,14 @@ Raw COLMAP / trained 3DGS Gaussian
 - [ ] UV refresh, control-grid update, weight update, support-mask refresh의 실행 순서와 version contract를 정의한다.
 - [ ] rational weight가 학습으로 변한 뒤 재-fitting/maintenance가 필요한 경우 nonlinear path를 분리 설계한다. 현재 LSQ는 weight=1일 때만 선형이다.
 
-## Priority 8 — Training performance optimization
+## Priority 8 — Training performance optimization 및 scene 품질 격차
 
-Correctness 안정화 이후 수행한다.
+성능 구현 항목(ADC 단일 shape transaction, bounded pinned-memory snapshot, final 중복 제거, maintenance patch budget)과 결정론적 순환 view sampling 교체는 완료했다. 완료 근거는 `docs/worklogs/57_priority8_training_performance.md`에 기록했으며, 완료된 세부 항목은 이 TODO에서 삭제했다.
 
-- [ ] ADC의 여러 clone/rebuild를 단일 shape transaction으로 통합.
-- [ ] snapshot capture를 bounded pinned-memory asynchronous copy로 분리.
-- [ ] duplicate snapshot 전송 제거.
-- [ ] maintenance cadence 최적화.
-- [ ] 최적화 전후 학습 결과가 동일 tolerance 내인지 regression으로 검증.
+남은 acceptance 검증:
+
+- [ ] 동일 해상도 10k OSN-GS/Graphdeco A/B로 scene 품질 격차를 다시 측정한다.
+- [ ] 같은 seed의 OSN-GS deterministic replay와 A/B 결과를 이용해 품질·학습시간·ADC spike regression 기준을 확정한다.
 
 ## 실행 순서
 

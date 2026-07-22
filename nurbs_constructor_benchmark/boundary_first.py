@@ -78,6 +78,8 @@ def construct_boundary_first(
     annulus_segment_placement: str = "uniform_angle",
     annulus_seam_phase_offset: float = 0.0,
     annulus_hermite_boundary_seed: bool = False,
+    annulus_coupled_boundary_fit: bool = True,
+    annulus_collect_diagnostic_samples: bool = False,
     fallback_resolution_u: int = 12,
     fallback_resolution_v: int = 12,
     export_dir: Path | None = None,
@@ -130,6 +132,8 @@ def construct_boundary_first(
                 segment_placement=annulus_segment_placement,
                 seam_phase_offset=annulus_seam_phase_offset,
                 hermite_boundary_seed=annulus_hermite_boundary_seed,
+                coupled_boundary_fit=annulus_coupled_boundary_fit,
+                collect_diagnostic_samples=annulus_collect_diagnostic_samples,
             )
             for sl in chart.slices:
                 patch_id = len(all_surfaces)
