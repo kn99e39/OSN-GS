@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 """Phase 3 Trimmed Component Correctness Baseline unit tests
-(OSN_GS_Final_Boundary_First_NURBS_Direction.md §Phase 3)."""
+(docs/Urgent_Work/OSN_GS_Final_Boundary_First_NURBS_Direction.md §Phase 3)."""
 
 import unittest
 

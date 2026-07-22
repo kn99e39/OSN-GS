@@ -44,7 +44,7 @@ Step 6가 요구하는 "`chamfer_rms`/`false_fill`이 tolerance 이내에서 회
 
 ## Phase 5 게이트
 
-플랜 문서와 `OSN_GS_Final_Boundary_First_NURBS_Direction.md` §14 모두 "Phase 5는 사용자의 명시적 승인 없이 시작하지 않는다"를 반복해서 명시한다. Step 6를 실행했다고 해서 이 게이트가 자동으로 풀리는 게 아니다 — Phase 4를 닫기로 결정하더라도 Phase 5 착수는 **별도의 명시적 승인**이 필요하다.
+플랜 문서와 `../Urgent_Work/OSN_GS_Final_Boundary_First_NURBS_Direction.md` §14 모두 "Phase 5는 사용자의 명시적 승인 없이 시작하지 않는다"를 반복해서 명시한다. Step 6를 실행했다고 해서 이 게이트가 자동으로 풀리는 게 아니다 — Phase 4를 닫기로 결정하더라도 Phase 5 착수는 **별도의 명시적 승인**이 필요하다.
 
 ## 검증
 

@@ -384,8 +384,8 @@ The local Graphdeco notebook cells read/write patched Python sources with explic
 
 ## 2026-07-20 Governing NURBS Construction Plan
 
-- [OSN_GS_Final_Boundary_First_NURBS_Direction.md](../OSN_GS_Final_Boundary_First_NURBS_Direction.md) is the governing plan for future NURBS construction work. It requires boundary-first topology, component-level Gaussian geometry fitting, topology-aware chart generation, benchmark-only phased implementation, and an explicit user approval gate after every phase.
-- [OSN_GS_Voxel_Driven_NURBS_Migration_Plan.md](../OSN_GS_Voxel_Driven_NURBS_Migration_Plan.md) is retained only as the historical Stage 1 migration record.
+- [OSN_GS_Final_Boundary_First_NURBS_Direction.md](Urgent_Work/OSN_GS_Final_Boundary_First_NURBS_Direction.md) is the governing plan for future NURBS construction work. It requires boundary-first topology, component-level Gaussian geometry fitting, topology-aware chart generation, benchmark-only phased implementation, and an explicit user approval gate after every phase.
+- [OSN_GS_Voxel_Driven_NURBS_Migration_Plan.md](Urgent_Work/OSN_GS_Voxel_Driven_NURBS_Migration_Plan.md) is retained only as the historical Stage 1 migration record.
 
 ## 2026-07-20 Phase 2 Component Boundary Baseline
 
@@ -422,6 +422,10 @@ The local Graphdeco notebook cells read/write patched Python sources with explic
 - surface maintenance는 `OSN_SURFACE_MAINTENANCE_PATCH_BUDGET`/`--surface_maintenance_patch_budget`(기본 16)만큼 patch를 round-robin 검사한다. 0은 모든 patch 검사다.
 - training view는 순차 순환 대신 seed 재현 가능한 epoch별 무작위 순열(without replacement)을 사용한다.
 - CUDA smoke와 전체 150-test 회귀는 통과했다. 동일 해상도 10k baseline A/B는 남은 acceptance 검증이다. See `docs/worklogs/57_priority8_training_performance.md`.
+
+## 2026-07-22 Urgent_Work 계획 문서 경로
+
+- 루트 계획 문서 참조는 `docs/Urgent_Work/`로 이동했다. TODO, benchmark 문서, source/test docstring, 기존 worklog의 active-plan 참조를 새 위치에 맞췄고 Markdown 링크 검증에서 누락은 없었다. 상세 내용은 `docs/worklogs/58_urgent_work_reference_relocation.md`를 참고한다.
 
 ## 2026-07-22 Proxy-Based Surface Decomposition Stage 0/1
 

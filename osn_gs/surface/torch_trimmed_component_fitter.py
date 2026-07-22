@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """Phase 3 Trimmed Component Correctness Baseline.
 
-Implements ``OSN_GS_Final_Boundary_First_NURBS_Direction.md`` §Phase 3: fits
+Implements ``docs/Urgent_Work/OSN_GS_Final_Boundary_First_NURBS_Direction.md`` §Phase 3: fits
 ONE existing-fitter NURBS chart per Phase 1 ``SurfaceComponent``, using
 Phase 2's own shared UV frame (so the trim mask and the fitted chart agree on
 what "u, v" means) and Phase 2's refined support mask as the trim.

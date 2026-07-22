@@ -457,7 +457,7 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "NURBS constructor architecture. 'boundary_first' (default) runs the Phase 1-4 "
             "component/boundary/topology-routed-chart pipeline "
-            "(OSN_GS_Final_Boundary_First_NURBS_Direction.md); see the --bf-* options. "
+            "(docs/Urgent_Work/OSN_GS_Final_Boundary_First_NURBS_Direction.md); see the --bf-* options. "
             "'voxel_patch_stage1' is the Stage 1 ablation baseline, kept for comparison only. "
             "The legacy pipeline is retired from this benchmark and cannot be selected here."
         ),
@@ -499,7 +499,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--bf-disable-coupled-boundary-fit", action="store_true",
-        help="[boundary_first] Phase 5 Step 5-A (production default since 2026-07-22, docs/worklogs/55): pass this to fall back to the pre-Step-5-A independent per-wedge fit instead of the joint shared-seam-boundary solve -- see OSN_GS_Phase5_Boundary_Aligned_Extension_Plan.md.",
+        help="[boundary_first] Phase 5 Step 5-A (production default since 2026-07-22, docs/worklogs/55): pass this to fall back to the pre-Step-5-A independent per-wedge fit instead of the joint shared-seam-boundary solve -- see docs/Urgent_Work/OSN_GS_Phase5_Boundary_Aligned_Extension_Plan.md.",
     )
     parser.add_argument(
         "--bf-candidate-diagnostics",

@@ -3,7 +3,7 @@
 """Stage 1 recursive raw-count adaptive voxel hierarchy.
 
 This is the experimental ``voxel_patch_stage1`` builder described in
-``OSN_GS_Voxel_Driven_NURBS_Migration_Plan.md``. It is intentionally separate
+``docs/Urgent_Work/OSN_GS_Voxel_Driven_NURBS_Migration_Plan.md``. It is intentionally separate
 from the legacy ``torch_voxel_regions`` builder so the legacy constructor path
 stays byte-identical.
 

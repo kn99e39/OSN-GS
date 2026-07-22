@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """Phase 2 Component-Level Boundary Extraction.
 
-Implements ``OSN_GS_Final_Boundary_First_NURBS_Direction.md`` §Phase 2:
+Implements ``docs/Urgent_Work/OSN_GS_Final_Boundary_First_NURBS_Direction.md`` §Phase 2:
 extracts outer/inner-hole boundary structure for a whole
 ``SurfaceComponent`` (Phase 1) at once, in ONE shared component-level UV
 frame, instead of per-leaf/per-patch trim masks. This is the direct fix for

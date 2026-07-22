@@ -6,7 +6,7 @@
 
 ## 배경
 
-Step 4-D 계열(`worst_wedge_optimized`, `profile_constrained`) seam 각도 재배치 탐색이 worklog 52/53에서 모두 canonical default 자격 미달로 종료되고, 사용자가 `OSN_GS_Phase4_Hardening_Plan.md`를 완료 처리(삭제)한 뒤 Phase 5(`OSN_GS_Phase5_Boundary_Aligned_Extension_Plan.md`)를 승인했다. Phase 5 본편(occluded extension chart) 이전에, 사용자가 GPT 리뷰를 거쳐 지시한 선행 작업이 Step 5-A: **coupled patch-boundary fitting**이다 — "seam을 봉합해서 보기 좋게 만드는 것"이 아니라, 독립적으로 fitting된 wedge들을 shared-boundary constrained system으로 바꿨을 때 **patch-interior fold까지 완화되는지** 검증하는 것이 핵심 목적이었다.
+Step 4-D 계열(`worst_wedge_optimized`, `profile_constrained`) seam 각도 재배치 탐색이 worklog 52/53에서 모두 canonical default 자격 미달로 종료되고, 사용자가 `OSN_GS_Phase4_Hardening_Plan.md`를 완료 처리(삭제)한 뒤 Phase 5(`../Urgent_Work/OSN_GS_Phase5_Boundary_Aligned_Extension_Plan.md`)를 승인했다. Phase 5 본편(occluded extension chart) 이전에, 사용자가 GPT 리뷰를 거쳐 지시한 선행 작업이 Step 5-A: **coupled patch-boundary fitting**이다 — "seam을 봉합해서 보기 좋게 만드는 것"이 아니라, 독립적으로 fitting된 wedge들을 shared-boundary constrained system으로 바꿨을 때 **patch-interior fold까지 완화되는지** 검증하는 것이 핵심 목적이었다.
 
 ## 구현
 

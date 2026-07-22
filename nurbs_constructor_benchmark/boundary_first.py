@@ -1,7 +1,7 @@
 """Boundary-First NURBS constructor: the ``osn-gs benchmark --constructor
 boundary_first`` entry point.
 
-Implements ``OSN_GS_Final_Boundary_First_NURBS_Direction.md`` Phases 1-4 as a
+Implements ``docs/Urgent_Work/OSN_GS_Final_Boundary_First_NURBS_Direction.md`` Phases 1-4 as a
 single, scoreable constructor selectable from the SAME unified benchmark CLI
 (``nurbs_constructor_benchmark/runner.py``) as ``legacy``/``voxel_patch_stage1``,
 instead of separate per-phase scripts: Stage 1 raw-count voxel hierarchy ->

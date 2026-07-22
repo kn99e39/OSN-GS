@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 """Phase 4 Boundary-Conforming Chart Generator unit tests
-(OSN_GS_Final_Boundary_First_NURBS_Direction.md §Phase 4)."""
+(docs/Urgent_Work/OSN_GS_Final_Boundary_First_NURBS_Direction.md §Phase 4)."""
 
 import math
 import unittest

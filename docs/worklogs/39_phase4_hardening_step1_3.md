@@ -2,7 +2,7 @@
 
 작성일: 2026-07-21
 상태: hardening plan의 Step 1-3 완료. 다음은 Step 4(저위험 seed 변경).
-관련 문서: `OSN_GS_Phase4_Hardening_Plan.md` (이번 hardening pass의 근거 문서. `OSN_GS_Final_Boundary_First_NURBS_Direction.md`의 Phase 5 게이트에는 영향 없음 — 여전히 별도의 명시적 승인 필요).
+관련 문서: `OSN_GS_Phase4_Hardening_Plan.md` (이번 hardening pass의 근거 문서. `../Urgent_Work/OSN_GS_Final_Boundary_First_NURBS_Direction.md`의 Phase 5 게이트에는 영향 없음 — 여전히 별도의 명시적 승인 필요).
 
 ## 배경
 

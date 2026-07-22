@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """Phase 1 Surface-Cell Component Builder.
 
-Implements ``OSN_GS_Final_Boundary_First_NURBS_Direction.md`` §Phase 1: merges
+Implements ``docs/Urgent_Work/OSN_GS_Final_Boundary_First_NURBS_Direction.md`` §Phase 1: merges
 Stage 1 active (and, by default, complex) leaf voxels into physical surface
 *components* using face adjacency plus normal/plane-offset compatibility.
 

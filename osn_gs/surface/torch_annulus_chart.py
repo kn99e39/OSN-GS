@@ -780,7 +780,7 @@ def build_annulus_chart(
     everywhere, false_fill roughly flat. Set ``coupled_boundary_fit=False``
     to recover the pre-Step-5-A independent per-wedge fit (kept as a tested
     fallback/ablation path, not deleted) -- see
-    `OSN_GS_Phase5_Boundary_Aligned_Extension_Plan.md`.
+    `docs/Urgent_Work/OSN_GS_Phase5_Boundary_Aligned_Extension_Plan.md`.
 
     ``"profile_constrained"`` (Phase 4 hardening Step 4-D re-evaluation,
     ``docs/worklogs/52``/53): the canonical objective revision proposed

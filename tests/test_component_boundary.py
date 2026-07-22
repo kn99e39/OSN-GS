@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 """Phase 2 Component-Level Boundary Extraction unit tests
-(OSN_GS_Final_Boundary_First_NURBS_Direction.md §Phase 2)."""
+(docs/Urgent_Work/OSN_GS_Final_Boundary_First_NURBS_Direction.md §Phase 2)."""
 
 import unittest
 

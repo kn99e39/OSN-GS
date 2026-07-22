@@ -2,7 +2,7 @@
 
 날짜: 2026-07-20
 상태: 구현 및 검증 완료. 사용자의 명시적 승인 없이 Phase 5를 시작하지 않는다.
-기준 문서: `OSN_GS_Final_Boundary_First_NURBS_Direction.md`, Phase 4.
+기준 문서: `../Urgent_Work/OSN_GS_Final_Boundary_First_NURBS_Direction.md`, Phase 4.
 
 ## 완료한 범위
 
