@@ -103,6 +103,15 @@ Do not spend time retrying those commands inside the restricted sandbox. Treat t
   smaller verification step.
 - When the user provides a traceback or notebook output, treat it as the source
   of truth. Do not infer a different cell or command without checking.
+- 2026-07-23: When the user gives a conditional instruction ahead of time
+  ("once training finishes, do your remaining work and then shut the system
+  down"), execute it automatically the moment the condition is met. Do not
+  stop to re-confirm minor follow-up details the user already settled (e.g.
+  via an earlier clarifying question they already answered) — that just
+  delays execution for no benefit. Re-confirm only if something materially
+  new or risky comes up that the original instruction did not cover. Getting
+  this wrong once left the user's machine running all night waiting on a
+  question that had already been answered.
 
 ## Ongoing Context Log
 

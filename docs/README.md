@@ -438,4 +438,27 @@ The local Graphdeco notebook cells read/write patched Python sources with explic
 - Diagnostics-only scale-aware spatial candidate graph를 추가했다. Adaptive leaf AABB diagonal에 비례한 반경, deterministic sweep-and-prune, canonical pair ordering, duplicate 제거를 사용하며 face/edge/corner 관계는 결과 provenance로만 기록한다.
 - 기본 `curved_annulus`에서 누락 smooth pair 4/4와 기존 face-smooth pair 14/14를 모두 포함했다. 12 nodes, 39 edges, degree mean 6.50, p95/max 9였다. 회전·point count·adaptive leaf resolution·density-gradient sweep에서도 평가 reference recall은 모두 1.0이었다.
 - Candidate graph는 의도적으로 broad하다. 8-leaf crease/parallel 및 5–8-leaf density 조건은 complete graph였고, GT-cross false candidate 비율은 crease 57.1%, parallel layer 57.1%, disconnected-close 27.3%였다. 거리 sweep은 edge membership보다 기록된 `support_gap`에 반영되므로 Stage 3 admissibility에서 독립적으로 검증해야 한다.
-- 실제 `osn-gs benchmark --constructor boundary_first --bf-candidate-diagnostics`를 실행했으며 production `curved_annulus` component count는 2로 유지됐다. 전체 182 tests 통과(1 skip). Stage 3는 diagnostics-only prototype으로 조건부 진행 가능하지만 사용자 승인 전에는 시작하지 않는다. 상세 근거는 `docs/worklogs/62_proxy_decomposition_stage2_candidate_graph.md`와 `artifacts/proxy_decomposition_stage2.json`, `artifacts/proxy_decomposition_stage2_unified_benchmark.json/report.json`에 있다.
+- 실제 `osn-gs benchmark --constructor boundary_first --bf-candidate-diagnostics`를 실행했으며 production `curved_annulus` component count는 2로 유지됐다. 전체 182 tests 통과(1 skip). 이후 승인된 Stage 3 diagnostics-only prototype 결과는 아래에 기록했다. 상세 근거는 `docs/worklogs/62_proxy_decomposition_stage2_candidate_graph.md`와 `artifacts/proxy_decomposition_stage2.json`, `artifacts/proxy_decomposition_stage2_unified_benchmark.json/report.json`에 있다.
+
+## 2026-07-22 Proxy-Based Surface Decomposition Stage 3
+
+- Stage 2 graph 위에 atomic-leaf 초기 region, local quadratic proxy, normalized support gap, layer consistency를 사용하는 diagnostics-only deterministic merge-only agglomeration을 추가했다. 모든 raw diagnostics를 먼저 계산한 뒤 ordered gate를 적용하며 weighted semantic score는 사용하지 않는다.
+- 기본 seed-0에서는 `curved_annulus`를 1 region으로 복원하면서 crease, close parallel sheets, disconnected gap 0.1을 각각 2 regions로 유지했고 plane·planar annulus·density-gradient를 회귀시키지 않았다. 회전, point count, leaf resolution, parallel distance sweep도 통과했다.
+- 광범위 sweep에서는 density-gradient 4/5, disconnected gap 0.1은 2/5만 성공했다. Density seed 2 연결은 gap/spacing 5.163 초과가 필요하지만 disconnected seed 1 차단은 3.496 미만이 필요해 현재 signal set에 scene-independent 공통 threshold가 없다. 작은 disconnected gap 0.02/0.05도 오병합됐고 `mild_curved_sheet`는 과분할됐다.
+- 반복 실행, reversed candidate ordering, 전체 artifact가 hash-identical했다. 전체 suite는 191 passed, 1 skipped이며 실제 `osn-gs benchmark --constructor boundary_first`에서도 production membership과 기본값은 그대로였다.
+- 결론: Stage 3 broad methodology feasibility gate는 실패했다. 후속 승인된 Stage 3-R Gaussian-native diagnostics 결과는 아래에 기록했으며, production integration 및 Stage 4는 여전히 진행하지 않는다. 상세 근거는 `docs/worklogs/64_proxy_decomposition_stage3_merge_only_diagnostics.md`, `artifacts/proxy_decomposition_stage3.json`, `artifacts/proxy_decomposition_stage3_production_benchmark.json/report.json`에 있다.
+## 2026-07-22 Proxy-Based Surface Decomposition Stage 3-R
+
+- Gaussian mean/covariance/opacity만 받는 diagnostics-only continuity evaluator를 추가했다. Mahalanobis distance, k-sigma ellipsoid overlap, directional/tangent/normal reach, local bridge density, facing support mass와 기존 point diagnostics를 독립적으로 기록하며 merge decision과 weighted score는 없다.
+- 실제 field audit 결과 synthetic scene은 scale/rotation/covariance/opacity를 제공하지 않고, current production initialization도 KNN spacing을 xyz에 반복한 isotropic scale, identity rotation, opacity 0.12다. 따라서 actual 33 pair 모두 covariance principal axis가 surface normal을 의미하지 않았다.
+- Stage 3 core conflict에서 best valid signal인 pooled Mahalanobis q0.1은 AUC 0.90이지만 separation margin -0.359였다. Invalid principal-axis 신호를 제외한 두-signal AND도 disconnected gap 0.02를 false positive로 남겼다.
+- Opacity weighted/unweighted bridge 차이는 최대 4.44e-16이었다. Bridge density는 sample 17/33/65와 truncation 3/4/6에는 안정적이었지만 covariance scale multiplier 0.5/1/2에 따라 positive와 negative가 함께 0.002 수준에서 0.82 수준까지 이동했다.
+- 신규 11 tests 및 전체 202 tests(1 skip)가 통과했다. Artifact 3종은 반복 생성 SHA-256이 byte-identical했고, 실제 boundary-first benchmark의 공통 10 scenes에서 patch/component/topology/chart signature가 Stage 3 기준선과 동일했다.
+- 결론: actual pipeline에서 Gaussian-native pairwise signal은 Stage 3 conflict를 해결하지 못한다. Stage 3 재개와 Stage 4 integration은 기각하며, 다음 후보는 별도 승인된 neighborhood/manifold-level connectivity 조사다. 상세 근거는 `docs/worklogs/65_gaussian_native_support_continuity_stage3r.md`, `artifacts/gaussian_support_continuity_stage3r_pairs.json`, `artifacts/gaussian_support_continuity_stage3r_summary.json`에 있다.
+
+## 2026-07-23 NURBS Knot Vector Cache
+
+- `TorchNURBSSurface`가 control-grid 크기, effective degree, dtype, device별 clamped knot vector를 lazy cache한다. Control point와 rational weight가 학습 중 바뀌어도 재사용하며 구조가 바뀌면 자동 무효화한다.
+- 생성자, checkpoint, 학습 수학은 변경하지 않았다. 캐시 재사용·무효화·autograd 테스트와 전체 `204 passed, 1 skipped, 8 subtests passed` 회귀를 통과했다.
+- Isolated 16-patch forward benchmark에서 forced-uncached 대비 CPU `1.039x`, CUDA `1.063x`였다. 안전한 소폭 개선이지만 전체 `surface_loss` 병목을 해결하는 수준은 아니므로 ragged patch batching이나 UV basis cache로 범위를 확장하지 않았다.
+- 상세 결과와 남은 위험은 `docs/worklogs/66_nurbs_surface_loss_knot_cache_opportunity.md`에 기록했다.

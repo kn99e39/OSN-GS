@@ -21,7 +21,7 @@ from osn_gs.interop.colab_args import (
 )
 from osn_gs.render.diff_gaussian_loader import validate_diff_gaussian_build_environment
 from osn_gs.render.gaussian_rasterizer import GaussianRasterizerConfig
-from osn_gs.utils.torch_ops import default_device
+from osn_gs.utils.torch_ops import default_device, enable_timestamped_stdout
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -124,7 +124,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--density_control_interval", type=int, default=500)
     parser.add_argument("--save_interval", type=int, default=1000)
     parser.add_argument("--progress_log_interval", type=int, default=100, help="Print training progress every N iterations. 0 disables periodic progress logs.")
-    parser.add_argument("--timing_log_interval", type=int, default=100, help="Print per-stage training timing every N iterations. 0 disables periodic timing logs.")
+    parser.add_argument("--timing_log_interval", type=int, default=10, help="Print per-stage training timing every N iterations. 0 disables periodic timing logs.")
     parser.add_argument("--skip_cuda_build_preflight", action="store_true", help="Skip the early MSVC/CUDA/Ninja readiness check before CUDA rasterizer loading.")
     parser.add_argument("--disable_cuda_rasterizer", action="store_true")
     parser.add_argument("--stream_url", type=str, default="")
@@ -146,6 +146,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    enable_timestamped_stdout()
     args = build_parser().parse_args()
     device = args.device or default_device(prefer_cuda=True)
     image_device = args.image_device or ("auto" if device == "cuda" else device)

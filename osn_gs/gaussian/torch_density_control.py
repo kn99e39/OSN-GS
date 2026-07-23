@@ -161,11 +161,11 @@ def apply_adaptive_density_control(
     world_mask = torch.zeros_like(opacity_mask)
     split_parent_mask = torch.zeros_like(opacity_mask)
     split_parent_mask[split_idx] = True
-    # The old append path reset screen radii after the first growth operation.
-    # Preserve that behavior while collapsing all edits into one transaction.
+    # Newly cloned/split Gaussians have no observed screen radius yet, so they
+    # start at 0; pre-existing Gaussians keep their real accumulated max_radii2D
+    # regardless of whether growth happened this step.
     candidate_radii = torch.zeros_like(opacity_mask, dtype=torch.float32)
-    if cloned + split == 0:
-        candidate_radii[: len(model)] = model.max_radii2D
+    candidate_radii[: len(model)] = model.max_radii2D
     size_pruning_active = iteration > int(config.screen_size_prune_from_iter)
     if size_pruning_active and config.max_screen_size > 0:
         screen_mask = current_certain & (candidate_radii > float(config.max_screen_size))

@@ -267,6 +267,29 @@ class TrainingRegressionTest(unittest.TestCase):
         self.assertEqual(report.split, 2)
         self.assertEqual(len(model), 8)
 
+    def test_screen_size_pruning_fires_alongside_simultaneous_growth(self):
+        _, state = self._state(count=8)
+        model = state.model
+        model.training_setup(GaussianParameterGroups())
+        model.max_radii2D[0] = 25.0
+        model.denom.fill_(1.0)
+        model.xyz_gradient_accum.zero_()
+        model.xyz_gradient_accum[1] = 1.0
+        report = apply_adaptive_density_control(
+            model,
+            TorchDensityControlConfig(
+                densify_grad_threshold=0.1,
+                percent_dense=10.0,
+                max_screen_size=20.0,
+                max_scale_ratio=0,
+                screen_size_prune_from_iter=0,
+            ),
+            scene_extent=1.0,
+            iteration=1000,
+        )
+        self.assertGreater(report.cloned, 0)
+        self.assertEqual(report.pruned_screen, 1)
+
     def test_view_sampling_uses_reproducible_epoch_shuffle(self):
         cameras = list(range(7))
         scene = TorchScene(None, None, cameras, torch.zeros((7, 1)), "cpu", view_sampling_seed=17)

@@ -3,8 +3,11 @@ from __future__ import annotations
 """NURBS parametric-representation tests: derivatives, normals, foot-point projection."""
 
 import unittest
+from unittest import mock
 
 import torch
+
+import osn_gs.surface.torch_nurbs as torch_nurbs_module
 
 from osn_gs.core.torch_pipeline import TorchOSNGSPipeline, TorchPipelineConfig
 from osn_gs.surface.torch_nurbs import (
@@ -43,6 +46,46 @@ def _random_surface(
 
 
 class NURBSDerivativeTest(unittest.TestCase):
+    def test_knot_vectors_are_cached_and_invalidated_by_surface_structure(self):
+        surface = _random_surface(n_u=6, n_v=5)
+        uv = torch.rand(16, 2, dtype=torch.float64)
+
+        with mock.patch.object(
+            torch_nurbs_module,
+            "_clamped_knot_vector",
+            wraps=torch_nurbs_module._clamped_knot_vector,
+        ) as knot_builder:
+            expected = surface.evaluate(uv)
+            self.assertEqual(knot_builder.call_count, 2)
+            torch.testing.assert_close(surface.evaluate(uv), expected)
+            self.assertEqual(knot_builder.call_count, 2)
+
+            surface.degree_u = 3
+            self.assertTrue(torch.isfinite(surface.evaluate(uv)).all())
+            self.assertEqual(knot_builder.call_count, 4)
+
+            surface.control_grid = surface.control_grid[:-1]
+            surface.weights = surface.weights[:-1]
+            self.assertTrue(torch.isfinite(surface.evaluate(uv)).all())
+            self.assertEqual(knot_builder.call_count, 6)
+
+    def test_cached_knot_vectors_preserve_autograd(self):
+        surface = _random_surface()
+        surface.control_grid.requires_grad_(True)
+        surface.weights.requires_grad_(True)
+        uv = torch.rand(32, 2, dtype=torch.float64, requires_grad=True)
+
+        loss = surface.evaluate(uv).square().mean() + surface.evaluate(uv).abs().mean()
+        loss.backward()
+        self.assertIsNotNone(surface.control_grid.grad)
+        self.assertIsNotNone(surface.weights.grad)
+        self.assertIsNotNone(uv.grad)
+        self.assertTrue(torch.isfinite(surface.control_grid.grad).all())
+        self.assertTrue(torch.isfinite(surface.weights.grad).all())
+        self.assertTrue(torch.isfinite(uv.grad).all())
+        self.assertFalse(surface._cached_knots_u.requires_grad)
+        self.assertFalse(surface._cached_knots_v.requires_grad)
+
     def test_analytic_derivatives_match_finite_differences(self):
         surface = _random_surface()
         torch.manual_seed(11)

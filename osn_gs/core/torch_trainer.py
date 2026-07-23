@@ -36,6 +36,7 @@ from osn_gs.losses.torch_losses import (
 from osn_gs.render.gaussian_rasterizer import GaussianRasterizerConfig, OSNGaussianRasterizer
 from osn_gs.utils.torch_checkpoint import load_torch_checkpoint, save_torch_checkpoint
 from osn_gs.utils.torch_ops import default_device, psnr_from_mse, require_torch, sh_dc_to_rgb
+from tqdm import tqdm
 
 
 @dataclass
@@ -67,7 +68,9 @@ class TorchTrainingConfig:
     save_interval: int = 1000
     save_iterations: tuple[int, ...] = ()
     progress_log_interval: int = 100
-    timing_log_interval: int = 100
+    # Matches the Graphdeco baseline's tqdm postfix cadence (`iteration % 10`),
+    # so per-iteration timing samples are 10x denser than the status/ADC log.
+    timing_log_interval: int = 10
     stream_url: str = ""
     stream_every: int = 1
     stream_iterations: tuple[int, ...] = ()
@@ -112,7 +115,21 @@ class TorchOSNGSTrainer:
         self._stream_queue: queue.Queue[Any] | None = None
         self._stream_thread: threading.Thread | None = None
         self._streamed_iterations: dict[int, bool] = {}
-        print(f"OSN-GS rasterizer backend: {self.rasterizer.backend_source}", flush=True)
+        self._progress_bar: Any | None = None
+        self._last_progress_iteration = 0
+        self._print(f"OSN-GS rasterizer backend: {self.rasterizer.backend_source}")
+
+    def _print(self, message: str) -> None:
+        """Print training-status messages, matching the Graphdeco baseline's log style.
+
+        Routed through `tqdm.write` while a progress bar is active so status
+        lines don't corrupt the live bar; falls back to plain `print` otherwise.
+        """
+
+        if self._progress_bar is not None:
+            tqdm.write(message)
+        else:
+            print(message, flush=True)
 
     def train(self, scene: TorchScene, output_dir: str | Path) -> TorchTrainingResult:
         """Train the scene and save previews, checkpoints, and point clouds."""
@@ -135,9 +152,33 @@ class TorchOSNGSTrainer:
                 self.training_config.surface_lr,
             )
             start_iteration = restored + 1
-            print(f"OSN-GS resumed: checkpoint={self.training_config.resume_checkpoint} iteration={restored}", flush=True)
+            self._print(f"OSN-GS resumed: checkpoint={self.training_config.resume_checkpoint} iteration={restored}")
         background = torch.zeros((3,), dtype=torch.float32, device=self.device)
         train_wall_start = time.perf_counter()
+        self._progress_bar = tqdm(
+            total=self.training_config.iterations,
+            initial=start_iteration - 1,
+            desc="OSN-GS training",
+        )
+        self._last_progress_iteration = start_iteration - 1
+        try:
+            self._train_loop(scene, state, scene_extent, output_dir, background, start_iteration, train_wall_start)
+        finally:
+            self._progress_bar.close()
+            self._progress_bar = None
+        return TorchTrainingResult(state=state, output_dir=output_dir)
+
+    def _train_loop(
+        self,
+        scene: TorchScene,
+        state: TorchPipelineState,
+        scene_extent: float,
+        output_dir: Path,
+        background,
+        start_iteration: int,
+        train_wall_start: float,
+    ) -> None:
+        torch = self.torch
         for iteration in range(start_iteration, self.training_config.iterations + 1):
             state.model.update_learning_rate(iteration)
             timed = self._should_log_timing(iteration)
@@ -204,6 +245,21 @@ class TorchOSNGSTrainer:
                 state.last_loss = float(total.detach().cpu())
                 state.last_psnr = psnr_from_mse(float(mean_mse.detach().cpu()))
 
+            # Save/stream before ADC and opacity reset (matching the baseline's
+            # own save-before-densify_and_prune ordering). Opacity reset zeroes
+            # every Gaussian's opacity; saving after it captured a near-black
+            # render.ppm at every reset_interval/save_interval overlap instead
+            # of the actually-trained state (worklog 69).
+            self._stream_snapshot(state, include_nurbs=self._should_stream_nurbs(state))
+            if self.training_config.write_output_files and self._should_save_iteration(iteration):
+                # A fixed camera (not the current minibatch's) so every periodic
+                # render.ppm across iterations -- and across frameworks, since
+                # the baseline picks the same name-sorted first train camera --
+                # is comparable pixel-for-pixel from the same viewpoint.
+                self.save_outputs(state, output_dir / str(iteration), self._preview_camera(scene))
+            self._record_timing(timings, "save", phase_start, timed)
+            phase_start = self._time_now(timed)
+
             if self.training_config.surface_rebuild_interval > 0 and iteration % self.training_config.surface_rebuild_interval == 0:
                 report = self.pipeline.maintain_surface_from_certain(
                     state,
@@ -216,15 +272,14 @@ class TorchOSNGSTrainer:
                 )
                 if report["topology_changed"]:
                     self._sync_surface_optimizer(state)
-                print(
+                self._print(
                     "OSN-GS surface maintenance: "
                     f"iteration={iteration} checked={report['checked']} "
                     f"max_residual={report['max_residual_ratio']:.6g} "
                     f"candidates={len(report['candidates'])} "
                     f"corrected={len(report['corrected'])} "
                     f"patches={report['patches']} "
-                    f"uv_refreshed={report.get('uv_refreshed', 0)}",
-                    flush=True,
+                    f"uv_refreshed={report.get('uv_refreshed', 0)}"
                 )
 
             if should_run_adc(iteration, self.training_config.density_control):
@@ -232,15 +287,23 @@ class TorchOSNGSTrainer:
                 report = apply_adaptive_density_control(
                     state.model, self.training_config.density_control, scene_extent, iteration=iteration
                 )
-                print(
+                self._print(
                     "OSN-GS ADC: "
                     f"iteration={iteration} cloned={report.cloned} split={report.split} "
                     f"pruned={report.pruned} opacity={report.pruned_opacity} "
                     f"screen={report.pruned_screen} world={report.pruned_world} gaussians={len(state.model)} "
                     f"tracked={adc_before['tracked']} max_grad={adc_before['max_grad']:.6g} "
-                    f"mean_grad={adc_before['mean_grad']:.6g} threshold={adc_before['threshold']:.6g}",
-                    flush=True,
+                    f"mean_grad={adc_before['mean_grad']:.6g} threshold={adc_before['threshold']:.6g}"
                 )
+                # Baseline 3DGS calls this at the end of every densify_and_prune
+                # step (gaussian_model.py). Our clone/split/prune shape
+                # transaction frees several full-size temporaries per ADC step;
+                # without releasing them back to the driver, the caching
+                # allocator's free blocks fragment as Gaussian count grows,
+                # which showed up as multi-second stalls once VRAM usage
+                # neared capacity (worklog 67).
+                if self.device == "cuda" and self.torch.cuda.is_available():
+                    self.torch.cuda.empty_cache()
             reset_interval = int(self.training_config.density_control.opacity_reset_interval)
             densify_until = int(self.training_config.density_control.densify_until_iter)
             if (
@@ -249,25 +312,18 @@ class TorchOSNGSTrainer:
                 and iteration % reset_interval == 0
             ):
                 state.model.reset_opacity()
-                print(f"OSN-GS ADC: iteration={iteration} opacity_reset=0.01", flush=True)
+                self._print(f"OSN-GS ADC: iteration={iteration} opacity_reset=0.01")
 
             if self.training_config.density_control_interval > 0 and iteration % self.training_config.density_control_interval == 0:
                 report = apply_uncertain_density_control(state.model, self.training_config.density_control)
                 if report.changed:
-                    print(
+                    self._print(
                         "OSN-GS uncertain cleanup: "
-                        f"iteration={iteration} pruned={report.uncertain_pruned} gaussians={len(state.model)}",
-                        flush=True,
+                        f"iteration={iteration} pruned={report.uncertain_pruned} gaussians={len(state.model)}"
                     )
             state.model.optimizer.step()
             self._clamp_uncertain_confidence(state)
             self._record_timing(timings, "density", phase_start, timed)
-            phase_start = self._time_now(timed)
-
-            self._stream_snapshot(state, include_nurbs=self._should_stream_nurbs(state))
-            if self.training_config.write_output_files and self._should_save_iteration(iteration):
-                self.save_outputs(state, output_dir / str(iteration), batch.cameras[0])
-            self._record_timing(timings, "save", phase_start, timed)
             phase_start = self._time_now(timed)
 
             if self._should_log_progress(iteration):
@@ -282,8 +338,19 @@ class TorchOSNGSTrainer:
         self._finish_stream_worker()
         self._close_stream_socket()
         if self.training_config.write_output_files:
-            self.save_outputs(state, output_dir / "final", scene.cameras[0])
-        return TorchTrainingResult(state=state, output_dir=output_dir)
+            self.save_outputs(state, output_dir / "final", self._preview_camera(scene))
+
+    def _preview_camera(self, scene: TorchScene):
+        """Fixed camera for render.ppm previews: name-sorted first train camera.
+
+        Deterministic and independent of minibatch sampling/shuffling, so
+        every periodic preview is the same viewpoint across iterations. The
+        Graphdeco baseline picks its preview camera the same way (sorted
+        train cameras, first by name) so the two frameworks' render.ppm files
+        are directly comparable pixel-for-pixel.
+        """
+
+        return min(scene.cameras, key=lambda camera: camera.image_name)
 
     def _maintenance_patch_ids(self, state: TorchPipelineState) -> tuple[int, ...] | None:
         """Rotate a bounded patch set at each maintenance checkpoint."""
@@ -683,8 +750,16 @@ class TorchOSNGSTrainer:
             timings[name] = self._elapsed(start)
 
     def _log_timing(self, iteration: int, timings: dict[str, float]) -> None:
-        parts = " ".join(f"{key}={value:.3f}s" for key, value in timings.items())
-        print(f"OSN-GS timing: iteration={iteration} {parts}", flush=True)
+        # Split across two lines once the phase breakdown gets long enough to
+        # hurt readability; both lines repeat the iteration so notebook parsing
+        # by iteration number still works line-by-line.
+        items = list(timings.items())
+        midpoint = (len(items) + 1) // 2
+        first_half = " ".join(f"{key}={value:.3f}s" for key, value in items[:midpoint])
+        second_half = " ".join(f"{key}={value:.3f}s" for key, value in items[midpoint:])
+        self._print(f"OSN-GS timing: iteration={iteration} {first_half}")
+        if second_half:
+            self._print(f"OSN-GS timing: iteration={iteration} {second_half}")
 
     def _should_log_progress(self, iteration: int) -> bool:
         interval = max(0, int(self.training_config.progress_log_interval))
@@ -696,15 +771,19 @@ class TorchOSNGSTrainer:
         uncertain_count = 0
         if state.model.is_uncertain.numel() > 0 and bool(state.model.is_uncertain.detach().cpu().any()):
             uncertain_count = int(state.model.is_uncertain.detach().cpu().sum())
-        print(
-            "OSN-GS progress: "
-            f"iteration={state.iteration}/{self.training_config.iterations} "
-            f"loss={state.last_loss:.6f} "
-            f"psnr={state.last_psnr:.3f} "
-            f"gaussians={len(state.model)} "
-            f"uncertain={uncertain_count}",
-            flush=True,
-        )
+        postfix = {
+            "Loss": f"{state.last_loss:.6f}",
+            "PSNR": f"{state.last_psnr:.3f}",
+            "Gaussians": f"{len(state.model)}",
+        }
+        if uncertain_count:
+            postfix["Uncertain"] = str(uncertain_count)
+        if self._progress_bar is not None:
+            self._progress_bar.set_postfix(postfix)
+            delta = int(state.iteration) - self._last_progress_iteration
+            if delta > 0:
+                self._progress_bar.update(delta)
+            self._last_progress_iteration = int(state.iteration)
 
     def _prepare_training_view(self, camera, target):
         """Optionally downscale the training view to reduce renderer memory pressure."""

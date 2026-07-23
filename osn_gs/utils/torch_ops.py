@@ -8,7 +8,38 @@ PyTorch import를 파일 top-level에서 하지 않고 `require_torch()`로 지�
 """
 
 import math
+import sys
+from datetime import datetime
 from typing import Any
+
+
+def enable_timestamped_stdout() -> None:
+    """Append a `[dd/mm HH:MM:SS]` timestamp to every stdout line's newline.
+
+    Matches the Graphdeco baseline's own `safe_state()` stdout wrapper
+    (`gaussian-splatting/utils/general_utils.py`) so both training logs read
+    in the same format for side-by-side comparison. Idempotent: calling it
+    more than once does not stack wrappers.
+    """
+
+    if getattr(sys.stdout, "_osn_gs_timestamped", False):
+        return
+    original = sys.stdout
+
+    class _TimestampedStdout:
+        _osn_gs_timestamped = True
+
+        def write(self, text: str) -> None:
+            if text.endswith("\n"):
+                stamp = datetime.now().strftime("%d/%m %H:%M:%S")
+                original.write(text[:-1] + f" [{stamp}]\n")
+            else:
+                original.write(text)
+
+        def flush(self) -> None:
+            original.flush()
+
+    sys.stdout = _TimestampedStdout()
 
 
 def require_torch() -> Any:

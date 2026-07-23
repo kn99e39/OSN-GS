@@ -2,7 +2,7 @@
 ## Adaptive Local Surface Cells + Variational Proxy-Based Surface Decomposition
 
 **진행 상태 (2026-07-22)**
-Stage 0 기준선, Stage 1 diagnostics-only quadratic proxy, Stage 2 diagnostics-only Spatial Candidate Graph 검증을 완료했다. Production component membership과 기본값은 변경하지 않았다. Stage 2는 `curved_annulus` 누락 smooth pair 및 기존 face-smooth pair recall 1.0을 유지했으나 coarse leaf scene에서 dense/complete candidate graph가 발생함을 확인했다. 근거는 `docs/worklogs/62_proxy_decomposition_stage2_candidate_graph.md`, `artifacts/proxy_decomposition_stage2.json`, `artifacts/proxy_decomposition_stage2_unified_benchmark.json/report.json`에 있다. **Stage 3 Merge-Only Agglomeration은 사용자 승인 대기 상태이며 아직 구현하지 않았다.**
+Stage 0~3과 별도 diagnostics Stage 3-R Gaussian-Native Support Continuity 조사를 완료했다. Production component membership과 기본값은 변경하지 않았다. Stage 3-R에서 actual synthetic/production initialization의 covariance는 KNN spacing 기반 isotropic scale, identity rotation, constant opacity라 surface-aligned support 정보를 담지 않음을 확인했다. Pooled Mahalanobis는 core conflict ranking을 개선했지만 공통 threshold가 없었고, 유효한 두 신호 conjunction도 disconnected gap 0.02를 오연결했다. 근거는 `docs/worklogs/65_gaussian_native_support_continuity_stage3r.md`, `artifacts/gaussian_support_continuity_stage3r_pairs.json`, `artifacts/gaussian_support_continuity_stage3r_summary.json`에 있다. **Stage 3과 Stage 3-R pairwise methodology는 기각했으며 Stage 4 production integration은 진행하지 않는다.**
 
 **문서 목적**
 이 문서는 OSN-GS의 현재 Phase 1 Surface-Cell Component Builder를, 축 정렬 voxel face adjacency에 의존하는 방식에서 **local geometric proxy 기반 surface decomposition** 방식으로 교체하기 위한 개발 지침이다.
@@ -511,7 +511,7 @@ Production 변경 금지.
 
 ## Stage 2 — Spatial Candidate Graph
 
-상태: **완료 (2026-07-22, Worklog 62).** Diagnostics-only candidate generation과 회전·point count·adaptive leaf resolution·density gradient·parallel-layer distance sweep을 완료했다. Production component membership은 변경하지 않았으며 Stage 3는 사용자 승인 대기다.
+상태: **완료 (2026-07-22, Worklog 62).** Diagnostics-only candidate generation과 회전·point count·adaptive leaf resolution·density gradient·parallel-layer distance sweep을 완료했다. Production component membership은 변경하지 않았다. 이후 승인된 Stage 3 결과는 Worklog 64에 기록했다.
 
 ### 목표
 
@@ -555,6 +555,8 @@ build_surface_cell_candidate_graph(
 ---
 
 ## Stage 3 — Merge-Only Agglomeration Prototype
+
+상태: **diagnostics-only 구현 및 검증 완료 후 기각 (2026-07-22, Worklog 64).** 기본 fixture는 통과했으나 seed/distance sweep에서 density-gradient와 disconnected-close를 구분할 공통 threshold가 없어 광범위 feasibility gate는 실패했다. 후속 Stage 3-R도 actual covariance의 구조적 한계로 실패했다. Production integration 및 Stage 4는 진행하지 않는다.
 
 ### 목표
 
@@ -612,6 +614,21 @@ min_region_support
 
 ---
 
+## Stage 3-R — Gaussian-Native Support Continuity Investigation
+
+상태: **diagnostics-only 조사 완료 후 기각 (2026-07-22, Worklog 65).** Gaussian covariance/scale/rotation/opacity 기반 Mahalanobis, ellipsoid overlap, projected reach, bridge density, facing mass를 독립적으로 평가했다. Actual benchmark covariance는 isotropic KNN initialization이라 principal axis가 surface normal을 의미하지 않았고, 의미가 유효한 단일 또는 두 신호로 Stage 3 conflict를 분리하지 못했다.
+
+### 결론
+
+- Core conflict의 best valid signal은 pooled Mahalanobis q0.1이었으나 AUC 0.90, separation margin -0.359로 공통 threshold가 없다.
+- Constant opacity 때문에 weighted/unweighted bridge 결과가 동일하다.
+- Bridge density는 sample/truncation에는 비교적 안정적이지만 covariance scale에 강하게 종속된다.
+- Invalid principal-axis 신호를 제외한 두-signal AND도 disconnected gap 0.02를 false positive로 남긴다.
+- Production component, Stage 3 admissibility, Phase 2/NURBS는 변경하지 않았다.
+
+Stage 3 agglomeration 재개와 Stage 4 integration의 근거가 없다. 다음 조사는 별도 승인 후 neighborhood/manifold-level connectivity 방법론으로 정의해야 한다.
+
+---
 ## Stage 4 — Downstream Interface Integration
 
 ### 목표
@@ -985,4 +1002,4 @@ Stage 1 종료 후 다음 내용을 보고하고 멈춘다.
 5. 예상되는 downstream Phase 2 위험은 무엇인가
 ```
 
-Stage 2 완료 결과를 보고한 뒤 멈춘다. 사용자의 승인 없이 Stage 3로 진행하지 않는다.
+Stage 3-R 완료 결과를 보고한 뒤 멈춘다. Pairwise local evidence를 포기하고 neighborhood/manifold-level connectivity를 조사하는 별도 방법론과 사용자 승인이 없으면 Stage 3 수정 또는 Stage 4 production integration으로 진행하지 않는다.

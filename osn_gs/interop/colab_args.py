@@ -215,7 +215,7 @@ def build_osn_gs_train_parser() -> argparse.ArgumentParser:
     parser.add_argument("--disable_local_surface_correction", action="store_true")
     parser.add_argument("--density_control_interval", type=int, default=500)
     parser.add_argument("--progress_log_interval", type=int, default=100, help="Print training progress every N iterations. 0 disables periodic progress logs.")
-    parser.add_argument("--timing_log_interval", type=int, default=100, help="Print per-stage training timing every N iterations. 0 disables periodic timing logs.")
+    parser.add_argument("--timing_log_interval", type=int, default=10, help="Print per-stage training timing every N iterations. 0 disables periodic timing logs.")
     parser.add_argument("--stream_url", type=str, default="", help="Optional WebSocket URL for live renderer snapshots.")
     parser.add_argument("--stream_every", type=int, default=1, help="Broadcast every N iterations; default 1 broadcasts each iteration.")
     parser.add_argument("--stream_iterations", nargs="*", type=int, default=[], help="Exact iterations to stream.")

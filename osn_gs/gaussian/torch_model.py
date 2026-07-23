@@ -27,8 +27,8 @@ class GaussianParameterGroups:
     xyz_lr_max_steps: int = 30000
     # SH DC color coefficient.
     feature_lr: float = 2.5e-3
-    # raw opacity logit.
-    opacity_lr: float = 5.0e-2
+    # raw opacity logit. Matches original 3DGS (arguments/__init__.py: opacity_lr=0.025).
+    opacity_lr: float = 2.5e-2
     # log scale parameter.
     scaling_lr: float = 5.0e-3
     # quaternion rotation.
