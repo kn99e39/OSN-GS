@@ -123,6 +123,7 @@ def build_osn_gs_train_parser() -> argparse.ArgumentParser:
     parser.add_argument("--adc_max_screen_size", type=float, default=20.0)
     parser.add_argument("--adc_max_scale_ratio", type=float, default=0.1)
     parser.add_argument("--opacity_reset_interval", type=int, default=3000)
+    parser.add_argument("--adc_drop_survivor_gradients", action="store_true", help="A/B only: discard survivor gradients after ADC shape replacement to match Graphdeco lifecycle.")
     parser.add_argument("--screen_size_prune_from_iter", type=int, default=3000)
 
     parser.add_argument("--images", type=str, default="images", help="Image folder name under --source_path.")
@@ -155,12 +156,19 @@ def build_osn_gs_train_parser() -> argparse.ArgumentParser:
         default=1,
         help="Additional training-time render downscale. 2 means half resolution in each axis.",
     )
+    parser.add_argument(
+        "--position_lr_extent_mode",
+        type=str,
+        default="scene",
+        choices=("scene", "calibration"),
+        help="Position-LR scale: robust point-cloud scene extent (default) or Graphdeco camera calibration extent for A/B.",
+    )
     parser.add_argument("--base_curve_count", type=int, default=8)
     parser.add_argument("--visible_surface_resolution_u", type=int, default=8)
     parser.add_argument("--visible_surface_resolution_v", type=int, default=4)
     parser.add_argument("--visible_surface_resolution_scale", type=float, default=4.0)
     parser.add_argument("--max_surface_control_points", type=int, default=65536)
-    parser.add_argument("--covariance_init", type=str, default="knn", choices=("knn", "constant"), help="Initialize Gaussian covariance scales from KNN spacing or a constant fallback.")
+    parser.add_argument("--covariance_init", type=str, default="knn", choices=("knn", "graphdeco_knn", "constant"), help="Initialize Gaussian covariance scales from KNN spacing or a constant fallback.")
     parser.add_argument("--covariance_knn_chunk_size", type=int, default=0, help="KNN chunk for covariance initialization. 0 auto-selects from VRAM.")
     parser.add_argument("--covariance_min_scale", type=float, default=1e-4)
     parser.add_argument("--covariance_max_scale_ratio", type=float, default=0.05)

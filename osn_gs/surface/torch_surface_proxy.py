@@ -2,11 +2,10 @@ from __future__ import annotations
 
 """Diagnostics-only local quadratic surface proxies.
 
-This module implements Stage 1 of
-``docs/Urgent_Work/OSN_GS_Proxy_Based_Surface_Decomposition_Impl_Plan.md``.
-It does not participate in the production component builder.  The proxy is a
-local decomposition diagnostic, never a replacement for the final NURBS
-surface.
+This module implements the diagnostics-only Stage 1 recorded in
+``docs/worklogs/61_proxy_decomposition_stage1_quadratic_diagnostics.md``. It
+does not participate in the production component builder. The proxy is a local
+decomposition diagnostic, never a replacement for the final NURBS surface.
 
 Coordinates are normalized by one isotropic tangent-space support scale before
 fitting ``z = ax^2 + bxy + cy^2 + dx + ey + f``.  Error increase for a pair is

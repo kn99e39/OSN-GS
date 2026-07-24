@@ -16,16 +16,17 @@ Why this exists (OSN-GS, not upstream): the OSN-GS vs baseline 3DGS quality
 A/B (``TODO.md``'s top section) needs the SAME held-out test cameras and the
 SAME effective training resolution on both sides, or the comparison is not
 fair. Rather than re-derive this logic by hand (risking a subtle off-by-one
-or rounding mismatch), the two self-contained pieces of upstream logic that
+or rounding mismatch), the self-contained pieces of upstream logic that
 decide this are copied verbatim from ``gaussian-splatting/scene/
-dataset_readers.py`` (``readColmapSceneInfo``'s llffhold branch) and
+dataset_readers.py`` (``readColmapSceneInfo``'s llffhold branch and
+``getNerfppNorm``'s camera-based scene-extent radius) and
 ``gaussian-splatting/utils/camera_utils.py`` (``loadCam``'s resolution
 branch), preserving the original control flow byte-for-byte so a future diff
 against upstream stays meaningful. Only lightly repackaged into standalone
-functions operating on plain values (image name list / width / height)
-instead of upstream's own ``CameraInfo``/``args`` objects, since OSN-GS has
-its own COLMAP reader (``osn_gs/data/colmap_scene.py``) and does not import
-upstream's scene-loading module wholesale.
+functions operating on plain values (image name list / width / height /
+camera centers) instead of upstream's own ``CameraInfo``/``args`` objects,
+since OSN-GS has its own COLMAP reader (``osn_gs/data/colmap_scene.py``) and
+does not import upstream's scene-loading module wholesale.
 
 Per ``AGENTS.md``'s vendoring rule ("avoid editing external reference
 projects; vendor code into OSN-GS and point runtime paths only at OSN-GS"),
@@ -37,6 +38,37 @@ imported or modified at runtime.
 from __future__ import annotations
 
 import os
+
+from typing import Sequence
+
+
+def estimate_camera_extent(camera_centers: Sequence[Sequence[float]]) -> float:
+    """Verbatim port of ``getNerfppNorm``'s radius computation
+    (``gaussian-splatting/scene/dataset_readers.py:50-71``).
+
+    Given the world-space camera centers of a scene's TRAIN cameras, returns
+    upstream's ``cameras_extent``: 1.1x the max distance from the mean camera
+    center. Unlike a point-cloud-based scene extent, this is computed purely
+    from (noise-free, bundle-adjusted) camera poses, so it needs no
+    outlier-robust statistic the way a raw SfM point cloud does -- but it can
+    diverge sharply from the reconstructed geometry's actual spread on
+    walkthrough-style captures where observed content extends well past the
+    camera path (see ``docs/worklogs/71_scene_extent_basis_mismatch_and_visible_blur_root_cause.md``).
+    All of baseline 3DGS's own scale-sensitive constants (``percent_dense``,
+    ``opacity_reset``'s implicit size assumptions, world-size prune ratio)
+    are calibrated against this exact quantity, so any OSN-GS code path that
+    reuses those constants unmodified must feed them this, not a
+    point-cloud-based extent.
+    """
+
+    import numpy as np
+
+    centers = np.asarray([np.asarray(c, dtype=np.float64).reshape(3) for c in camera_centers])
+    if centers.shape[0] == 0:
+        return 1.0
+    center = centers.mean(axis=0)
+    dist = np.linalg.norm(centers - center, axis=1)
+    return float(dist.max()) * 1.1
 
 
 def select_llff_holdout_test_names(

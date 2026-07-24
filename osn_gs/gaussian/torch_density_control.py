@@ -31,6 +31,9 @@ class TorchDensityControlConfig:
     max_gaussians: int = 0
     opacity_reset_interval: int = 3000
     screen_size_prune_from_iter: int = 3000
+    # Keep current OSN-GS behavior by default. False reproduces Graphdeco's
+    # parameter-replacement lifecycle on ADC steps for a parity ablation.
+    preserve_adc_gradients: bool = True
     prune_uncertain_confidence_threshold: float = 0.05
 
 
@@ -39,7 +42,13 @@ class TorchDensityControlReport:
     """Summary of a density-control pass."""
 
     cloned: int = 0
+    # ``split`` is the number of generated child Gaussians. Parent counts are
+    # recorded separately so Graphdeco candidate diagnostics are comparable.
     split: int = 0
+    clone_parents: int = 0
+    split_parents: int = 0
+    clone_parent_anisotropy: float = 0.0
+    split_parent_anisotropy: float = 0.0
     pruned: int = 0
     uncertain_pruned: int = 0
     pruned_opacity: int = 0
@@ -65,19 +74,29 @@ def add_densification_stats(model: TorchGaussianModel, viewspace_points, visibil
         return
 
     grad = None
+    source = "unavailable"
     if viewspace_points is not None and viewspace_points.grad is not None:
         candidate = viewspace_points.grad.detach()
         if candidate.ndim == 2 and candidate.shape[0] >= len(model):
             grad = candidate[:, :2]
+            source = "screen_space"
 
     if grad is None or not torch.isfinite(grad[valid]).any() or torch.count_nonzero(grad[valid]).item() == 0:
         xyz_grad = getattr(model._xyz, "grad", None)
-        if xyz_grad is None:
-            return
-        candidate = xyz_grad.detach()
-        if candidate.ndim != 2 or candidate.shape[0] < len(model):
-            return
-        grad = candidate[:, :2]
+        if xyz_grad is not None:
+            candidate = xyz_grad.detach()
+            if candidate.ndim == 2 and candidate.shape[0] >= len(model):
+                grad = candidate[:, :2]
+                source = "xyz_fallback"
+
+    sources = getattr(model, "density_gradient_sources", None)
+    if sources is None:
+        sources = {"screen_space": 0, "xyz_fallback": 0, "unavailable": 0}
+        model.density_gradient_sources = sources
+    if grad is None:
+        sources["unavailable"] = int(sources.get("unavailable", 0)) + 1
+        return
+    sources[source] = int(sources.get(source, 0)) + 1
 
     grad_xy = torch.nan_to_num(grad[valid], nan=0.0, posinf=0.0, neginf=0.0)
     model.xyz_gradient_accum[valid] += torch.norm(grad_xy, dim=-1, keepdim=True)
@@ -150,7 +169,11 @@ def apply_adaptive_density_control(
     split_samples = max(1, int(config.split_samples))
     parent_limit = None if available is None else max(0, available // split_samples)
     split_idx = _limited_indices(split_mask, parent_limit)
-    split = int(split_idx.numel()) * split_samples
+    split_parents = int(split_idx.numel())
+    split = split_parents * split_samples
+    anisotropy = scale_max / torch.clamp(model.get_scaling.detach().min(dim=1).values, min=1e-12)
+    clone_parent_anisotropy = float(anisotropy[clone_idx].mean().item()) if cloned else 0.0
+    split_parent_anisotropy = float(anisotropy[split_idx].mean().item()) if split_parents else 0.0
 
     candidate = _shape_transaction_candidates(model, clone_idx, split_idx, split_samples)
     current_certain = ~candidate["is_uncertain"]
@@ -185,12 +208,21 @@ def apply_adaptive_density_control(
 
     pruned = int((opacity_mask | screen_mask | world_mask).sum().item())
     if bool(prune_mask.any()) or cloned + split > 0:
-        _commit_shape_transaction(model, candidate, ~prune_mask)
+        _commit_shape_transaction(
+            model,
+            candidate,
+            ~prune_mask,
+            preserve_gradients=bool(config.preserve_adc_gradients),
+        )
     else:
         model._reset_density_stats(len(model))
     return TorchDensityControlReport(
         cloned=cloned,
         split=split,
+        clone_parents=cloned,
+        split_parents=split_parents,
+        clone_parent_anisotropy=clone_parent_anisotropy,
+        split_parent_anisotropy=split_parent_anisotropy,
         pruned=pruned,
         pruned_opacity=pruned_opacity,
         pruned_screen=pruned_screen,
@@ -259,7 +291,13 @@ def _shape_transaction_candidates(model: TorchGaussianModel, clone_idx, split_id
     }
 
 
-def _commit_shape_transaction(model: TorchGaussianModel, candidate: dict, keep_mask) -> None:
+def _commit_shape_transaction(
+    model: TorchGaussianModel,
+    candidate: dict,
+    keep_mask,
+    *,
+    preserve_gradients: bool = True,
+) -> None:
     """Apply all ADC growth and pruning with one parameter/Adam-state rebuild."""
 
     torch = require_torch()
@@ -279,6 +317,7 @@ def _commit_shape_transaction(model: TorchGaussianModel, candidate: dict, keep_m
         surface_uv=selected["surface_uv"],
         cluster_ids=selected["cluster_ids"],
         optimizer_keep_indices=optimizer_keep_indices,
+        preserve_parameter_gradients=preserve_gradients,
     )
 
 def _prune_mask(model: TorchGaussianModel, prune_mask) -> int:

@@ -1105,22 +1105,31 @@ class TorchOSNGSPipeline:
     def _initial_covariance_scales(self, points: Any) -> Any:
         """Initialize trainable Gaussian scale from local point spacing.
 
-        Original 3DGS initializes log-scale from sqrt(nearest-neighbor distance
-        squared). OSN-GS keeps the same scale+rotation covariance convention but
-        uses a chunked torch KNN path instead of the optional simple-knn module.
+        ``knn`` uses the nearest other point. ``graphdeco_knn`` reproduces
+        Graphdeco's ``simple-knn::distCUDA2`` convention: the mean squared
+        distance of the three nearest other points. Both use the same chunked
+        torch path and scale+rotation covariance convention.
         """
 
         torch = require_torch()
         count = int(points.shape[0])
         if count == 0:
             return torch.empty((0, 3), dtype=torch.float32, device=self.device)
-        if count == 1 or str(self.config.covariance_init).lower() == "constant":
+        mode = str(self.config.covariance_init).lower()
+        if count == 1 or mode == "constant":
             base = self._scene_scale(points) * 0.001
             value = max(float(self.config.covariance_min_scale), float(base))
             return torch.full((count, 3), value, dtype=torch.float32, device=self.device)
+        if mode == "knn":
+            spacing_dist2 = self._nearest_neighbor_dist2(points.detach())
+        elif mode == "graphdeco_knn":
+            # Graphdeco simple-knn::distCUDA2 is the mean squared distance of
+            # the three nearest other points, not a single-neighbor distance.
+            spacing_dist2 = self._graphdeco_neighbor_mean_dist2(points.detach())
+        else:
+            raise ValueError(f"Unsupported covariance_init={self.config.covariance_init!r}")
 
-        nearest_dist2 = self._nearest_neighbor_dist2(points.detach())
-        scales = torch.sqrt(torch.clamp(nearest_dist2, min=float(self.config.covariance_min_scale) ** 2))
+        scales = torch.sqrt(torch.clamp(spacing_dist2, min=float(self.config.covariance_min_scale) ** 2))
         scales = scales * float(self.config.covariance_scale_multiplier)
         max_scale = max(float(self.config.covariance_min_scale), self._scene_scale(points) * float(self.config.covariance_max_scale_ratio))
         scales = torch.clamp(scales, min=float(self.config.covariance_min_scale), max=max_scale)
@@ -1129,10 +1138,21 @@ class TorchOSNGSPipeline:
     def _nearest_neighbor_dist2(self, points: Any) -> Any:
         """Return squared distance to the nearest other point for every point."""
 
+        return self._neighbor_mean_dist2(points, neighbor_count=1)
+
+    def _graphdeco_neighbor_mean_dist2(self, points: Any) -> Any:
+        """Match Graphdeco ``distCUDA2``: mean squared distance to three neighbors."""
+
+        return self._neighbor_mean_dist2(points, neighbor_count=3)
+
+    def _neighbor_mean_dist2(self, points: Any, neighbor_count: int) -> Any:
+        """Return mean squared distance to up to ``neighbor_count`` other points."""
+
         torch = require_torch()
         count = int(points.shape[0])
+        neighbors = min(max(1, int(neighbor_count)), max(1, count - 1))
         chunk_size = self._resolve_covariance_knn_chunk_size(points)
-        nearest = torch.full((count,), float("inf"), dtype=torch.float32, device=points.device)
+        mean_dist2 = torch.full((count,), float("inf"), dtype=torch.float32, device=points.device)
         all_indices = torch.arange(count, device=points.device)
         for start in range(0, count, chunk_size):
             end = min(start + chunk_size, count)
@@ -1140,15 +1160,16 @@ class TorchOSNGSPipeline:
             distances = torch.cdist(chunk, points).square()
             local = all_indices[start:end]
             distances[torch.arange(end - start, device=points.device), local] = float("inf")
-            nearest[start:end] = distances.min(dim=1).values
-        finite = torch.isfinite(nearest)
+            closest = distances.topk(neighbors, dim=1, largest=False).values
+            mean_dist2[start:end] = closest.mean(dim=1)
+        finite = torch.isfinite(mean_dist2)
         if not bool(finite.any()):
             fallback = self._scene_scale(points) * 0.001
-            nearest.fill_(max(float(self.config.covariance_min_scale) ** 2, float(fallback) ** 2))
+            mean_dist2.fill_(max(float(self.config.covariance_min_scale) ** 2, float(fallback) ** 2))
         else:
-            fill = nearest[finite].median()
-            nearest = torch.where(finite, nearest, fill)
-        return nearest
+            fill = mean_dist2[finite].median()
+            mean_dist2 = torch.where(finite, mean_dist2, fill)
+        return mean_dist2
 
     def _resolve_covariance_knn_chunk_size(self, points: Any) -> int:
         configured = int(self.config.covariance_knn_chunk_size)
@@ -1306,6 +1327,8 @@ def nurbs_intermediate_payload(state: TorchPipelineState) -> dict[str, Any]:
         "parameter_domain": {"u": [0.0, 1.0], "v": [0.0, 1.0]},
         "degree_u": int(surface.degree_u),
         "degree_v": int(surface.degree_v),
+        "knots_u": surface.knots_u.detach().cpu().tolist(),
+        "knots_v": surface.knots_v.detach().cpu().tolist(),
         "observed_v_max": float(surface.observed_v_max),
         "control_grid_shape": list(surface.control_grid.shape),
         "control_grid": surface.control_grid.detach().cpu().tolist(),
@@ -1321,6 +1344,8 @@ def nurbs_intermediate_payload(state: TorchPipelineState) -> dict[str, Any]:
                 "weights": patch.weights.detach().cpu().tolist(),
                 "degree_u": int(patch.degree_u),
                 "degree_v": int(patch.degree_v),
+                "knots_u": patch.knots_u.detach().cpu().tolist(),
+                "knots_v": patch.knots_v.detach().cpu().tolist(),
                 "uv_support": _uv_support_payload(patch),
                 **(
                     {"stage1": stage1_provenance[patch_id]}

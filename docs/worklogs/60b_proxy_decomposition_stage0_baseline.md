@@ -1,4 +1,4 @@
-# Worklog 59: Proxy-Based Surface Decomposition Stage 0 기준선 동결
+# Worklog 60-B: Proxy-Based Surface Decomposition Stage 0 기준선 동결
 
 날짜: 2026-07-22
 
@@ -6,7 +6,7 @@
 
 ## 목표
 
-`docs/Urgent_Work/OSN_GS_Proxy_Based_Surface_Decomposition_Impl_Plan.md`의 최초 실행 범위에 따라 현재 Phase 1 component builder와 Phase 2 boundary/topology 인터페이스를 감사하고, proxy 진단 전 기준선을 고정했다.
+당시 proxy decomposition 조사의 최초 실행 범위에 따라 현재 Phase 1 component builder와 Phase 2 boundary/topology 인터페이스를 감사하고, proxy 진단 전 기준선을 고정했다.
 
 ## 수행 작업
 

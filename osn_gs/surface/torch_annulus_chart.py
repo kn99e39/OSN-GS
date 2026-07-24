@@ -60,6 +60,10 @@ from osn_gs.surface.torch_nurbs import (
     fit_coupled_wedge_ring_lsq,
     fit_torch_visible_surface_lsq,
 )
+from osn_gs.surface.torch_parametric_diagnostics import (
+    compute_orientation_consistency,
+    compute_parametric_jacobian_metrics,
+)
 from osn_gs.surface.torch_surface_components import SurfaceComponent
 from osn_gs.utils.torch_ops import require_torch
 
@@ -170,6 +174,12 @@ def _jacobian_diagnostics(
     existing call site's output shape/performance) so a spatial heatmap can
     be exported/compared across seed-change candidates instead of only
     aggregate counts.
+
+    Delegates the singular-value/condition computation and the single-
+    reference orientation check to the surface-agnostic helpers in
+    `torch_parametric_diagnostics.py` (Phase D prerequisite refactor) --
+    this function's own job is only to sample the surface and adapt the
+    field names/units this module's existing callers already expect.
     """
 
     torch = require_torch()
@@ -179,38 +189,23 @@ def _jacobian_diagnostics(
     _, du, dv = surface.evaluate_with_derivatives(uv)
     du, dv = du.detach(), dv.detach()
 
-    a = (du * du).sum(dim=1)
-    d = (dv * dv).sum(dim=1)
-    b = (du * dv).sum(dim=1)
-    trace = a + d
-    disc = (trace.square() - 4.0 * (a * d - b * b)).clamp_min(0.0).sqrt()
-    sigma_max = ((trace + disc).clamp_min(0.0) * 0.5).sqrt()
-    sigma_min = ((trace - disc).clamp_min(0.0) * 0.5).sqrt()
-
-    normal = torch.cross(du, dv, dim=1)
-    area = normal.norm(dim=1)
-    normal_unit = normal / area.clamp_min(eps)[:, None]
-    seed = normal_unit[normal_unit.shape[0] // 2]
-    aligned = torch.where((normal_unit @ seed < 0.0)[:, None], -normal_unit, normal_unit)
-    reference = aligned.mean(dim=0)
-    reference = reference / reference.norm().clamp_min(eps)
-    orientation_dot = normal_unit @ reference
-
-    condition = sigma_max / sigma_min.clamp_min(eps)
-    sigma_min_normalized = sigma_min / (characteristic_length + eps)
+    jacobian = compute_parametric_jacobian_metrics(du, dv, eps=eps, scale=characteristic_length)
+    orientation = compute_orientation_consistency(torch.cross(du, dv, dim=1), eps=eps)
+    sigma_min, condition = jacobian["sigma_min"], jacobian["condition"]
+    orientation_dot = orientation["orientation_dot"]
 
     result = {
-        "min_area_jacobian": float(area.min().cpu()),
-        "min_jacobian_singular_value": float(sigma_min.min().cpu()),
-        "min_jacobian_singular_value_normalized": float(sigma_min_normalized.min().cpu()),
+        "min_area_jacobian": jacobian["min_area_jacobian"],
+        "min_jacobian_singular_value": jacobian["min_jacobian_singular_value"],
+        "min_jacobian_singular_value_normalized": jacobian["min_jacobian_singular_value_normalized"],
         "characteristic_length": float(characteristic_length),
-        "jacobian_condition_mean": float(condition.mean().cpu()),
-        "jacobian_condition_p95": float(condition.quantile(0.95).cpu()),
-        "max_jacobian_condition": float(condition.max().cpu()),
-        "orientation_flip_count": int((orientation_dot < 0.0).sum()),
-        "near_degenerate_count": int((sigma_min < eps).sum()),
-        "sample_count": int(area.shape[0]),
-        "reference_normal": reference.detach().cpu().tolist(),
+        "jacobian_condition_mean": jacobian["jacobian_condition_mean"],
+        "jacobian_condition_p95": jacobian["jacobian_condition_p95"],
+        "max_jacobian_condition": jacobian["max_jacobian_condition"],
+        "orientation_flip_count": orientation["orientation_flip_count"],
+        "near_degenerate_count": jacobian["near_degenerate_count"],
+        "sample_count": jacobian["sample_count"],
+        "reference_normal": orientation["reference_normal"],
     }
     if collect_samples:
         result["samples"] = {

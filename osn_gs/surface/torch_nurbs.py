@@ -128,6 +128,28 @@ def _bspline_basis_derivative(lower: Any | None, degree: int, knots: Any, contro
     return float(p) * (left - right)
 
 
+def _bspline_basis_second_derivative(
+    u: Any, degree: int, knots: Any, control_point_count: int
+) -> Any | None:
+    """Second derivative of a B-spline basis table.
+
+    The first-derivative recurrence is linear in the degree ``p - 1`` basis,
+    so applying the same recurrence to that lower basis' first derivative
+    yields ``N''_{i,p}``. Degree-zero and degree-one bases have an identically
+    zero second derivative and return ``None`` so callers can use a zero table.
+    """
+
+    p = int(degree)
+    n = int(control_point_count)
+    if p < 2:
+        return None
+    _, lower_lower = _bspline_basis_pair(u, p - 1, knots, n + 1)
+    lower_derivative = _bspline_basis_derivative(
+        lower_lower, p - 1, knots, n + 1
+    )
+    return _bspline_basis_derivative(lower_derivative, p, knots, n)
+
+
 @dataclass
 class TorchCurveSet:
     """여러 curve의 control point를 batch tensor로 보관한다."""
@@ -155,6 +177,31 @@ class NURBSFitDiagnostics:
     final_weights: Any
     final_gaussian_indices: Any | None = None
     final_gaussian_uv: Any | None = None
+
+
+@dataclass(frozen=True)
+class SharedBoundaryConstraint:
+    """Pair corresponding control points across two independently-owned patches.
+
+    Indices are flattened row-major indices into each patch's ``(U, V)``
+    control grid. ``reverse=True`` pairs ``control_indices_a`` with the reverse
+    of ``control_indices_b``. The generic coupled solver treats every paired
+    item as one variable from the first solve onward; it never overwrites a
+    fitted boundary after the fact.
+    """
+
+    patch_a: int
+    control_indices_a: tuple[int, ...]
+    patch_b: int
+    control_indices_b: tuple[int, ...]
+    reverse: bool = False
+    constraint_id: str = ""
+
+    def paired_indices(self) -> tuple[tuple[int, int], ...]:
+        right = tuple(reversed(self.control_indices_b)) if self.reverse else self.control_indices_b
+        if len(self.control_indices_a) != len(right) or not right:
+            raise ValueError("A shared-boundary constraint needs equal non-empty index sequences.")
+        return tuple(zip(self.control_indices_a, right))
 
 
 @dataclass
@@ -190,6 +237,42 @@ class TorchNURBSSurface:
         default=None, init=False, repr=False, compare=False
     )
 
+    def _knot_vectors_internal(self) -> tuple[Any, Any, int, int]:
+        """Return cached knots plus effective degrees for the current structure."""
+
+        n_u = int(self.control_grid.shape[0])
+        n_v = int(self.control_grid.shape[1])
+        dtype, device = self.control_grid.dtype, self.control_grid.device
+        degree_u = _effective_degree(n_u, self.degree_u)
+        degree_v = _effective_degree(n_v, self.degree_v)
+        cache_key = (n_u, n_v, degree_u, degree_v, dtype, device)
+        if (
+            self._knot_cache_key != cache_key
+            or self._cached_knots_u is None
+            or self._cached_knots_v is None
+        ):
+            self._cached_knots_u = _clamped_knot_vector(n_u, degree_u, dtype, device)
+            self._cached_knots_v = _clamped_knot_vector(n_v, degree_v, dtype, device)
+            self._knot_cache_key = cache_key
+        return self._cached_knots_u, self._cached_knots_v, degree_u, degree_v
+
+    @property
+    def knots_u(self) -> Any:
+        """Read-only snapshot of the effective clamped knot vector on ``u``."""
+
+        return self._knot_vectors_internal()[0].detach().clone()
+
+    @property
+    def knots_v(self) -> Any:
+        """Read-only snapshot of the effective clamped knot vector on ``v``."""
+
+        return self._knot_vectors_internal()[1].detach().clone()
+
+    def knot_vectors(self) -> tuple[Any, Any]:
+        """Return read-only snapshots ``(knots_u, knots_v)`` for export/audit."""
+
+        knots_u, knots_v, _, _ = self._knot_vectors_internal()
+        return knots_u.detach().clone(), knots_v.detach().clone()
     def support(self, uv: Any) -> Any:
         """Boolean mask of whether each ``uv`` lies in the trimmed (supported) domain."""
 
@@ -218,20 +301,8 @@ class TorchNURBSSurface:
             uv = uv[None, :]
         n_u = int(self.control_grid.shape[0])
         n_v = int(self.control_grid.shape[1])
-        dtype, device = self.control_grid.dtype, self.control_grid.device
-        degree_u = _effective_degree(n_u, self.degree_u)
-        degree_v = _effective_degree(n_v, self.degree_v)
-        cache_key = (n_u, n_v, degree_u, degree_v, dtype, device)
-        if (
-            self._knot_cache_key != cache_key
-            or self._cached_knots_u is None
-            or self._cached_knots_v is None
-        ):
-            self._cached_knots_u = _clamped_knot_vector(n_u, degree_u, dtype, device)
-            self._cached_knots_v = _clamped_knot_vector(n_v, degree_v, dtype, device)
-            self._knot_cache_key = cache_key
-        knots_u = self._cached_knots_u
-        knots_v = self._cached_knots_v
+        knots_u, knots_v, degree_u, degree_v = self._knot_vectors_internal()
+
 
         u = torch.clamp(uv[:, 0], 0.0, 1.0)
         v = torch.clamp(uv[:, 1], 0.0, 1.0)
@@ -291,6 +362,66 @@ class TorchNURBSSurface:
         deriv_v = _partial(basis_u, dbasis_v) if dbasis_v is not None else zeros
         return point, deriv_u, deriv_v
 
+    def evaluate_with_second_derivatives(
+        self, uv: Any
+    ) -> tuple[Any, Any, Any, Any, Any, Any]:
+        """Return ``(S, S_u, S_v, S_uu, S_uv, S_vv)`` at ``uv``.
+
+        All partials are analytic rational NURBS derivatives. Differentiating
+        ``A = W S`` twice gives, for example,
+        ``S_uu = (A_uu - W_uu S - 2 W_u S_u) / W``. Axes whose effective
+        degree is below two return zero pure-second derivatives.
+        """
+
+        torch = require_torch()
+        uv = torch.as_tensor(uv, dtype=self.control_grid.dtype, device=self.control_grid.device)
+        if uv.ndim == 1:
+            uv = uv[None, :]
+        basis_u, basis_v, dbasis_u, dbasis_v = self._basis_tables(uv)
+        knots_u, knots_v, degree_u, degree_v = self._knot_vectors_internal()
+        n_u, n_v = int(self.control_grid.shape[0]), int(self.control_grid.shape[1])
+        ddbasis_u = _bspline_basis_second_derivative(
+            torch.clamp(uv[:, 0], 0.0, 1.0), degree_u, knots_u, n_u
+        )
+        ddbasis_v = _bspline_basis_second_derivative(
+            torch.clamp(uv[:, 1], 0.0, 1.0), degree_v, knots_v, n_v
+        )
+
+        weighted_control = self.control_grid * self.weights[..., None]
+        point, denominator = self._rational_point(basis_u, basis_v)
+        zeros = torch.zeros_like(point)
+        zero_weight = denominator.new_zeros(denominator.shape)
+
+        def _raw(table_u: Any, table_v: Any) -> tuple[Any, Any]:
+            numerator = torch.einsum("qi,qj,ijc->qc", table_u, table_v, weighted_control)
+            weight = torch.einsum("qi,qj,ij->q", table_u, table_v, self.weights)
+            return numerator, weight
+
+        a_u, w_u = _raw(dbasis_u, basis_v) if dbasis_u is not None else (zeros, zero_weight)
+        a_v, w_v = _raw(basis_u, dbasis_v) if dbasis_v is not None else (zeros, zero_weight)
+        deriv_u = (a_u - w_u[:, None] * point) / denominator[:, None]
+        deriv_v = (a_v - w_v[:, None] * point) / denominator[:, None]
+
+        a_uu, w_uu = _raw(ddbasis_u, basis_v) if ddbasis_u is not None else (zeros, zero_weight)
+        a_uv, w_uv = (
+            _raw(dbasis_u, dbasis_v)
+            if dbasis_u is not None and dbasis_v is not None
+            else (zeros, zero_weight)
+        )
+        a_vv, w_vv = _raw(basis_u, ddbasis_v) if ddbasis_v is not None else (zeros, zero_weight)
+        deriv_uu = (
+            a_uu - w_uu[:, None] * point - 2.0 * w_u[:, None] * deriv_u
+        ) / denominator[:, None]
+        deriv_uv = (
+            a_uv
+            - w_uv[:, None] * point
+            - w_u[:, None] * deriv_v
+            - w_v[:, None] * deriv_u
+        ) / denominator[:, None]
+        deriv_vv = (
+            a_vv - w_vv[:, None] * point - 2.0 * w_v[:, None] * deriv_v
+        ) / denominator[:, None]
+        return point, deriv_u, deriv_v, deriv_uu, deriv_uv, deriv_vv
     def normals(self, uv: Any) -> Any:
         """Unit surface normal ``normalize(S_u x S_v)`` at each ``uv`` query."""
 
@@ -708,6 +839,209 @@ def fit_torch_visible_surface_lsq(
         return surface, uv, diagnostics
     return surface, uv
 
+
+def boundary_control_indices(
+    resolution_u: int,
+    resolution_v: int,
+    edge: str,
+    start: int = 0,
+    stop: int | None = None,
+) -> tuple[int, ...]:
+    """Return flattened control indices along one rectangular patch edge.
+
+    Edge order follows the increasing coordinate on the varying axis. ``start``
+    and ``stop`` permit partial-edge constraints; reversal belongs to
+    :class:`SharedBoundaryConstraint`.
+    """
+
+    n_u, n_v = int(resolution_u), int(resolution_v)
+    if n_u < 1 or n_v < 1:
+        raise ValueError("Control-grid resolutions must be positive.")
+    edge = str(edge).lower()
+    if edge == "u0":
+        values = [j for j in range(n_v)]
+    elif edge == "u1":
+        values = [(n_u - 1) * n_v + j for j in range(n_v)]
+    elif edge == "v0":
+        values = [i * n_v for i in range(n_u)]
+    elif edge == "v1":
+        values = [i * n_v + n_v - 1 for i in range(n_u)]
+    else:
+        raise ValueError(f"Unknown control-grid edge: {edge!r}")
+    selected = values[int(start) : None if stop is None else int(stop)]
+    if not selected:
+        raise ValueError("A boundary control-index selection must not be empty.")
+    return tuple(selected)
+
+
+def fit_coupled_patch_graph_lsq(
+    patch_points: list[Any],
+    patch_initial_uv: list[Any],
+    shared_boundaries: list[SharedBoundaryConstraint],
+    resolution_u: int = 12,
+    resolution_v: int = 12,
+    degree_u: int = 2,
+    degree_v: int = 2,
+    smoothness_lambda: float = 1e-4,
+    tikhonov_lambda: float = 1e-4,
+    correction_rounds: int = 2,
+    chunk_size: int = 4096,
+    projection_iterations: int = 4,
+    collect_diagnostics: bool = False,
+) -> list[tuple[TorchNURBSSurface, Any]] | list[tuple[TorchNURBSSurface, Any, NURBSFitDiagnostics]]:
+    """Jointly fit a patch graph with explicitly shared control variables.
+
+    Unlike the annulus-specific solver, this accepts an arbitrary graph of
+    full or partial boundary correspondences. Every constrained pair is
+    unioned into one unknown before the first linear solve. Patch interiors
+    and unconstrained boundary controls stay private, and no fitted boundary
+    is overwritten after the solve.
+    """
+
+    torch = require_torch()
+    patch_count = len(patch_points)
+    if patch_count < 2 or len(patch_initial_uv) != patch_count:
+        raise ValueError("Coupled patch fitting needs at least two point/UV patches.")
+    if not shared_boundaries:
+        raise ValueError("Coupled patch fitting needs at least one shared-boundary constraint.")
+    patch_points = [
+        torch.as_tensor(p, dtype=torch.float32, device=p.device if hasattr(p, "device") else None)
+        for p in patch_points
+    ]
+    patch_initial_uv = [
+        torch.as_tensor(uv, dtype=torch.float32, device=patch_points[k].device)
+        for k, uv in enumerate(patch_initial_uv)
+    ]
+    if len({str(points.device) for points in patch_points}) != 1:
+        raise ValueError("All coupled patches must live on the same device.")
+
+    surfaces = [
+        fit_torch_visible_surface(
+            patch_points[k],
+            resolution_u=resolution_u,
+            resolution_v=resolution_v,
+            chunk_size=chunk_size,
+            degree_u=degree_u,
+            degree_v=degree_v,
+            initial_uv=patch_initial_uv[k],
+        )
+        for k in range(patch_count)
+    ]
+    n_u = int(surfaces[0].control_grid.shape[0])
+    n_v = int(surfaces[0].control_grid.shape[1])
+    local_size = n_u * n_v
+    local_total = patch_count * local_size
+    dtype, device = surfaces[0].control_grid.dtype, surfaces[0].control_grid.device
+
+    parent = list(range(local_total))
+
+    def _find(index: int) -> int:
+        while parent[index] != index:
+            parent[index] = parent[parent[index]]
+            index = parent[index]
+        return index
+
+    def _union(a: int, b: int) -> None:
+        root_a, root_b = _find(a), _find(b)
+        if root_a == root_b:
+            return
+        if root_b < root_a:
+            root_a, root_b = root_b, root_a
+        parent[root_b] = root_a
+
+    for constraint in shared_boundaries:
+        patch_a, patch_b = int(constraint.patch_a), int(constraint.patch_b)
+        if not (0 <= patch_a < patch_count and 0 <= patch_b < patch_count):
+            raise ValueError("Shared-boundary patch index is outside the patch list.")
+        for local_a, local_b in constraint.paired_indices():
+            local_a, local_b = int(local_a), int(local_b)
+            if not (0 <= local_a < local_size and 0 <= local_b < local_size):
+                raise ValueError("Shared-boundary control index is outside the control grid.")
+            _union(patch_a * local_size + local_a, patch_b * local_size + local_b)
+
+    roots = sorted({_find(index) for index in range(local_total)})
+    root_to_global = {root: index for index, root in enumerate(roots)}
+    local_to_global = [
+        torch.tensor(
+            [root_to_global[_find(k * local_size + local)] for local in range(local_size)],
+            dtype=torch.long,
+            device=device,
+        )
+        for k in range(patch_count)
+    ]
+    total = len(roots)
+
+    diagnostics_list: list[NURBSFitDiagnostics | None] = [
+        NURBSFitDiagnostics(
+            patch_points[k].detach().clone(),
+            None,
+            patch_initial_uv[k].detach().clone(),
+            surfaces[k].control_grid.detach().clone(),
+            [],
+            surfaces[k].control_grid.detach().clone(),
+            surfaces[k].weights.detach().clone(),
+        )
+        if collect_diagnostics
+        else None
+        for k in range(patch_count)
+    ]
+
+    uv = list(patch_initial_uv)
+    with torch.no_grad():
+        for _ in range(max(1, int(correction_rounds))):
+            global_matrix = torch.zeros((total, total), dtype=dtype, device=device)
+            global_rhs = torch.zeros((total, 3), dtype=dtype, device=device)
+            for k in range(patch_count):
+                matrix, rhs, weight = _lsq_normal_system(
+                    patch_points[k],
+                    uv[k],
+                    surfaces[k],
+                    smoothness_lambda,
+                    tikhonov_lambda,
+                    chunk_size,
+                    None,
+                )
+                scale = max(weight, 1e-8)
+                penalty = _second_difference_penalty(n_u, n_v, dtype, device)
+                seed = surfaces[k].control_grid.detach().reshape(local_size, 3)
+                local_system = (
+                    matrix / scale
+                    + float(smoothness_lambda) * penalty
+                    + float(tikhonov_lambda) * torch.eye(local_size, dtype=dtype, device=device)
+                )
+                local_rhs = rhs / scale + float(tikhonov_lambda) * seed
+                mapping = local_to_global[k]
+                flat_index = (mapping.unsqueeze(1) * total + mapping.unsqueeze(0)).reshape(-1)
+                global_matrix.view(-1).index_add_(0, flat_index, local_system.reshape(-1))
+                global_rhs.index_add_(0, mapping, local_rhs)
+            try:
+                solution = torch.linalg.solve(global_matrix, global_rhs)
+            except Exception:
+                solution = torch.linalg.lstsq(global_matrix, global_rhs).solution
+
+            for k in range(patch_count):
+                surfaces[k].control_grid = solution[local_to_global[k]].reshape(n_u, n_v, 3)
+                control_grid_after_lsq = surfaces[k].control_grid.detach().clone()
+                uv[k] = project_torch_points_to_nurbs(
+                    patch_points[k],
+                    surfaces[k],
+                    iterations=int(projection_iterations),
+                    chunk_size=chunk_size,
+                )
+                if diagnostics_list[k] is not None:
+                    diagnostics_list[k].rounds.append(
+                        NURBSFitRoundDiagnostics(control_grid_after_lsq, uv[k].detach().clone())
+                    )
+
+    results = []
+    for k in range(patch_count):
+        if diagnostics_list[k] is not None:
+            diagnostics_list[k].final_control_grid = surfaces[k].control_grid.detach().clone()
+            diagnostics_list[k].final_weights = surfaces[k].weights.detach().clone()
+            results.append((surfaces[k], uv[k], diagnostics_list[k]))
+        else:
+            results.append((surfaces[k], uv[k]))
+    return results
 
 def fit_coupled_wedge_ring_lsq(
     wedge_points: list[Any],

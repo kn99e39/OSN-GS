@@ -11,7 +11,10 @@ import osn_gs.surface.torch_nurbs as torch_nurbs_module
 
 from osn_gs.core.torch_pipeline import TorchOSNGSPipeline, TorchPipelineConfig
 from osn_gs.surface.torch_nurbs import (
+    SharedBoundaryConstraint,
     TorchNURBSSurface,
+    boundary_control_indices,
+    fit_coupled_patch_graph_lsq,
     fit_coupled_wedge_ring_lsq,
     fit_torch_visible_surface,
     fit_torch_visible_surface_lsq,
@@ -101,6 +104,42 @@ class NURBSDerivativeTest(unittest.TestCase):
         self.assertTrue(torch.allclose(deriv_u, fd_u, atol=1e-4, rtol=1e-4))
         self.assertTrue(torch.allclose(deriv_v, fd_v, atol=1e-4, rtol=1e-4))
 
+    def test_public_knot_snapshots_cannot_mutate_cached_evaluation_knots(self):
+        surface = _random_surface()
+        expected = surface.evaluate(torch.rand(8, 2, dtype=torch.float64))
+        public_u, public_v = surface.knot_vectors()
+        public_u.fill_(0.25)
+        public_v.fill_(0.75)
+        self.assertEqual(float(surface.knots_u[0]), 0.0)
+        self.assertEqual(float(surface.knots_u[-1]), 1.0)
+        self.assertEqual(float(surface.knots_v[0]), 0.0)
+        self.assertEqual(float(surface.knots_v[-1]), 1.0)
+        self.assertTrue(torch.isfinite(expected).all())
+
+    def test_analytic_second_derivatives_match_finite_differences(self):
+        surface = _random_surface(degree_u=3, degree_v=3)
+        torch.manual_seed(29)
+        uv = 0.12 + 0.76 * torch.rand(48, 2, dtype=torch.float64)
+        point, deriv_u, deriv_v, deriv_uu, deriv_uv, deriv_vv = surface.evaluate_with_second_derivatives(uv)
+        torch.testing.assert_close(point, surface.evaluate(uv))
+
+        step = 2e-5
+        offset_u = torch.tensor([step, 0.0], dtype=torch.float64)
+        offset_v = torch.tensor([0.0, step], dtype=torch.float64)
+        _, plus_u_du, plus_u_dv = surface.evaluate_with_derivatives(uv + offset_u)
+        _, minus_u_du, minus_u_dv = surface.evaluate_with_derivatives(uv - offset_u)
+        _, plus_v_du, plus_v_dv = surface.evaluate_with_derivatives(uv + offset_v)
+        _, minus_v_du, minus_v_dv = surface.evaluate_with_derivatives(uv - offset_v)
+        fd_uu = (plus_u_du - minus_u_du) / (2.0 * step)
+        fd_uv_from_u = (plus_u_dv - minus_u_dv) / (2.0 * step)
+        fd_uv_from_v = (plus_v_du - minus_v_du) / (2.0 * step)
+        fd_vv = (plus_v_dv - minus_v_dv) / (2.0 * step)
+        torch.testing.assert_close(deriv_u, surface.evaluate_with_derivatives(uv)[1])
+        torch.testing.assert_close(deriv_v, surface.evaluate_with_derivatives(uv)[2])
+        torch.testing.assert_close(deriv_uu, fd_uu, atol=2e-3, rtol=2e-3)
+        torch.testing.assert_close(deriv_uv, fd_uv_from_u, atol=2e-3, rtol=2e-3)
+        torch.testing.assert_close(deriv_uv, fd_uv_from_v, atol=2e-3, rtol=2e-3)
+        torch.testing.assert_close(deriv_vv, fd_vv, atol=2e-3, rtol=2e-3)
     def test_degree_zero_axis_returns_zero_derivative(self):
         grid = torch.rand(4, 1, 3, dtype=torch.float64)
         surface = TorchNURBSSurface(
@@ -212,6 +251,51 @@ class LeastSquaresFitTest(unittest.TestCase):
             self.assertEqual(patch.degree_u, 3)
             self.assertEqual(patch.degree_v, 2)
 
+
+class CoupledPatchGraphFitTest(unittest.TestCase):
+    def _patches(self):
+        torch.manual_seed(31)
+        uv_a = torch.rand(240, 2)
+        uv_b = torch.rand(240, 2)
+        points_a = torch.stack((uv_a[:, 0], uv_a[:, 1], 0.08 * uv_a[:, 0] * uv_a[:, 1]), dim=1)
+        # Same world sheet on [1, 2] x [0, 1], but v is reversed locally.
+        points_b = torch.stack((1.0 + uv_b[:, 0], 1.0 - uv_b[:, 1], 0.08 * (1.0 + uv_b[:, 0]) * (1.0 - uv_b[:, 1])), dim=1)
+        return [points_a, points_b], [uv_a, uv_b]
+
+    def test_reversed_full_edge_is_one_joint_variable_sequence(self):
+        points, uv = self._patches()
+        n_u, n_v = 6, 5
+        constraint = SharedBoundaryConstraint(
+            0,
+            boundary_control_indices(n_u, n_v, "u1"),
+            1,
+            boundary_control_indices(n_u, n_v, "u0"),
+            reverse=True,
+            constraint_id="shared",
+        )
+        results = fit_coupled_patch_graph_lsq(
+            points, uv, [constraint], resolution_u=n_u, resolution_v=n_v
+        )
+        torch.testing.assert_close(
+            results[0][0].control_grid[-1],
+            results[1][0].control_grid[0].flip(0),
+            atol=1e-6,
+            rtol=1e-6,
+        )
+
+    def test_partial_edge_constraint_only_shares_selected_controls(self):
+        points, uv = self._patches()
+        n_u, n_v = 6, 5
+        selected_a = boundary_control_indices(n_u, n_v, "u1", 1, 4)
+        selected_b = boundary_control_indices(n_u, n_v, "u0", 1, 4)
+        constraint = SharedBoundaryConstraint(0, selected_a, 1, selected_b, reverse=True)
+        results = fit_coupled_patch_graph_lsq(
+            points, uv, [constraint], resolution_u=n_u, resolution_v=n_v
+        )
+        edge_a = results[0][0].control_grid[-1]
+        edge_b = results[1][0].control_grid[0].flip(0)
+        torch.testing.assert_close(edge_a[1:4], edge_b[1:4], atol=1e-6, rtol=1e-6)
+        self.assertGreater(float((edge_a[[0, 4]] - edge_b[[0, 4]]).abs().max()), 1e-7)
 
 class CoupledWedgeRingFitTest(unittest.TestCase):
     """Phase 5 Step 5-A (docs/worklogs/55): white-box tests on

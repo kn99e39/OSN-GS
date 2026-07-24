@@ -107,6 +107,7 @@ class OSNGaussianRasterizer:
             "visibility_filter": torch.nonzero(radii > 0, as_tuple=False).reshape(-1),
             "radii": radii,
             "depth": depth_image,
+            "valid_depth_mask": depth_image.squeeze(0).abs() > 1e-8,
         }
 
     def _raise_if_fallback_is_too_large(self, camera: TorchCamera, model: TorchGaussianModel) -> None:

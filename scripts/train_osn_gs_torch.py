@@ -54,12 +54,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--iterations", type=int, default=1000)
     parser.add_argument("--train_resolution_scale", type=int, default=1, help="Additional training-time render downscale.")
+    parser.add_argument(
+        "--position_lr_extent_mode",
+        type=str,
+        default="scene",
+        choices=("scene", "calibration"),
+        help="Position-LR scale: robust point-cloud scene extent (default) or Graphdeco camera calibration extent for A/B.",
+    )
     parser.add_argument("--base_curve_count", type=int, default=8)
     parser.add_argument("--visible_surface_resolution_u", type=int, default=8)
     parser.add_argument("--visible_surface_resolution_v", type=int, default=4)
     parser.add_argument("--visible_surface_resolution_scale", type=float, default=4.0)
     parser.add_argument("--max_surface_control_points", type=int, default=65536)
-    parser.add_argument("--covariance_init", type=str, default="knn", choices=("knn", "constant"))
+    parser.add_argument("--covariance_init", type=str, default="knn", choices=("knn", "graphdeco_knn", "constant"))
     parser.add_argument("--covariance_knn_chunk_size", type=int, default=0)
     parser.add_argument("--covariance_min_scale", type=float, default=1e-4)
     parser.add_argument("--covariance_max_scale_ratio", type=float, default=0.05)
@@ -105,6 +112,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--adc_max_screen_size", type=float, default=20.0)
     parser.add_argument("--adc_max_scale_ratio", type=float, default=0.1)
     parser.add_argument("--opacity_reset_interval", type=int, default=3000)
+    parser.add_argument("--adc_drop_survivor_gradients", action="store_true", help="A/B only: discard survivor gradients after ADC shape replacement to match Graphdeco lifecycle.")
     parser.add_argument("--screen_size_prune_from_iter", type=int, default=3000)
     parser.add_argument(
         "--surface_update_interval",
@@ -196,6 +204,7 @@ def main() -> None:
         max_scale_ratio=max(0.0, float(args.adc_max_scale_ratio)),
         opacity_reset_interval=max(0, int(args.opacity_reset_interval)),
         screen_size_prune_from_iter=max(0, int(args.screen_size_prune_from_iter)),
+        preserve_adc_gradients=not bool(args.adc_drop_survivor_gradients),
     )
 
     pipeline_config = TorchPipelineConfig(
@@ -253,6 +262,7 @@ def main() -> None:
         resume_checkpoint=args.resume_checkpoint,
         prefer_cuda=device == "cuda",
         train_resolution_scale=train_resolution_scale,
+        position_lr_extent_mode=args.position_lr_extent_mode,
         density_control=density_control_config,
     )
 

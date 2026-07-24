@@ -314,7 +314,13 @@ def evaluate_scene_boundary_first(
         write_point_cloud_ply(scene, scene_dir / "point_cloud.ply")
         write_point_cloud_ply(scene, gt_dir / "point_cloud.ply")
         (scene_dir / "nurbs_surface.json").write_text(
-            json.dumps(boundary_first_renderer_payload(scene.name, payload_patches), indent=2), encoding="utf-8"
+            json.dumps(
+                boundary_first_renderer_payload(
+                    scene.name, payload_patches, [boundary.payload() for boundary in state.patch_boundaries]
+                ),
+                indent=2,
+            ),
+            encoding="utf-8",
         )
         (gt_dir / "nurbs_surface.json").write_text(
             json.dumps(gt_nurbs_payload(scene), indent=2), encoding="utf-8"
@@ -323,6 +329,11 @@ def evaluate_scene_boundary_first(
     result["boundary_first"] = {
         "component_count": state.component_count,
         "per_component": state.per_component,
+        "patch_boundary_count": len(state.patch_boundaries),
+        "patch_boundary_states": {
+            boundary_state: sum(1 for boundary in state.patch_boundaries if boundary.state == boundary_state)
+            for boundary_state in sorted({boundary.state for boundary in state.patch_boundaries})
+        },
         "candidate_graph": state.candidate_graph,
     }
     return result

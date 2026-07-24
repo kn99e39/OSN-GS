@@ -2,9 +2,10 @@ from __future__ import annotations
 
 """Diagnostics-only scale-aware spatial graph over atomic surface cells.
 
-Stage 2 of ``OSN_GS_Proxy_Based_Surface_Decomposition_Impl_Plan.md`` replaces
-face contact as the *candidate generation* mechanism, not as a production
-component rule.  This module therefore knows nothing about scene names,
+The diagnostics-only Stage 2 recorded in
+``docs/worklogs/62_proxy_decomposition_stage2_candidate_graph.md`` replaces face
+contact as the *candidate generation* mechanism, not as a production component
+rule. This module therefore knows nothing about scene names,
 ground-truth topology, component counts, merge scores, or admissibility.
 
 Candidate generation uses expanded adaptive-leaf AABBs with a deterministic

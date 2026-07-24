@@ -92,4 +92,6 @@ def fallback_render(camera: TorchCamera, model: TorchGaussianModel, background: 
         "visibility_filter": torch.nonzero(radii > 0, as_tuple=False).reshape(-1),
         "radii": radii,
         "depth": depth_image,
+        "alpha": alpha,
+        "valid_depth_mask": alpha > 1e-3,
     }

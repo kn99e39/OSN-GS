@@ -1,4 +1,4 @@
-# Worklog 60: Held-out eval 파이프라인 학습 루프 연결 + smoke test
+# Worklog 60-A: Held-out eval 파이프라인 학습 루프 연결 + smoke test
 
 날짜: 2026-07-22
 

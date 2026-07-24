@@ -69,6 +69,11 @@ class TorchGaussianModel:
         self.xyz_gradient_accum = torch.empty((0, 1), dtype=torch.float32, device=device)
         self.denom = torch.empty((0, 1), dtype=torch.float32, device=device)
         self.max_radii2D = torch.empty((0,), dtype=torch.float32, device=device)
+        self.density_gradient_sources: dict[str, int] = {
+            "screen_space": 0,
+            "xyz_fallback": 0,
+            "unavailable": 0,
+        }
 
     @property
     def get_xyz(self) -> Any:
@@ -212,6 +217,11 @@ class TorchGaussianModel:
         self.xyz_gradient_accum = self.torch.zeros((count, 1), dtype=self.torch.float32, device=self.device)
         self.denom = self.torch.zeros((count, 1), dtype=self.torch.float32, device=self.device)
         self.max_radii2D = self.torch.zeros((count,), dtype=self.torch.float32, device=self.device)
+        self.density_gradient_sources = {
+            "screen_space": 0,
+            "xyz_fallback": 0,
+            "unavailable": 0,
+        }
 
     def replace_tensors(
         self,
@@ -226,8 +236,9 @@ class TorchGaussianModel:
         surface_uv: Any,
         cluster_ids: Any,
         optimizer_keep_indices: Any | None = None,
+        preserve_parameter_gradients: bool = True,
     ) -> None:
-        """Replace Gaussian tensors while preserving Adam rows when possible."""
+        """Replace Gaussian tensors while preserving Adam rows when requested."""
 
         torch = self.torch
         xyz = torch.as_tensor(xyz, dtype=self.torch.float32, device=self.device)
@@ -253,7 +264,8 @@ class TorchGaussianModel:
         self.surface_uv = torch.as_tensor(surface_uv, dtype=self.torch.float32, device=self.device).reshape(count, 2)
         self.cluster_ids = torch.as_tensor(cluster_ids, dtype=torch.long, device=self.device).reshape(count)
         self._preserve_optimizer_state(old_params, keep_indices, old_count)
-        self._preserve_parameter_gradients(old_gradients, keep_indices, old_count)
+        if preserve_parameter_gradients:
+            self._preserve_parameter_gradients(old_gradients, keep_indices, old_count)
         self._reset_density_stats(count)
 
     def _preserve_parameter_gradients(

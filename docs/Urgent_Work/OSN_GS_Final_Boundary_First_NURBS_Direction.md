@@ -1,4 +1,4 @@
-SN-GS Final NURBS Construction Direction
+# OSN-GS Final NURBS Construction Direction
 
 ## Boundary-First Topology, Component-Level Geometry Fitting, and Topology-Aware Chart Generation
 
@@ -6,15 +6,19 @@ SN-GS Final NURBS Construction Direction
 ## Document Status
 
 This is the **governing implementation plan** for all future OSN-GS NURBS
-construction work. Its phase gates, implementation prohibitions, benchmark
-matrix, and approval requirements take precedence over earlier NURBS migration
-plans and roadmap notes when they disagree.
+construction work. Its architecture, phase gates, implementation prohibitions,
+benchmark matrix, and approval requirements take precedence over older roadmap
+notes when they disagree.
 
-The historical voxel-per-patch plan remains useful as the record of the Stage 1
-baseline and its measurements, but it does not authorize further implementation
-work. See
-[OSN_GS_Voxel_Driven_NURBS_Migration_Plan.md](OSN_GS_Voxel_Driven_NURBS_Migration_Plan.md).
----
+현재 실행 상태는 **Phase 5 도달 후 Phase 1 component/connectivity remediation을
+다시 진행하는 단계**다. Step 5-A coupled boundary fitting은 채택됐지만,
+`curved_annulus` 과분할과 `mild_curved_sheet`의 spurious annulus 문제 때문에
+Phase 5 extension 본편은 block되어 있다. Pairwise quadratic proxy와
+Gaussian-native pairwise continuity 방법은 worklog 60-B–65에서 feasibility가
+기각됐으며 production component membership에는 통합되지 않았다. 다음 Phase 1
+방법론은 neighborhood/manifold-level connectivity로 새로 승인받아야 한다.
+과거 voxel migration 및 기각된 proxy 실행 계획은 삭제했고, 재현 근거는
+`docs/worklogs/`와 `artifacts/`에 보존한다.
 
 ---
 
@@ -601,6 +605,8 @@ S_{\mathrm{ext},j}(s,t)
 
 # Phase 0 — Current State Preservation
 
+**상태: 완료.** 비교 기준선 보존 규칙만 계속 유효하다.
+
 ## 목표
 
 현재 구현을 비교군으로 완전히 보존한다.
@@ -629,6 +635,8 @@ boundary_component_charted
 ---
 
 # Phase 1 — Surface-Cell Component Builder
+
+**상태: 기존 face-adjacency 기준선 구현 완료 후 remediation 재개.** 아래 최초 구현 절차는 역사적 기준선이며, 현재 작업은 §15의 connectivity gate를 따른다.
 
 ## 목표
 
@@ -729,6 +737,8 @@ Close parallel sheets:
 
 # Phase 2 — Component-Level Boundary Extraction
 
+**상태: benchmark correctness baseline 구현 완료.** Outer-boundary conformance는 Phase 5 복귀 전 해결해야 할 blocker로 남아 있다.
+
 ## 목표
 
 patch별이 아니라 component 전체에서 outer/inner boundary를 먼저 추출한다.
@@ -817,6 +827,8 @@ Plane/Sine:
 
 # Phase 3 — Trimmed Component Correctness Baseline
 
+**상태: 완료.** Trimmed component 경로는 correctness baseline으로 유지한다.
+
 ## 목표
 
 component-level boundary를 사용해 안정적인 geometry와 support topology 기준선을 만든다.
@@ -892,6 +904,8 @@ Sine:
 ---
 
 # Phase 4 — Boundary-Conforming Chart Generator
+
+**상태: 완료 및 hardening 종료.** Annulus coupled shared-boundary fit은 후속 Step 5-A에서 채택됐다.
 
 ## 목표
 
@@ -1000,6 +1014,8 @@ Planar Hole O-grid:
 
 # Phase 5 — Boundary-Aligned Extension Charts
 
+**상태: 진입 후 일시 block.** Step 5-A는 채택됐고, Phase 1 connectivity/topology remediation과 outer-boundary conformance 해결 후 extension 본편을 재개한다.
+
 ## 목표
 
 Observed surface chart와 별개로 occluded extension을 위한 boundary-local chart를 생성한다.
@@ -1062,6 +1078,8 @@ C_{\mathrm{ext}}(s,t)
 ---
 
 # Phase 6 — Stage 2 Robustness Improvements
+
+**상태: 미착수.** Phase 5 완료와 별도 사용자 승인 전에는 진행하지 않는다.
 
 다음은 기본 architecture가 동작한 이후에 추가한다.
 
@@ -1385,57 +1403,24 @@ failure diagnostics
 
 ---
 
-# 15. 최초 Agent 실행 명령
+# 15. 현재 Agent 실행 게이트
 
-현재 `legacy` 및 `voxel_patch_stage1` 구현을 유지하고, 우선 **Phase 1 — Surface-Cell Component Builder**만 구현하라.
+현재 Phase 0–4 또는 Step 5-A를 처음부터 재실행하지 않는다. 다음 active work는
+Phase 5에서 발견된 component/topology blocker를 해결하기 위한 **Phase 1
+remediation**이다.
 
-## 요구 사항
+필수 조건:
 
-1. Stage 1 hierarchy leaf를 graph node로 재사용
-2. face adjacency 생성
-3. normal compatibility 계산
-4. plane offset compatibility 계산
-5. active-active support continuity 확인
-6. deterministic connected component 생성
-7. component provenance export
-8. merge/split reason export
-9. legacy와 voxel_patch_stage1 수치 불변 regression
-10. benchmark-only 구현
-11. trainer/ADC 통합 금지
+1. 기존 face-adjacency production component builder와 benchmark 결과를 기준선으로 유지한다.
+2. worklog 64/65에서 기각된 pairwise proxy 또는 Gaussian-native pairwise gate를 재도입하지 않는다.
+3. scene-specific selector, retry, fallback, GT runtime branch를 만들지 않는다.
+4. 새로운 neighborhood/manifold-level connectivity 방법론은 별도 사용자 승인 후 diagnostics-only로 시작한다.
+5. `curved_annulus`는 하나의 annulus component로 복원하고, `mild_curved_sheet`는 hole 없는 disk-like component로 유지해야 한다.
+6. crease, close parallel sheets, disconnected-close, density-gradient negative control을 함께 검증한다.
+7. production membership, Phase 2 boundary, chart/NURBS 경로는 broad feasibility가 통과하기 전 변경하지 않는다.
+8. remediation 통과 후 coupled boundary fit을 재검증하고 Phase 5 extension 본편으로 복귀한다.
 
-## 필수 benchmark
-
-- plane
-- sine
-- planar_hole
-- crease
-- close_parallel_sheets
-- density_gradient
-
-## 반드시 보고할 값
-
-- voxel leaf count
-- component count
-- component별 Gaussian count
-- component별 member leaf
-- GT component count
-- component assignment ARI
-- merge error
-- split error
-- runtime
-- failure cases
-
-## 기대되는 Planar Hole 결과
-
-```text
-physical component count = 1
-outer support loop candidate = 1
-inner inactive region candidate = 1
-```
-
-단, Phase 1에서는 아직 boundary curve와 NURBS refit을 구현하지 않는다.
-
-보고 후 멈추고 사용자의 승인을 기다린다.
+각 방법론 종료 후 worklog를 남기고 사용자 승인 없이 다음 단계로 진행하지 않는다.
 
 ---
 

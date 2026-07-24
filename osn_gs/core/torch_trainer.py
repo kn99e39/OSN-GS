@@ -18,6 +18,7 @@ from osn_gs.core.torch_pipeline import (
 )
 from osn_gs.data.colmap_scene import estimate_scene_extent
 from osn_gs.data.torch_scene import TorchScene
+from osn_gs.data.vendor.graphdeco_scene_split import estimate_camera_extent
 from osn_gs.gaussian.torch_model import GaussianParameterGroups
 from osn_gs.gaussian.torch_density_control import (
     TorchDensityControlConfig,
@@ -46,6 +47,9 @@ class TorchTrainingConfig:
     iterations: int = 1000
     batch_size: int = 1
     train_resolution_scale: int = 1
+    # ``scene`` keeps OSN-GS's robust point-cloud-derived position-LR scale;
+    # ``calibration`` is a Graphdeco camera-extent parity ablation.
+    position_lr_extent_mode: str = "scene"
     # Image loss weight, matching original 3DGS: (1 - lambda_dssim)*L1 + lambda_dssim*(1 - SSIM).
     lambda_dssim: float = 0.2
     lambda_surface: float = 0.01
@@ -139,8 +143,25 @@ class TorchOSNGSTrainer:
         output_dir.mkdir(parents=True, exist_ok=True)
 
         state = self.pipeline.initialize(scene.initial_points, scene.initial_colors)
+        # Two different "scene scale" quantities, kept deliberately separate
+        # (worklog 71): scene_extent (point-cloud-derived, outlier-robust)
+        # answers "how far apart are the things we've actually observed" and
+        # drives position step size (spatial_lr_scale). calibration_extent
+        # (camera-derived, matching baseline's cameras_extent exactly)
+        # answers "what splat size should count as oversized," which is what
+        # baseline's own percent_dense/max_scale_ratio constants were tuned
+        # against -- feeding them a point-cloud extent instead systematically
+        # inflates Gaussian scale on walkthrough-style captures where
+        # observed geometry extends well past the camera path.
         scene_extent = self._scene_extent(scene.initial_points)
-        state.model.spatial_lr_scale = scene_extent
+        calibration_extent = self._calibration_extent(scene)
+        position_lr_extent = self._position_lr_extent(scene_extent, calibration_extent)
+        state.model.spatial_lr_scale = position_lr_extent
+        self._print(
+            "OSN-GS position LR extent: "
+            f"mode={self.training_config.position_lr_extent_mode} "
+            f"value={position_lr_extent:.6g} scene={scene_extent:.6g} calibration={calibration_extent:.6g}"
+        )
         state.model.training_setup(self.training_config.parameter_groups)
         self._setup_surface_optimizer(state)
         start_iteration = 1
@@ -162,7 +183,9 @@ class TorchOSNGSTrainer:
         )
         self._last_progress_iteration = start_iteration - 1
         try:
-            self._train_loop(scene, state, scene_extent, output_dir, background, start_iteration, train_wall_start)
+            self._train_loop(
+                scene, state, scene_extent, calibration_extent, output_dir, background, start_iteration, train_wall_start
+            )
         finally:
             self._progress_bar.close()
             self._progress_bar = None
@@ -173,6 +196,7 @@ class TorchOSNGSTrainer:
         scene: TorchScene,
         state: TorchPipelineState,
         scene_extent: float,
+        calibration_extent: float,
         output_dir: Path,
         background,
         start_iteration: int,
@@ -284,16 +308,23 @@ class TorchOSNGSTrainer:
 
             if should_run_adc(iteration, self.training_config.density_control):
                 adc_before = self._adc_stats(state)
+                gradient_sources = dict(getattr(state.model, "density_gradient_sources", {}))
                 report = apply_adaptive_density_control(
-                    state.model, self.training_config.density_control, scene_extent, iteration=iteration
+                    state.model, self.training_config.density_control, calibration_extent, iteration=iteration
                 )
                 self._print(
                     "OSN-GS ADC: "
-                    f"iteration={iteration} cloned={report.cloned} split={report.split} "
+                    f"iteration={iteration} clone_parents={report.clone_parents} "
+                    f"split_parents={report.split_parents} split_children={report.split} "
+                    f"clone_parent_aniso={report.clone_parent_anisotropy:.6g} "
+                    f"split_parent_aniso={report.split_parent_anisotropy:.6g} "
                     f"pruned={report.pruned} opacity={report.pruned_opacity} "
                     f"screen={report.pruned_screen} world={report.pruned_world} gaussians={len(state.model)} "
                     f"tracked={adc_before['tracked']} max_grad={adc_before['max_grad']:.6g} "
-                    f"mean_grad={adc_before['mean_grad']:.6g} threshold={adc_before['threshold']:.6g}"
+                    f"mean_grad={adc_before['mean_grad']:.6g} threshold={adc_before['threshold']:.6g} "
+                    f"grad_source=screen:{gradient_sources.get('screen_space', 0)} "
+                    f"fallback:{gradient_sources.get('xyz_fallback', 0)} "
+                    f"unavailable:{gradient_sources.get('unavailable', 0)}"
                 )
                 # Baseline 3DGS calls this at the end of every densify_and_prune
                 # step (gaussian_model.py). Our clone/split/prune shape
@@ -697,10 +728,28 @@ class TorchOSNGSTrainer:
             "threshold": float(self.training_config.density_control.densify_grad_threshold),
         }
 
+    def _position_lr_extent(self, scene_extent: float, calibration_extent: float) -> float:
+        """Select the position-LR scale without changing ADC calibration."""
+
+        mode = str(self.training_config.position_lr_extent_mode).strip().lower()
+        if mode == "scene":
+            return max(float(scene_extent), 1e-6)
+        if mode == "calibration":
+            return max(float(calibration_extent), 1e-6)
+        raise ValueError(
+            "position_lr_extent_mode must be 'scene' or 'calibration', "
+            f"got {self.training_config.position_lr_extent_mode!r}"
+        )
+
     def _scene_extent(self, points) -> float:
-        """Return a conservative, outlier-robust scene extent used by ADC
-        size thresholds and (via ``spatial_lr_scale``) the xyz position
-        learning-rate magnitude.
+        """Return a conservative, outlier-robust scene extent, used (via
+        ``spatial_lr_scale``) to size the xyz position learning-rate.
+
+        This answers "how far apart are the things we've actually observed,"
+        which is the right question for position step size. It is
+        deliberately NOT used for ADC's size thresholds anymore -- see
+        ``_calibration_extent`` and worklog 71 for why those need baseline's
+        camera-based quantity instead.
 
         Previously computed as the raw point cloud's bounding-box diagonal
         (``(max - min).norm()``), which is extremely sensitive to a handful
@@ -726,6 +775,25 @@ class TorchOSNGSTrainer:
             return 1.0
         extent = estimate_scene_extent(pts.detach().cpu().numpy())
         return max(float(extent), 1e-6)
+
+    def _calibration_extent(self, scene: TorchScene) -> float:
+        """Return baseline 3DGS's own camera-position-based scene extent.
+
+        Feeds ADC's ``percent_dense``/``max_scale_ratio`` size thresholds
+        (worklog 71): those constants are copied from baseline and were
+        tuned against ``cameras_extent`` (max distance from the mean TRAIN
+        camera center * 1.1), not against a point-cloud-derived extent. On a
+        walkthrough-style capture where observed geometry extends well past
+        the camera path, the two diverge by ~2.5x, and feeding the
+        point-cloud number into baseline-tuned thresholds systematically
+        oversizes Gaussians -- confirmed by direct scale-distribution A/B
+        against baseline at matched iteration/Gaussian-count.
+        """
+
+        centers = [
+            self.torch.as_tensor(camera.camera_center).detach().cpu().numpy() for camera in scene.cameras
+        ]
+        return max(estimate_camera_extent(centers), 1e-6)
 
     def _should_log_timing(self, iteration: int) -> bool:
         interval = max(0, int(self.training_config.timing_log_interval))

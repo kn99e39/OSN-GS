@@ -32,7 +32,14 @@ import torch
 
 from osn_gs.surface.torch_annulus_chart import annulus_chart_payload, build_annulus_chart
 from osn_gs.surface.torch_chart_topology import TOPOLOGY_ANNULUS, classify_boundary_result
-from osn_gs.surface.torch_component_boundary import extract_component_boundary
+from osn_gs.surface.torch_component_boundary import component_boundary_payload, extract_component_boundary
+from osn_gs.surface.torch_patch_boundary import (
+    BOUNDARY_RECONCILED_INTERNAL,
+    BOUNDARY_UNCLASSIFIED,
+    PatchBoundarySegment,
+    build_rectangular_patch_edge,
+    extract_trimmed_patch_boundaries,
+)
 from osn_gs.surface.torch_surface_candidate_graph import (
     build_surface_cell_candidate_graph,
     candidate_graph_payload,
@@ -65,6 +72,8 @@ class BoundaryFirstState:
     surface: Any = None  # no single combined surface; unassigned points score as zero residual
     voxel_hierarchy: Any = None
     per_component: list[dict[str, Any]] = field(default_factory=list)
+    component_boundaries: list[Any] = field(default_factory=list)
+    patch_boundaries: list[PatchBoundarySegment] = field(default_factory=list)
     component_count: int = 0
     candidate_graph: dict[str, Any] | None = None
 
@@ -158,6 +167,8 @@ def construct_boundary_first(
     surface_uv = torch.zeros((count, 2), dtype=scene.points.dtype)
     all_surfaces: list[Any] = []
     per_component: list[dict[str, Any]] = []
+    component_boundaries: list[Any] = []
+    patch_boundaries: list[PatchBoundarySegment] = []
     payload_patches: list[dict[str, Any]] = []
 
     for component in component_set.components:
@@ -167,8 +178,10 @@ def construct_boundary_first(
             coarse_gap_closing_cells=coarse_gap_closing_cells,
         )
         topology = classify_boundary_result(boundary)
+        component_boundaries.append(boundary)
 
         if topology == TOPOLOGY_ANNULUS:
+            patch_start_id = len(all_surfaces)
             chart = build_annulus_chart(
                 component, scene.points, boundary.frame, boundary.refined_mask,
                 boundary.hole_loops[0].boundary_world_points, segments=annulus_segments,
@@ -192,9 +205,58 @@ def construct_boundary_first(
                         "weights": sl.surface.weights.detach().cpu().tolist(),
                         "degree_u": int(sl.surface.degree_u),
                         "degree_v": int(sl.surface.degree_v),
+                        "knots_u": sl.surface.knots_u.detach().cpu().tolist(),
+                        "knots_v": sl.surface.knots_v.detach().cpu().tolist(),
                         "uv_support": uv_support_payload(sl.surface),
                         "fit_metrics": sl.fit_metrics,
                     }
+                )
+            seam_state = (
+                BOUNDARY_RECONCILED_INTERNAL
+                if annulus_coupled_boundary_fit
+                else BOUNDARY_UNCLASSIFIED
+            )
+            for local_index, sl in enumerate(chart.slices):
+                patch_id = patch_start_id + local_index
+                previous_patch_id = patch_start_id + (local_index - 1) % len(chart.slices)
+                next_patch_id = patch_start_id + (local_index + 1) % len(chart.slices)
+                patch_boundaries.extend(
+                    [
+                        build_rectangular_patch_edge(
+                            patch_id,
+                            sl.surface,
+                            "u0",
+                            source_kind="annulus_artificial_seam",
+                            state=seam_state,
+                            adjacent_patch_id=previous_patch_id,
+                            adjacent_boundary_id=f"p{previous_patch_id}:edge:u1",
+                            provenance={"component_id": component.component_id, "slice_index": local_index},
+                        ),
+                        build_rectangular_patch_edge(
+                            patch_id,
+                            sl.surface,
+                            "u1",
+                            source_kind="annulus_artificial_seam",
+                            state=seam_state,
+                            adjacent_patch_id=next_patch_id,
+                            adjacent_boundary_id=f"p{next_patch_id}:edge:u0",
+                            provenance={"component_id": component.component_id, "slice_index": local_index},
+                        ),
+                        build_rectangular_patch_edge(
+                            patch_id,
+                            sl.surface,
+                            "v0",
+                            source_kind="observed_inner_boundary",
+                            provenance={"component_id": component.component_id, "slice_index": local_index},
+                        ),
+                        build_rectangular_patch_edge(
+                            patch_id,
+                            sl.surface,
+                            "v1",
+                            source_kind="observed_outer_boundary",
+                            provenance={"component_id": component.component_id, "slice_index": local_index},
+                        ),
+                    ]
                 )
             seam_gaps = [s.mean_gap for s in chart.seams]
             per_component.append(
@@ -207,6 +269,7 @@ def construct_boundary_first(
                     "max_seam_gap": max((s.max_gap for s in chart.seams), default=0.0),
                     "topology_checks": chart.topology_checks,
                     "chart_quality": chart.chart_quality,
+                    "component_boundary": component_boundary_payload(boundary) if export_dir is not None else None,
                     "chart_export": annulus_chart_payload(chart) if export_dir is not None else None,
                 }
             )
@@ -227,24 +290,35 @@ def construct_boundary_first(
                     "weights": fit.surface.weights.detach().cpu().tolist(),
                     "degree_u": int(fit.surface.degree_u),
                     "degree_v": int(fit.surface.degree_v),
+                    "knots_u": fit.surface.knots_u.detach().cpu().tolist(),
+                    "knots_v": fit.surface.knots_v.detach().cpu().tolist(),
                     "uv_support": uv_support_payload(fit.surface),
                     "fit_metrics": fit.fit_metrics,
                 }
             )
+            patch_boundaries.extend(extract_trimmed_patch_boundaries(patch_id, fit.surface))
             per_component.append(
                 {
                     "component_id": component.component_id,
                     "topology": topology,
                     "chart": "trimmed_rect_fallback",
                     "fit_metrics": fit.fit_metrics,
+                    "component_boundary": component_boundary_payload(boundary) if export_dir is not None else None,
                 }
             )
 
+    boundary_ids_by_patch: dict[int, list[str]] = {}
+    for boundary_record in patch_boundaries:
+        boundary_ids_by_patch.setdefault(boundary_record.patch_id, []).append(boundary_record.boundary_id)
+    for patch_payload in payload_patches:
+        patch_payload["boundary_ids"] = sorted(boundary_ids_by_patch.get(int(patch_payload["patch_id"]), []))
     state = BoundaryFirstState(
         model=_BoundaryFirstModel(get_xyz=scene.points, cluster_ids=cluster_ids, surface_uv=surface_uv),
         surface_patches=all_surfaces,
         voxel_hierarchy=hierarchy,
         per_component=per_component,
+        component_boundaries=component_boundaries,
+        patch_boundaries=patch_boundaries,
         component_count=component_set.component_count(),
         candidate_graph=candidate_payload,
     )
@@ -284,7 +358,11 @@ def write_point_cloud_ply(scene: SyntheticGaussianScene, path: Path) -> None:
     np.savetxt(path, columns, fmt=["%.9g"] * 14, header=header, comments="", encoding="utf-8")
 
 
-def renderer_payload(scene_name: str, patches: list[dict[str, Any]]) -> dict[str, Any]:
+def renderer_payload(
+    scene_name: str,
+    patches: list[dict[str, Any]],
+    patch_boundaries: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     primary = patches[0]
     return {
         "type": "boundary_first_surface",
@@ -292,6 +370,8 @@ def renderer_payload(scene_name: str, patches: list[dict[str, Any]]) -> dict[str
         "parameter_domain": {"u": [0.0, 1.0], "v": [0.0, 1.0]},
         "degree_u": primary["degree_u"],
         "degree_v": primary["degree_v"],
+        "knots_u": primary["knots_u"],
+        "knots_v": primary["knots_v"],
         "observed_v_max": 1.0,
         "control_grid_shape": primary["control_grid_shape"],
         "control_grid": primary["control_grid"],
@@ -300,5 +380,11 @@ def renderer_payload(scene_name: str, patches: list[dict[str, Any]]) -> dict[str
         "base_curves": [],
         "occlusion_curves": [],
         "patches": patches,
-        "metadata": {"source": "boundary_first", "scene": scene_name, "patch_count": len(patches)},
+        "patch_boundaries": [] if patch_boundaries is None else patch_boundaries,
+        "metadata": {
+            "source": "boundary_first",
+            "scene": scene_name,
+            "patch_count": len(patches),
+            "patch_boundary_count": 0 if patch_boundaries is None else len(patch_boundaries),
+        },
     }

@@ -12,6 +12,7 @@ from osn_gs.core.torch_trainer import TorchOSNGSTrainer, TorchTrainingConfig
 from osn_gs.data.torch_scene import TorchScene
 from osn_gs.gaussian.torch_density_control import (
     TorchDensityControlConfig,
+    add_densification_stats,
     apply_adaptive_density_control,
     should_run_adc,
 )
@@ -148,6 +149,39 @@ class TrainingRegressionTest(unittest.TestCase):
         self.assertIn(id(state.surface_patches[-1].control_grid), registered)
         self.assertIn(id(state.surface_patches[-1].weights), registered)
 
+    def test_position_lr_extent_mode_selects_only_position_scale(self):
+        trainer = TorchOSNGSTrainer.__new__(TorchOSNGSTrainer)
+        trainer.training_config = TorchTrainingConfig(position_lr_extent_mode="scene")
+        self.assertEqual(trainer._position_lr_extent(12.31, 4.92), 12.31)
+        trainer.training_config.position_lr_extent_mode = "calibration"
+        self.assertEqual(trainer._position_lr_extent(12.31, 4.92), 4.92)
+        trainer.training_config.position_lr_extent_mode = "invalid"
+        with self.assertRaises(ValueError):
+            trainer._position_lr_extent(12.31, 4.92)
+
+    def test_graphdeco_covariance_uses_three_neighbor_mean(self):
+        points = torch.tensor([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [3.0, 0.0, 0.0], [10.0, 0.0, 0.0]])
+        common = dict(covariance_knn_chunk_size=2, covariance_max_scale_ratio=10.0)
+        one = TorchOSNGSPipeline(TorchPipelineConfig(covariance_init="knn", **common), device="cpu")
+        graphdeco = TorchOSNGSPipeline(TorchPipelineConfig(covariance_init="graphdeco_knn", **common), device="cpu")
+        one_scales = one._initial_covariance_scales(points)[:, 0]
+        graphdeco_scales = graphdeco._initial_covariance_scales(points)[:, 0]
+        self.assertAlmostEqual(float(one_scales[0]), 1.0, places=6)
+        self.assertAlmostEqual(float(graphdeco_scales[0]), (110.0 / 3.0) ** 0.5, places=6)
+        self.assertGreater(float(graphdeco_scales[0]), float(one_scales[0]))
+
+    def test_adc_gradient_source_tracks_screen_space_and_fallback(self):
+        _, state = self._state(count=4)
+        model = state.model
+        viewspace = torch.zeros_like(model._xyz, requires_grad=True)
+        viewspace.grad = torch.ones_like(viewspace)
+        add_densification_stats(model, viewspace, torch.tensor([0, 1]))
+        self.assertEqual(model.density_gradient_sources["screen_space"], 1)
+        viewspace.grad.zero_()
+        model._xyz.grad = torch.ones_like(model._xyz)
+        add_densification_stats(model, viewspace, torch.tensor([0, 1]))
+        self.assertEqual(model.density_gradient_sources["xyz_fallback"], 1)
+
     def test_adc_respects_threshold_without_quantile_fallback(self):
         _, state = self._state()
         state.model.training_setup(GaussianParameterGroups())
@@ -231,6 +265,27 @@ class TrainingRegressionTest(unittest.TestCase):
         )
         self.assertTrue(torch.equal(state.model._xyz.grad[:-1], torch.ones_like(state.model._xyz.grad[:-1])))
         self.assertTrue(torch.equal(state.model._xyz.grad[-1], torch.zeros_like(state.model._xyz.grad[-1])))
+
+    def test_adc_parity_mode_drops_survivor_gradients(self):
+        _, state = self._state(count=8)
+        state.model.training_setup(GaussianParameterGroups())
+        state.model._xyz.grad = torch.ones_like(state.model._xyz)
+        state.model.denom.fill_(1.0)
+        state.model.xyz_gradient_accum.zero_()
+        state.model.xyz_gradient_accum[0] = 1.0
+        apply_adaptive_density_control(
+            state.model,
+            TorchDensityControlConfig(
+                densify_grad_threshold=0.1,
+                percent_dense=10.0,
+                max_screen_size=0,
+                max_scale_ratio=0,
+                preserve_adc_gradients=False,
+            ),
+            scene_extent=1.0,
+            iteration=1000,
+        )
+        self.assertIsNone(state.model._xyz.grad)
 
     def test_adc_clone_split_and_prune_use_one_shape_transaction(self):
         _, state = self._state(count=6)

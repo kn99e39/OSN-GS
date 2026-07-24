@@ -95,6 +95,9 @@ class Stage1PipelineTest(unittest.TestCase):
         pipeline = TorchOSNGSPipeline(self._stage1_config(), device="cpu")
         state = pipeline.initialize(points, colors)
         payload = nurbs_intermediate_payload(state)
+        self.assertIn("knots_u", payload)
+        self.assertIn("knots_v", payload)
+        self.assertTrue(all("knots_u" in patch and "knots_v" in patch for patch in payload["patches"]))
         self.assertIn("voxel_hierarchy", payload)
         self.assertEqual(payload["metadata"]["constructor_mode"], "voxel_patch_stage1")
         self.assertEqual(

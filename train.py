@@ -84,6 +84,7 @@ def main() -> None:
         max_scale_ratio=max(0.0, float(args.adc_max_scale_ratio)),
         opacity_reset_interval=max(0, int(args.opacity_reset_interval)),
         screen_size_prune_from_iter=max(0, int(args.screen_size_prune_from_iter)),
+        preserve_adc_gradients=not bool(args.adc_drop_survivor_gradients),
     )
 
     pipeline_config = TorchPipelineConfig(
@@ -141,6 +142,7 @@ def main() -> None:
         resume_checkpoint=args.resume_checkpoint,
         prefer_cuda=device == "cuda",
         train_resolution_scale=train_resolution_scale,
+        position_lr_extent_mode=args.position_lr_extent_mode,
         density_control=density_control_config,
     )
     print(

@@ -385,7 +385,9 @@ The local Graphdeco notebook cells read/write patched Python sources with explic
 ## 2026-07-20 Governing NURBS Construction Plan
 
 - [OSN_GS_Final_Boundary_First_NURBS_Direction.md](Urgent_Work/OSN_GS_Final_Boundary_First_NURBS_Direction.md) is the governing plan for future NURBS construction work. It requires boundary-first topology, component-level Gaussian geometry fitting, topology-aware chart generation, benchmark-only phased implementation, and an explicit user approval gate after every phase.
-- [OSN_GS_Voxel_Driven_NURBS_Migration_Plan.md](Urgent_Work/OSN_GS_Voxel_Driven_NURBS_Migration_Plan.md) is retained only as the historical Stage 1 migration record.
+- Current execution state: Boundary-First reached Phase 5 and adopted Step 5-A, then reopened Phase 1 remediation for curved component/topology failures. Pairwise proxy and Gaussian-native continuity methods were rejected; Phase 5 remains blocked until a separately approved neighborhood/manifold-level method passes.
+- Retired voxel-migration and rejected proxy-decomposition plans were removed. Their implementation evidence remains in `docs/worklogs/` and `artifacts/`.
+- Cleanup details and the current resume gate are recorded in `docs/worklogs/73b_urgent_work_plan_retirement.md`.
 
 ## 2026-07-20 Phase 2 Component Boundary Baseline
 
@@ -429,7 +431,7 @@ The local Graphdeco notebook cells read/write patched Python sources with explic
 
 ## 2026-07-22 Proxy-Based Surface Decomposition Stage 0/1
 
-- Stage 0에서 현재 Phase 1/2 계약과 기준선을 동결했다. `curved_annulus`는 생성된 edge 14개가 모두 merge됐지만 face-contact가 없는 cross-component AABB-touch pair 때문에 2개 component로 갈리는 것을 재현했다. `mild_curved_sheet`의 spurious annulus는 component가 이미 1개라 Phase 2 문제로 분리했다. See `docs/worklogs/60_proxy_decomposition_stage0_baseline.md`.
+- Stage 0에서 현재 Phase 1/2 계약과 기준선을 동결했다. `curved_annulus`는 생성된 edge 14개가 모두 merge됐지만 face-contact가 없는 cross-component AABB-touch pair 때문에 2개 component로 갈리는 것을 재현했다. `mild_curved_sheet`의 spurious annulus는 component가 이미 1개라 Phase 2 문제로 분리했다. See `docs/worklogs/60b_proxy_decomposition_stage0_baseline.md`.
 - Stage 1에 diagnostics-only local quadratic proxy와 실제 leaf-pair 분석 도구를 추가했다. 누락 curved pair는 기존 smooth pair와 비슷한 proxy distortion을 보였고, crease/parallel/disconnected는 단일 threshold가 아니라 proxy error·normal variation·layer direction·support gap의 독립 신호가 필요했다.
 - Production component builder와 기본값은 변경하지 않았다. 당시 전체 171 tests 통과(1 skip), artifact 반복 생성 hash 일치. Stage 2 Spatial Candidate Graph는 후속 승인 후 완료했으며 아래에 기록했다. See `docs/worklogs/61_proxy_decomposition_stage1_quadratic_diagnostics.md` 및 `artifacts/proxy_decomposition_{baseline,stage1}.json`.
 
@@ -462,3 +464,52 @@ The local Graphdeco notebook cells read/write patched Python sources with explic
 - 생성자, checkpoint, 학습 수학은 변경하지 않았다. 캐시 재사용·무효화·autograd 테스트와 전체 `204 passed, 1 skipped, 8 subtests passed` 회귀를 통과했다.
 - Isolated 16-patch forward benchmark에서 forced-uncached 대비 CPU `1.039x`, CUDA `1.063x`였다. 안전한 소폭 개선이지만 전체 `surface_loss` 병목을 해결하는 수준은 아니므로 ragged patch batching이나 UV basis cache로 범위를 확장하지 않았다.
 - 상세 결과와 남은 위험은 `docs/worklogs/66_nurbs_surface_loss_knot_cache_opportunity.md`에 기록했다.
+## 2026-07-23 Boundary-Conditioned Occlusion 방향 전환 감사
+
+- `docs/Urgent_Work/OSN_GS_Direction_Reset_Plan.md`를 기존 Phase 1–5 문서보다 상위의 methodology 재정의 문서로 검토했다. 새 방향은 global component recovery를 선행 성공조건에서 내리고, local visible NURBS boundary reconciliation → continuation domain → bounded multi-sided occluded candidate → constrained NURBS → uncertainty/validation 순서로 전환한다.
+- 현재 코드는 NURBS first derivative, voxel/local boundary provenance, Step 5-A joint solve, camera와 renderer depth를 부분적으로 제공한다. 반면 ordered/oriented open boundary, second derivative, inner isocurve, patch-boundary graph, constructor-level visibility/free-space context, generic constrained fit은 누락돼 있다.
+- Proxy Stage 0–3/3-R branch는 production 미적용 deprecated diagnostics로 보존한다. `build_surface_components`는 local patch bootstrap 용도로 유지하되 global component correctness는 새 prototype의 blocker가 아니다.
+- Production 코드와 기본값은 변경하지 않았다. 감사 결과는 `docs/worklogs/74_direction_reset_interface_audit.md`, 승인 전용 구현 초안은 `docs/Urgent_Work/OSN_GS_Boundary_Conditioned_Occlusion_Impl_Plan.md`에 기록했다. 최초 승인 요청 범위는 Phase A–B data contract와 isolated artificial-boundary reconciliation prototype뿐이다.
+## 2026-07-23 Boundary-Conditioned Phase A–B
+
+- 승인된 Phase A–B 범위에서 `TorchNURBSSurface`의 read-only knot와 analytic rational second derivative를 추가하고, trim/chart boundary를 ordered/oriented patch record와 inner isocurve로 보존했다. Boundary-First/main NURBS export는 root/per-patch knot를 포함하며 Boundary-First artifact는 stable `patch_boundaries`와 per-patch `boundary_ids`를 포함한다.
+- Generic shared-control solver는 explicit local patch graph의 full/partial, same/reversed edge correspondence를 첫 solve부터 하나의 unknown으로 묶는다. Existing production annulus solver는 변경하지 않았고 새 solver는 isolated reconciliation prototype에서만 사용한다.
+- Reconciliation은 scale-normalized proximity와 overlap만 hard evidence로 사용하고 tangent/normal은 soft evidence로 기록한다. Coplanar seam과 약 90° orthogonal shared edge는 각각 post C0 max `2.46e-07`, `2.38e-07`로 `reconciled_internal`이 됐으며 disconnected gap `0.2`는 joint fit 없이 남았다.
+- 전체 unittest `221 passed, 1 skipped`, pytest `220 passed, 1 skipped, 8 subtests passed`. Known `curved_annulus`/`mild_curved_sheet` blocker와 production component membership은 그대로다. Phase C 이후는 미승인 상태이며 Gate B에서 멈춘다. 상세 근거는 `docs/worklogs/75_boundary_conditioned_phase_ab.md`, active gate는 `docs/Urgent_Work/OSN_GS_Boundary_Conditioned_Occlusion_Impl_Plan.md`를 참고한다.
+
+## 2026-07-23 Boundary-Conditioned Phase C
+
+- 사용자가 Gate B 검토 후 Phase C(Observation Evidence와 Free-Space Query)만 승인했다. 신규 `osn_gs/surface/torch_observation_evidence.py`는 카메라별 depth/coverage를 하나의 명시적 view-depth 계약으로 통일하고, world sample마다 5-state per-view 분류(`known_free_space`/`on_observed_surface`/`behind_first_observed_surface`/`unobserved`/`outside_valid_view`)와 별도의 5-state aggregate 분류(`known_free_space`/`occluded_candidate`/`unobserved`/`outside_valid_view`/`conflicting_evidence`)를 제공한다.
+- 초안이 "behind_observed_surface" 단일 강한 명칭, depth-epsilon tie를 behind로 처리, "한 카메라라도 behind면 승리"하는 집계 규칙, CUDA invalid depth clamp 순서, backend 공통 `coverage_threshold`를 사용한 점을 사용자가 5가지 근거로 반려했고, 최종 구현은 모두 반영했다(`behind_first_observed_surface`로 개명, `on_observed_surface` 신규 상태, per-camera 5개 리스트를 항상 payload에 보존하는 `conflicting_evidence` 신규 aggregate 상태, mask-먼저-then-invert CUDA depth 복원, backend별 `coverage_kind`/`depth_kind`/`depth_is_approximate` 메타데이터).
+- `osn_gs/render/torch_fallback.py`/`gaussian_rasterizer.py`의 render 반환 dict에 `alpha`/`valid_depth_mask` 키만 추가했다(기존 키 값·의미 불변, caller-safety grep으로 dict-key 접근만 확인). Empty-voxel query(`query_empty_voxel_support`)는 `"no_observed_support"` 외의 값을 구조적으로 반환할 수 없고 sample classification과 연결되지 않는다.
+- `tests/test_observation_evidence.py` 8개 테스트 전부 통과(Gate C 핵심: 관측 표면 뒤 30-포인트 sweep에서 free-space false acceptance 0/30). 전체 pytest `230 passed, 1 skipped, 8 subtests passed`, 회귀 없음. Production(`torch_pipeline.py`/`torch_trainer.py`) 미변경. 상세 근거는 `docs/worklogs/77a_observation_evidence_phase_c.md`를 참고한다.
+- **Gate C 1차 보완 (같은 날)**: 사용자가 두 가지를 추가 요구했다 — (1) multi-view aggregate에서 `on_surface_in`이 있는 sample이 `known_free_space`가 되지 않도록 수정(1차: `free_space_confirmed_by`와 `on_surface_in`의 공존을 `conflicting_evidence`로 처리), (2) `evidence_cache_key()`가 `ObservationEvidence` 전체를 받아 `near`/`far`/`depth_epsilon`과 각 view의 backend/depth convention까지 포함하도록 확장하고, `_topology_version`/`_camera_set_version`도 각각 scale/rotation/opacity와 `full_proj_transform`을 해시에 포함하도록 확장(global cache는 추가하지 않음). 상세 근거는 `docs/worklogs/78_observation_evidence_phase_c_gate_c_followup.md`.
+- **Gate C 2차 보완 (같은 날)**: 사용자가 1차 보완도 아직 승인하지 않고 추가 요구했다 — (1) aggregate `STATUS_ON_OBSERVED_SURFACE` 신규 상태 추가(on_surface만 있으면 이 상태로, on_surface가 free/behind 중 하나 이상과 공존하면 `conflicting_evidence`로, 불변식을 docstring에 명시), (2) camera fingerprint에 명시적 `camera_index` identity 성분 추가(`TorchCamera.image_name`이 공유 기본값 `"camera"`라 이름만으로는 카메라를 구분할 수 없다는 점을 문서화), (3) `_tensor_digest()`가 raw byte만 해시하고 shape/dtype을 누락해 서로 다른 텐서가 이론상 충돌할 수 있던 실제 결함을 수정(label/shape/dtype을 해시 입력에 포함), (4) `evidence_cache_key()`가 렌더링 후에만 계산 가능한 post-build result fingerprint라는 계약을 docstring에 명시. 신규 테스트 5개 추가. 전체 pytest `238 passed, 1 skipped, 8 subtests passed`, 회귀 없음. 상세 근거는 `docs/worklogs/79_observation_evidence_phase_c_gate_c_round2.md`를 참고한다.
+- **Gate C 최종 승인 (같은 날)**: 사용자가 Gate C를 최종 승인했다. Non-blocking note 2건(duplicate camera 순서 교환 시 fingerprint 동일 — 문제로 보지 않음; synthetic per-view payload 기반 순수 aggregation truth-table 테스트는 향후 추가 권장)을 남겼다. Production pipeline/trainer integration은 아직 미승인.
+
+## 2026-07-23 Phase D — Parametric Continuation Domain 설계
+
+- 사용자가 Phase D의 구현이 아니라 **설계**를 요청했다. `osn_gs/surface/torch_nurbs.py`(NURBS derivative/knot API)와 `osn_gs/surface/torch_annulus_chart.py`(Jacobian singular-value 진단, 과거 seam-placement 실험) + 과거 pre-reset 확장 설계 문서 2개를 먼저 감사한 뒤 설계했다.
+- 핵심 감사 결과: knot vector는 `[0,1]`에 하드코딩된 clamped uniform B-spline이라 domain을 넘어 확장하는 헬퍼가 없고, `PatchBoundarySegment`는 실제 `TorchNURBSSurface` 참조를 갖지 않으며, `predict_torch_occlusion_curves`/`build_torch_surface`/`sample_torch_occluded_surface`는 자체 docstring이 "Stage 2 legacy"로 명시하고 호출부가 없는 pre-reset 코드였다.
+- 설계 결론: continuation domain은 `TorchNURBSSurface`를 확장하는 대신, boundary의 analytic `S_u`/`S_v`/`S_uu`/`S_uv`/`S_vv`로부터 매번 닫힌형으로 평가되는 별도의 경량 `ContinuationDomain` 객체로 만든다(1차 Taylor를 canonical baseline, 2차는 curvature-aware uncertainty 전용). Outward 방향은 최소자승 기반 축-비의존 general formula로 구하고 `inner_uv`(Phase A 산출물)로 부호를 정한다. `torch_annulus_chart.py`의 Jacobian-SVD 진단을 surface-agnostic 헬퍼로 추출하는 순수 리팩터가 구현 착수 전 prerequisite로 식별됐다. Self-intersection/역침범 전체 검사는 마스터 플랜이 이미 Phase F 소유로 규정하므로 Phase D는 로컬 proxy만 제공한다. Boundary pairing은 Phase E 몫이며 Phase D는 `aabb_min`/`aabb_max` 등 최소 interface만 제공한다. Phase C evidence 결합은 `ContinuationDomain.world.reshape(-1,3)`이 `classify_world_samples`의 입력 형태와 이미 일치한다는 interface 문서화만 하고 호출하지 않는다.
+- 전체 설계는 `docs/Urgent_Work/OSN_GS_Phase_D_Continuation_Domain_Design.md`(입력/출력 계약, construction 방법, validity 조건, boundary pairing 관계, fixture 12건, 대안 비교, 최소 구현 범위)에 기록했다. 코드는 작성하지 않았다. 상세 근거는 `docs/worklogs/80_phase_d_continuation_domain_design.md`를 참고한다. Phase D 구현, Phase C evidence 실제 결합, Phase E candidate 생성, production integration은 모두 별도 승인 전까지 시작하지 않는다.
+- **설계 revision 2/3 (같은 날, worklog 80 §7/§8)**: 사용자가 두 차례 더 설계만 교정했다(코드 없음). Revision 2: outward 방향을 UV-space 최소자승에서 순수 world-space 공식(`N=normalize(Su×Sv)`, `C=normalize(N×T)`, inner_world로 부호 선택)으로 전면 교체, sampled grid를 continuous evaluate() 대신 canonical source of truth로 확정, 상태명을 `candidate/degenerate/rejected`에서 `valid/degenerate/rejected`로 변경. Revision 3: `boundary_length` 필드로 closed-loop arclength 계약 완성, 인접 duplicate/zero-length segment를 `ValueError`로 명시적 거부, `ContinuationDomainBuildError` 신규 예외로 pre-grid 실패와 사후 품질 문제(`state=degenerate/rejected`) 분리, `local_surface_scale`의 canonical 집계 공식(`L_boundary`/`L_inner`/`L_control` median, 최소 2개 필요) 확정, second-order diagnostic 명칭을 `curvature_growth_ratio`에서 `second_order_growth_ratio`/`second_order_displacement_at_extent`로 개명(intrinsic curvature 아님을 명시).
+- **구현 완료 (같은 날, worklog 81)**: 사용자가 "D 구현 시작해"로 착수를 승인했다. Prerequisite로 `osn_gs/surface/torch_parametric_diagnostics.py`(`compute_parametric_jacobian_metrics`, `compute_orientation_consistency`)를 신설하고 `torch_annulus_chart.py`가 이를 호출하도록 리팩터(필드명/수치 불변, `tests/test_annulus_chart.py` 48개 회귀 없음). 신규 `osn_gs/surface/torch_continuation_domain.py`(`ContinuationDomain`, `ContinuationDomainBuildError`, `build_continuation_domain`, `interpolate_boundary_arclength`)를 설계 그대로 구현했다. 구현 중 설계 §2.3("모든 샘플이 degenerate하면 `ContinuationDomainBuildError`")을 최초 구현이 빠뜨린 간극을 테스트 작성 중 발견해 수정했다(설계 문서는 무변경). `tests/test_continuation_domain.py` 22개 전부 통과, 전체 pytest `260 passed, 1 skipped, 8 subtests passed`, 전체 unittest `261 tests, OK`, 회귀 없음. Production(`torch_pipeline.py`/`torch_trainer.py`) 미변경, Phase C evidence 미호출. 마스터 플랜의 승인 게이트 D(continuation strip 방향·크기·결정성 보고)를 완료했다. 상세 근거는 `docs/worklogs/81_phase_d_continuation_domain_implementation.md`를 참고한다. Phase C evidence 실제 결합, Phase E candidate 생성, Phase F NURBS fitting, production integration은 모두 별도 승인 전까지 시작하지 않는다.
+
+## 2026-07-23 Anisotropy 격차 재평가
+
+- 3k A/B의 핵심 격차는 global scale magnitude가 아니라 OSN-GS 최소축 contraction 부족이다. Anisotropy 중앙값/p90은 OSN-GS `3.3194/8.4219`, baseline `5.3921/19.2291`이며 최대축 중앙값은 비슷하지만 최소축은 `0.005367 vs 0.003339`이다.
+- OSN-GS covariance 초기화는 1-NN distance를 사용하지만 Graphdeco `distCUDA2`는 최근접 3개 squared distance의 평균을 사용한다. 실제 DATASET 초기 scale 중앙값은 `0.021216 vs 0.038980`이고, 동일 ADC threshold에서 초기 Gaussian의 16.2857%가 서로 다른 clone/split 영역에 놓인다. 강한 root-cause 후보지만 재학습 ablation 전에는 확정하지 않는다.
+- Worklog 73의 OSN-GS `split`은 child 수, baseline `split_candidates`는 parent 수여서 직접 비교할 수 없었다. parent 기준 split 수는 사실상 동일하며 clone 차이를 우선 조사한다.
+- 다음 순서는 Graphdeco-compatible 3-NN covariance ablation, ADC gradient source/parent-unit 진단, 필요 시 camera-extent position-LR ablation이다. Production 코드는 변경하지 않았다. 상세 근거는 `docs/worklogs/76_anisotropy_gap_root_candidate_reassessment.md`에 기록했다.
+
+## 2026-07-23 Anisotropy parity ablation 결과
+
+- `graphdeco_knn`(3-NN mean covariance), camera-based position-LR, ADC survivor-gradient drop을 각각 3k 실제 DATASET A/B로 검증했다. 신규 ADC 로그는 clone/split parent와 child 단위, candidate anisotropy, screen-space/fallback gradient source를 분리한다. 세 실행 모두 screen-space gradient만 사용했고 fallback은 0회였다.
+- 3-NN covariance는 held-out `PSNR/SSIM`을 `7.9819/0.1202 -> 8.0921/0.1279`로 소폭 개선했으나 anisotropy 중앙값/p90은 `3.3194/8.4219 -> 3.4543/8.6064`로 거의 변하지 않아 주원인으로 기각했다. 기본값은 기존 1-NN으로 유지하고 mode만 ablation으로 제공한다.
+- camera-based position LR은 anisotropy 중앙값/p90을 `4.6834/16.4903`까지 올리고 최소축을 baseline에 가깝게 만들었지만 held-out은 `7.8460/0.1114`로 악화됐다. point-cloud scene LR 기본을 되돌리지 않는다.
+- ADC survivor gradient drop도 기준과 사실상 같은 anisotropy·held-out 결과여서 주원인이 아니다. 다음 조사 범위는 position LR과 per-axis scaling gradient, position update, clone lineage의 결합 계측이다. 전체 회귀는 `233 passed, 1 skipped`. 상세 결과는 `docs/worklogs/77b_anisotropy_gap_parity_ablation_results.md`를 참고한다.
+
+## 워크로그 번호 규칙
+
+- 병렬 작업 때문에 같은 번호가 발생한 기록은 `NN-A` / `NN-B` suffix를 canonical 식별자로 사용한다. 충돌 목록과 신규 기록 규칙은 `docs/worklogs/README.md`에 정리했다.
