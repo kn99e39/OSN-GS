@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """Surface-agnostic AABB sweep-and-prune broad phase.
 
-Phase E prerequisite (docs/Urgent_Work/OSN_GS_Phase_E_Bounded_Candidate_Design.md
+Phase E prerequisite (docs/Urgent_Work/OSN_GS_Boundary_Conditioned_Occlusion_Impl_Plan.md
 section 3, impl plan section 7). A small, dependency-free reimplementation of the
 expanded-AABB sweep-and-prune pattern that ``torch_surface_candidate_graph.py``
 (deprecated Stage 2 diagnostics) established for voxel leaves.

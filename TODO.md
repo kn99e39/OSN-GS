@@ -420,11 +420,3 @@ Raw COLMAP / trained 3DGS Gaussian
 - [ ] 기존 rectangular benchmark 결과가 변하지 않는지 regression 확인.
 
 이 change set의 목적은 새 support 알고리즘을 즉시 확정하는 것이 아니라, **geometry fitting 실패와 support-domain estimation 실패를 독립적으로 측정할 수 있는 검증 기반을 만드는 것**이다.
-
----
-
-## 최하위 우선순위 — held-out eval이 opacity reset 경계와 겹치면 값이 무의미해짐 (2026-07-23)
-
-`evaluate_held_out_cameras`는 `trainer.train()`이 완전히 끝난 뒤 **최종 모델 상태**로 평가한다. `--iterations`가 `opacity_reset_interval`(기본 3000)의 배수와 정확히 겹치면(예: `--iterations 3000`), 학습 루프의 마지막으로 일어나는 일이 opacity reset(모든 Gaussian opacity를 0.01로 초기화)이고 그 뒤로 회복할 iteration이 없어서, held-out PSNR/SSIM이 실제 품질과 무관하게 붕괴한다(실측: PSNR 8.13/SSIM 0.13, 같은 시점 render.ppm은 정상적으로 잘 나왔음에도). Worklog 69에서 고친 "periodic save가 reset 직후를 캡처하던 문제"와는 별개로, post-hoc held-out eval 쪽은 아직 이 함정이 남아 있다. baseline도 구조적으로 동일한 함정이 있으나, 자체 `training_report`가 reset 이전에 측정을 찍기 때문에 지금까지는 드러나지 않았을 뿐이다.
-
-- [ ] `--iterations`가 `opacity_reset_interval`의 배수일 때 held-out eval을 마지막 opacity reset 이전 상태로 측정하거나, 최소한 로그에 "reset 직후 평가"임을 경고하도록 한다.

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """Phase E (evidence) — candidate-region ObservationEvidence validation.
 
-docs/Urgent_Work/OSN_GS_Phase_E_Bounded_Candidate_Design.md sections 8-11,
+docs/Urgent_Work/OSN_GS_Boundary_Conditioned_Occlusion_Impl_Plan.md sections 8-11,
 impl plan section 7. Applied AFTER `build_geometric_region_candidates` has
 produced purely geometric candidates -- this is the only Phase E module that
 imports `torch_observation_evidence`, keeping the geometric builder evidence-free.

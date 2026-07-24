@@ -3,7 +3,7 @@ from __future__ import annotations
 """Phase D — boundary-local world-space sampled continuation strip.
 
 docs/Urgent_Work/OSN_GS_Boundary_Conditioned_Occlusion_Impl_Plan.md section 6,
-detailed design docs/Urgent_Work/OSN_GS_Phase_D_Continuation_Domain_Design.md
+detailed design docs/Urgent_Work/OSN_GS_Boundary_Conditioned_Occlusion_Impl_Plan.md
 (Design Revision 3, user-approved for implementation).
 
 Scope, exactly as approved -- do not extend beyond this without a separate

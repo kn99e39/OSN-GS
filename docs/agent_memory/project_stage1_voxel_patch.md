@@ -1,0 +1,25 @@
+---
+name: project-stage1-voxel-patch
+description: "Approved Stage 1 voxel-per-patch migration scope, ordering (A-E), and hard constraints from the user's 2026-07-16 approval"
+metadata: 
+  node_type: memory
+  type: project
+  originSessionId: ce2402f7-496a-46cf-8bcd-e1cd8bc965d3
+  modified: 2026-07-20T02:34:00.157Z
+---
+
+User approved Stage 1 of `OSN_GS_Voxel_Driven_NURBS_Migration_Plan.md` on 2026-07-16 with amendments. Scope and hard constraints:
+
+- Order: 1-A recursive raw-count voxel builder (parent/child, stable leaf IDs, AABBs, active/inactive/subdivided/complex/empty states, conservation test) → 1-B one NURBS patch per active leaf, fitted to **raw Gaussians inside the voxel** (not centroids), voxel-local PCA UV, reuse existing IDW/LSQ/foot-point fitter → 1-C support mask = **exact plane–AABB intersection polygon** projected to UV and rasterized into the existing `uv_support_mask` (forbidden: UV min-max rectangle as boundary, polygon→bbox conversion, density kernels/morphology/support-mass) → 1-E minimal viewer (all patches, deterministic color, voxel AABBs, states, mask applied to geometry AND iso-lines, patch isolate, union/hole diagnostic) runs parallel with 1-C, not last → 1-D metrics split per-patch vs **global patch-union** (holes computed on world-space union raster, never by summing per-patch UV masks; include overlap/gap ratios, tiny-component area histograms).
+- Benchmark path only: trainer/ADC lifecycle integration is deferred until the user approves the benchmark results.
+- Legacy constructor path must remain byte-identical (feature flag, regression test); Stage 2 concepts (support mass, voxel merging, multi-state confidence) must NOT leak into Stage 1.
+- Required ablations: legacy / stage1+mask-off / stage1+mask-on / min-count sweep / max-count+depth sweep, on plane, sine, planar_hole, crease, density_gradient, elongated_plane, mild_curved_sheet, close_parallel_sheets (last three are new scenes).
+- Record `N_gaussian / N_control_points` per patch; mark underdetermined patches explicitly, never hide them via regularization.
+- Stage 2 requires explicit user approval; stop and report after Stage 1 (report items listed in plan §4 / user msg).
+- Worklogs: user lifted the ban on 2026-07-19 for ONE topic — document the support-mode differences/characteristics in a worklog; otherwise still don't write worklogs unprompted.
+
+**Stage 1-F amendment (user, 2026-07-19):** sub-voxel density boundary moved from Stage 2 into Stage 1. Scope: leaf face adjacency with interior/exterior-support/unresolved classification; density refinement ONLY around exterior/unresolved faces (interior active leaves keep polygon-only support); 2D KDE on boundary-leaf tangent UV (bandwidth = multiple of UV NN spacing; no opacity/planarity weights); marching-squares sub-cell contour; refined support ⊆ voxel polygon; active-active faces must not be eroded (ε-overlap / conservative inclusion OK; morphology closing, global hole fill, GT-referencing special cases, per-scene threshold hardcoding all forbidden). Decisions: the interim `voxel_data` occupancy mode is DELETED (superseded); support modes are `voxel_density` (default) / `voxel` / `none`; the FULL Stage 1 config must be exposed in all three parity locations (colab_args, train script, notebook) even though the trainer doesn't consume stage1 yet.
+
+**Boundary-conformal GT + topology ideal (user directive, 2026-07-19):** the benchmark GT NURBS must be boundary-conformal — support topology in the parameterization itself (annulus/crescent = polar charts whose inner boundary IS the hole, u_shape = swept strip, triangle = degenerate-corner chart), never a rect chart + trim mask; this conformality is also the topology IDEAL for generated surfaces (metric `support_conformality` = fraction of support boundary realized as chart edges). Option (a) chosen: uniform-knot dense degree-2 circle approximations; exact rational circles would need per-patch knot vectors in payload+both evaluators (deferred option b). Note this sets a long-term direction that diverges from migration plan §4.12 ("hole은 trim으로") — the plan text was NOT edited; user's directive wins.
+
+**1-F implemented (2026-07-19):** density = per-sample adaptive-bandwidth KDE (bandwidth 2.0 x each sample's own UV NN spacing; unnormalized kernels make the value an "effective neighbor count"), threshold = absolute 2.0 effective neighbors — both chosen by cross-sweep and recorded in `TorchPipelineConfig` comments; relative-to-median-reference thresholds and fixed occupancy grids both failed on density_gradient (dense cluster skews the reference / grid scale). Active-active non-erosion = cross-face sample borrowing + protection strip. Mode differences documented in `docs/worklogs/28_stage1_support_modes.md`. Known open items for Stage 2: polygon seam tiny holes (~17/scene, refinement can't reduce them — it only subtracts), hole_count==1 not strictly achievable without forbidden morphology, density_gradient sparse retreat (union IoU 0.824->0.795).

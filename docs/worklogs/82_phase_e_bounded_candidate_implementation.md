@@ -6,7 +6,7 @@
 
 ## 1. 배경
 
-사용자가 Phase E 전체 방향과 상세 설계(`docs/Urgent_Work/OSN_GS_Phase_E_Bounded_Candidate_Design.md`)를 승인하고, 필수 교정 6건을 반영한 뒤 재승인 요청 없이 구현까지 진행하도록 지시했다. 이 문서는 그 구현 결과와 마스터 플랜(`OSN_GS_Boundary_Conditioned_Occlusion_Impl_Plan.md` §7)의 승인 게이트 E를 보고한다. 설계 단계 worklog는 지시대로 만들지 않았고, 기존 설계 문서 두 개(상세 설계, impl plan §7)에 교정을 반영했다.
+사용자가 Phase E 전체 방향과 상세 설계(`docs/Urgent_Work/OSN_GS_Boundary_Conditioned_Occlusion_Impl_Plan.md`)를 승인하고, 필수 교정 6건을 반영한 뒤 재승인 요청 없이 구현까지 진행하도록 지시했다. 이 문서는 그 구현 결과와 마스터 플랜(`OSN_GS_Boundary_Conditioned_Occlusion_Impl_Plan.md` §7)의 승인 게이트 E를 보고한다. 설계 단계 worklog는 지시대로 만들지 않았고, 기존 설계 문서 두 개(상세 설계, impl plan §7)에 교정을 반영했다.
 
 ## 2. 변경 파일
 
@@ -18,7 +18,7 @@
 
 **수정:**
 - `osn_gs/surface/__init__.py` — entry point + result/candidate/conflict 타입 export.
-- `docs/Urgent_Work/OSN_GS_Phase_E_Bounded_Candidate_Design.md` — 필수 교정 6건 반영.
+- `docs/Urgent_Work/OSN_GS_Boundary_Conditioned_Occlusion_Impl_Plan.md` — 필수 교정 6건 반영.
 - `docs/Urgent_Work/OSN_GS_Boundary_Conditioned_Occlusion_Impl_Plan.md` — §7 구체화, 상태선/§11 표/다음 승인 요청 갱신.
 
 **미변경(회귀 방지):** deprecated Stage 2 `torch_surface_candidate_graph.py`는 import·재배선하지 않았다. Production(`torch_pipeline.py`/`torch_trainer.py`) 미변경.

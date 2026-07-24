@@ -21,6 +21,27 @@ from typing import Any
 from osn_gs.utils.torch_ops import psnr_from_mse, require_torch
 
 
+def final_iteration_opacity_reset_applies(
+    iteration: int,
+    opacity_reset_interval: int,
+    densify_until_iter: int,
+) -> bool:
+    """Whether the completed model was opacity-reset at ``iteration``.
+
+    The reset happens inside the training loop before a post-training
+    held-out evaluation can render the model. Keep this scheduling predicate
+    pure so both CLI entry points can report the evaluation state without
+    changing training or evaluation semantics.
+    """
+
+    return (
+        int(opacity_reset_interval) > 0
+        and int(iteration) > 0
+        and int(iteration) < int(densify_until_iter)
+        and int(iteration) % int(opacity_reset_interval) == 0
+    )
+
+
 def evaluate_held_out_cameras(
     rasterizer: Any,
     model: Any,

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """Surface-agnostic parametric-Jacobian and orientation-consistency helpers.
 
-Extracted (Phase D prerequisite, docs/Urgent_Work/OSN_GS_Phase_D_Continuation_Domain_Design.md
+Extracted (Phase D prerequisite, docs/Urgent_Work/OSN_GS_Boundary_Conditioned_Occlusion_Impl_Plan.md
 section 9) from `torch_annulus_chart.py`'s `_jacobian_diagnostics`, which mixed
 two responsibilities (singular-value/condition computation, and a single-
 reference orientation-consistency check) and required a `TorchNURBSSurface`

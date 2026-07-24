@@ -10,5 +10,8 @@
 | 73-B | Urgent_Work 계획 폐기와 현재 게이트 정리 |
 | 77-A | Boundary-Conditioned Phase C observation evidence |
 | 77-B | anisotropy parity ablation 결과 |
+| 84-A | Held-out eval opacity reset 경고 |
+| 84-B | Phase F.1 chart hardening 구현 |
+| 85 | Phase F.1 Gate 보완 진행 상태 |
 
 새 worklog는 현재 가장 큰 정수 식별자 다음 번호를 사용한다. 병렬 작업을 같은 번호로 추가해야 하면 suffix를 부여하고, 이 표·파일 제목·모든 Markdown 링크를 같은 변경에서 함께 갱신한다.

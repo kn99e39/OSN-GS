@@ -1,0 +1,14 @@
+- [OSN-GS direction & constraints](project_osn_gs_direction.md) — surface-centric design, Stage 1 boundary, no perf-motivated NURBS/voxel disabling
+- [OSN-GS onboarding docs map](reference_osn_gs_docs.md) — reading order for docs/*.md and TODO.md at session start
+- [Notebook/CLI training parity](project_notebook_cli_parity.md) — defaults duplicated in 3 places; VRAM-safe shared recipe; keep in sync
+- [Baseline 3DGS comparison](project_baseline_comparison.md) — building/running local gaussian-splatting here; /Zc:preprocessor + arch; resolution/loss fairness caveats
+- [Branch rule](project_branch_rule.md) — all work only on voxel-surface-regions branch
+- [Stage 1 voxel-per-patch](project_stage1_voxel_patch.md) — approved scope A–E, exact polygon mask, global-union metrics, benchmark-only, no worklogs until asked
+- [Boundary-First direction, Phase 1-4 hardening (closed) + Phase 5 kickoff](project_boundary_first_phase1.md) — HISTORICAL background; seam-angle search exhausted (52-53); Step 5-A coupled patch-boundary fit PRODUCTION ADOPTED (worklog 55-56); superseded as active direction by [[project_boundary_conditioned_occlusion]]
+- [Boundary-conditioned occlusion direction reset (active, 2026-07-23)](project_boundary_conditioned_occlusion.md) — Phase A-F done, Gate B/C/D/E approved + Gate F reported; only Phase G pre-authorized next; no production wiring yet
+- [Verify current state before reacting to corrections](feedback_verify_before_reacting.md) — check what's already done and report first, don't blindly redo on a 2nd/3rd review round
+- [Wire new phases into osn-gs benchmark, not new scripts](feedback_benchmark_cli_unification.md) — don't fork phaseN_report.py scripts; check the flag's *default*, not just that the choice exists; verify claims by running the real command, don't trust worklogs
+- [Worklogs must be in Korean](feedback_worklog_korean.md) — docs/worklogs/*.md entries in Korean regardless of nearby worklogs' language
+- [Deferred follow-ups: speed + quality gap](project_deferred_followups.md) — training speed AND scene quality gap vs baseline both parked until NURBS representation is complete; revisit together
+- [Commit scope: include other agents' work too](feedback_commit_scope.md) — when told to commit, cross-reference worklogs and bundle concurrent agents' changes, don't narrowly scope to Claude's own files only
+- [Mirror memory into repo for Codex](feedback_inrepo_memory_mirror.md) — every memory add/edit also gets copied into docs/agent_memory/ in the project so parallel agents can read it

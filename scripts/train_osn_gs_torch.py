@@ -11,7 +11,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from osn_gs.core.torch_pipeline import TorchPipelineConfig
 from osn_gs.core.torch_trainer import TorchOSNGSTrainer, TorchTrainingConfig
 from osn_gs.data.colmap_scene import load_colmap_scene, load_colmap_scene_with_eval_split
-from osn_gs.eval.held_out_metrics import evaluate_held_out_cameras
+from osn_gs.eval.held_out_metrics import (
+    evaluate_held_out_cameras,
+    final_iteration_opacity_reset_applies,
+)
 from osn_gs.gaussian.torch_density_control import TorchDensityControlConfig
 from osn_gs.interop.colab_args import (
     add_stage1_constructor_arguments,
@@ -318,6 +321,17 @@ def main() -> None:
     )
 
     if eval_split is not None:
+        post_opacity_reset = final_iteration_opacity_reset_applies(
+            result.state.iteration,
+            trainer.training_config.density_control.opacity_reset_interval,
+            trainer.training_config.density_control.densify_until_iter,
+        )
+        if post_opacity_reset:
+            print(
+                "OSN-GS held-out eval warning: final iteration coincides with an opacity reset; "
+                "the reported metrics describe the reset model and are not comparable to a pre-reset checkpoint.",
+                flush=True,
+            )
         held_out = evaluate_held_out_cameras(
             trainer.rasterizer, result.state.model, eval_split.test_cameras, eval_split.test_images, device=device,
         )
@@ -339,6 +353,7 @@ def main() -> None:
                         "resolution": list(eval_split.resolution),
                         "downscale_factor": eval_split.downscale_factor,
                         "llffhold": args.llffhold,
+                        "post_opacity_reset": post_opacity_reset,
                         **held_out,
                     },
                     indent=2,

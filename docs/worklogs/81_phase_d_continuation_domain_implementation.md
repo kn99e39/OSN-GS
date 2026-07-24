@@ -6,7 +6,7 @@
 
 ## 1. 배경
 
-사용자가 Phase D의 큰 방향과 설계 Revision 3(`docs/Urgent_Work/OSN_GS_Phase_D_Continuation_Domain_Design.md`)을 승인하고 구현 착수를 지시했다. 이 문서는 그 구현 결과와 마스터 플랜(`docs/Urgent_Work/OSN_GS_Boundary_Conditioned_Occlusion_Impl_Plan.md` §6)이 요구하는 승인 게이트 D — "continuation strip의 방향·크기·결정성을 보고하고 멈춘다" — 를 보고한다.
+사용자가 Phase D의 큰 방향과 설계 Revision 3(`docs/Urgent_Work/OSN_GS_Boundary_Conditioned_Occlusion_Impl_Plan.md`)을 승인하고 구현 착수를 지시했다. 이 문서는 그 구현 결과와 마스터 플랜(`docs/Urgent_Work/OSN_GS_Boundary_Conditioned_Occlusion_Impl_Plan.md` §6)이 요구하는 승인 게이트 D — "continuation strip의 방향·크기·결정성을 보고하고 멈춘다" — 를 보고한다.
 
 ## 2. Prerequisite 리팩터
 

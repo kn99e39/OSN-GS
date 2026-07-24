@@ -382,12 +382,10 @@ The local Graphdeco notebook cells read/write patched Python sources with explic
 
 - Constructor benchmark renderer exports now keep generated and GT NURBS in separate sibling folders: NURBS_output/scene and NURBS_output/scene_gt. Both use the renderer-standard filename nurbs_surface.json, so loading directories no longer combines two same-type surfaces in one snapshot. See docs/worklogs/32_benchmark_gt_folder_split.md.
 
-## 2026-07-20 Governing NURBS Construction Plan
+## 2026-07-20 Governing NURBS Construction Plan (superseded 2026-07-23)
 
-- [OSN_GS_Final_Boundary_First_NURBS_Direction.md](Urgent_Work/OSN_GS_Final_Boundary_First_NURBS_Direction.md) is the governing plan for future NURBS construction work. It requires boundary-first topology, component-level Gaussian geometry fitting, topology-aware chart generation, benchmark-only phased implementation, and an explicit user approval gate after every phase.
-- Current execution state: Boundary-First reached Phase 5 and adopted Step 5-A, then reopened Phase 1 remediation for curved component/topology failures. Pairwise proxy and Gaussian-native continuity methods were rejected; Phase 5 remains blocked until a separately approved neighborhood/manifold-level method passes.
-- Retired voxel-migration and rejected proxy-decomposition plans were removed. Their implementation evidence remains in `docs/worklogs/` and `artifacts/`.
-- Cleanup details and the current resume gate are recorded in `docs/worklogs/73b_urgent_work_plan_retirement.md`.
+- The Boundary-First direction (`OSN_GS_Final_Boundary_First_NURBS_Direction.md`) and its Phase 5 extension plan were retired on 2026-07-23 by the direction reset and their now-non-urgent docs were removed from `docs/Urgent_Work/`. The Boundary-First *production code path* (Step 5-A coupled boundary fit, etc.) is preserved unchanged; its completed experiments remain in `docs/worklogs/` (39–56) and the initial retirement in `docs/worklogs/73b_urgent_work_plan_retirement.md`.
+- Current governing methodology: [OSN_GS_Direction_Reset_Plan.md](Urgent_Work/OSN_GS_Direction_Reset_Plan.md) (top-level, boundary-conditioned occluded-surface construction) with the active gate in [OSN_GS_Boundary_Conditioned_Occlusion_Impl_Plan.md](Urgent_Work/OSN_GS_Boundary_Conditioned_Occlusion_Impl_Plan.md). Phases A–E are implemented and Gate A–E approved; Phase F is next.
 
 ## 2026-07-20 Phase 2 Component Boundary Baseline
 
@@ -492,7 +490,7 @@ The local Graphdeco notebook cells read/write patched Python sources with explic
 - 사용자가 Phase D의 구현이 아니라 **설계**를 요청했다. `osn_gs/surface/torch_nurbs.py`(NURBS derivative/knot API)와 `osn_gs/surface/torch_annulus_chart.py`(Jacobian singular-value 진단, 과거 seam-placement 실험) + 과거 pre-reset 확장 설계 문서 2개를 먼저 감사한 뒤 설계했다.
 - 핵심 감사 결과: knot vector는 `[0,1]`에 하드코딩된 clamped uniform B-spline이라 domain을 넘어 확장하는 헬퍼가 없고, `PatchBoundarySegment`는 실제 `TorchNURBSSurface` 참조를 갖지 않으며, `predict_torch_occlusion_curves`/`build_torch_surface`/`sample_torch_occluded_surface`는 자체 docstring이 "Stage 2 legacy"로 명시하고 호출부가 없는 pre-reset 코드였다.
 - 설계 결론: continuation domain은 `TorchNURBSSurface`를 확장하는 대신, boundary의 analytic `S_u`/`S_v`/`S_uu`/`S_uv`/`S_vv`로부터 매번 닫힌형으로 평가되는 별도의 경량 `ContinuationDomain` 객체로 만든다(1차 Taylor를 canonical baseline, 2차는 curvature-aware uncertainty 전용). Outward 방향은 최소자승 기반 축-비의존 general formula로 구하고 `inner_uv`(Phase A 산출물)로 부호를 정한다. `torch_annulus_chart.py`의 Jacobian-SVD 진단을 surface-agnostic 헬퍼로 추출하는 순수 리팩터가 구현 착수 전 prerequisite로 식별됐다. Self-intersection/역침범 전체 검사는 마스터 플랜이 이미 Phase F 소유로 규정하므로 Phase D는 로컬 proxy만 제공한다. Boundary pairing은 Phase E 몫이며 Phase D는 `aabb_min`/`aabb_max` 등 최소 interface만 제공한다. Phase C evidence 결합은 `ContinuationDomain.world.reshape(-1,3)`이 `classify_world_samples`의 입력 형태와 이미 일치한다는 interface 문서화만 하고 호출하지 않는다.
-- 전체 설계는 `docs/Urgent_Work/OSN_GS_Phase_D_Continuation_Domain_Design.md`(입력/출력 계약, construction 방법, validity 조건, boundary pairing 관계, fixture 12건, 대안 비교, 최소 구현 범위)에 기록했다. 코드는 작성하지 않았다. 상세 근거는 `docs/worklogs/80_phase_d_continuation_domain_design.md`를 참고한다. Phase D 구현, Phase C evidence 실제 결합, Phase E candidate 생성, production integration은 모두 별도 승인 전까지 시작하지 않는다.
+- Phase D continuation domain은 구현·Gate D 승인 완료다. canonical 계약은 `docs/Urgent_Work/OSN_GS_Boundary_Conditioned_Occlusion_Impl_Plan.md` §6, 구현 근거는 `docs/worklogs/81_phase_d_continuation_domain_implementation.md`를 따른다. Phase C evidence 실제 결합과 production integration은 여전히 별도 범위다.
 - **설계 revision 2/3 (같은 날, worklog 80 §7/§8)**: 사용자가 두 차례 더 설계만 교정했다(코드 없음). Revision 2: outward 방향을 UV-space 최소자승에서 순수 world-space 공식(`N=normalize(Su×Sv)`, `C=normalize(N×T)`, inner_world로 부호 선택)으로 전면 교체, sampled grid를 continuous evaluate() 대신 canonical source of truth로 확정, 상태명을 `candidate/degenerate/rejected`에서 `valid/degenerate/rejected`로 변경. Revision 3: `boundary_length` 필드로 closed-loop arclength 계약 완성, 인접 duplicate/zero-length segment를 `ValueError`로 명시적 거부, `ContinuationDomainBuildError` 신규 예외로 pre-grid 실패와 사후 품질 문제(`state=degenerate/rejected`) 분리, `local_surface_scale`의 canonical 집계 공식(`L_boundary`/`L_inner`/`L_control` median, 최소 2개 필요) 확정, second-order diagnostic 명칭을 `curvature_growth_ratio`에서 `second_order_growth_ratio`/`second_order_displacement_at_extent`로 개명(intrinsic curvature 아님을 명시).
 - **구현 완료 (같은 날, worklog 81)**: 사용자가 "D 구현 시작해"로 착수를 승인했다. Prerequisite로 `osn_gs/surface/torch_parametric_diagnostics.py`(`compute_parametric_jacobian_metrics`, `compute_orientation_consistency`)를 신설하고 `torch_annulus_chart.py`가 이를 호출하도록 리팩터(필드명/수치 불변, `tests/test_annulus_chart.py` 48개 회귀 없음). 신규 `osn_gs/surface/torch_continuation_domain.py`(`ContinuationDomain`, `ContinuationDomainBuildError`, `build_continuation_domain`, `interpolate_boundary_arclength`)를 설계 그대로 구현했다. 구현 중 설계 §2.3("모든 샘플이 degenerate하면 `ContinuationDomainBuildError`")을 최초 구현이 빠뜨린 간극을 테스트 작성 중 발견해 수정했다(설계 문서는 무변경). `tests/test_continuation_domain.py` 22개 전부 통과, 전체 pytest `260 passed, 1 skipped, 8 subtests passed`, 전체 unittest `261 tests, OK`, 회귀 없음. Production(`torch_pipeline.py`/`torch_trainer.py`) 미변경, Phase C evidence 미호출. 마스터 플랜의 승인 게이트 D(continuation strip 방향·크기·결정성 보고)를 완료했다. 상세 근거는 `docs/worklogs/81_phase_d_continuation_domain_implementation.md`를 참고한다. Phase C evidence 실제 결합, Phase E candidate 생성, Phase F NURBS fitting, production integration은 모두 별도 승인 전까지 시작하지 않는다.
 
@@ -513,3 +511,12 @@ The local Graphdeco notebook cells read/write patched Python sources with explic
 ## 워크로그 번호 규칙
 
 - 병렬 작업 때문에 같은 번호가 발생한 기록은 `NN-A` / `NN-B` suffix를 canonical 식별자로 사용한다. 충돌 목록과 신규 기록 규칙은 `docs/worklogs/README.md`에 정리했다.
+
+## 2026-07-24 Held-out 평가 opacity reset 식별
+
+- `--eval` run의 마지막 iteration이 opacity reset 조건과 겹치면 콘솔 경고와 `held_out_eval.json`의 `post_opacity_reset`으로 명시한다. 학습·평가 결과 자체는 변경하지 않으며, reset 직후 수치를 정상 checkpoint 품질로 해석하지 않게 하는 측정 안전장치다. 상세는 `docs/worklogs/84a_held_out_eval_opacity_reset_warning.md`.
+
+
+## 2026-07-24 Phase F.1 Gate 보완 진행 상태
+
+- Phase F.1 sampled safety gate는 central-bridge eligibility 정책과 sampled visible-surface 의미를 보완했으나, 필수 fixture 확장 중 발견된 provenance fixture 및 conflict-edge payload 결함을 수정 중이다. Gate F.1은 승인 대기이며 상세 진행 기록은 `docs/worklogs/85_phase_f1_gate_completion_followup.md`.

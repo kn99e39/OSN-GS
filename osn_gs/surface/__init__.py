@@ -25,6 +25,17 @@ from osn_gs.surface.torch_continuation_domain import (
     ContinuationDomainBuildError,
     build_continuation_domain,
 )
+from osn_gs.surface.torch_occluded_chart import (
+    OccludedChartFitConfig,
+    OccludedChartResult,
+    fit_occluded_chart,
+)
+from osn_gs.surface.torch_occluded_chart_hardening import (
+    OccludedChartHardeningConfig, OccludedChartSafetyResult, evaluate_occluded_chart_safety,
+)
+from osn_gs.surface.torch_chart_conflict import (
+    OccludedChartConflictEdge, attach_conflict_edges, build_occluded_chart_conflicts,
+)
 from osn_gs.surface.torch_occluded_region_candidate import (
     ConflictEdge,
     CorrespondenceEdge,
@@ -58,6 +69,11 @@ __all__ = [
     "CorrespondenceEdge",
     "EmptyVoxelSupportResult",
     "ObservationEvidence",
+    "OccludedChartFitConfig",
+    "OccludedChartHardeningConfig",
+    "OccludedChartSafetyResult",
+    "OccludedChartConflictEdge",
+    "OccludedChartResult",
     "OccludedRegionCandidate",
     "PatchBoundarySegment",
     "PatchEdgePair",
@@ -69,7 +85,9 @@ __all__ = [
     "TorchNURBSSurface",
     "TorchVoxelSurfaceRegions",
     "boundary_control_indices",
+    "attach_conflict_edges",
     "build_candidate_conflicts",
+    "build_occluded_chart_conflicts",
     "build_continuation_domain",
     "build_geometric_region_candidates",
     "build_observation_evidence",
@@ -77,8 +95,10 @@ __all__ = [
     "build_torch_surface",
     "build_torch_voxel_surface_regions",
     "classify_world_samples",
+    "evaluate_occluded_chart_safety",
     "extract_trimmed_patch_boundaries",
     "fit_coupled_patch_graph_lsq",
+    "fit_occluded_chart",
     "fit_reconciled_patch_graph",
     "fit_torch_base_curves",
     "fit_torch_visible_surface",

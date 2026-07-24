@@ -11,7 +11,10 @@ try:
 except ImportError:  # pragma: no cover
     torch = None
 
-from osn_gs.eval.held_out_metrics import evaluate_held_out_cameras
+from osn_gs.eval.held_out_metrics import (
+    evaluate_held_out_cameras,
+    final_iteration_opacity_reset_applies,
+)
 
 
 @dataclass
@@ -32,6 +35,13 @@ class _FakeRasterizer:
 
 @unittest.skipUnless(torch is not None, "PyTorch is required")
 class HeldOutMetricsTest(unittest.TestCase):
+    def test_final_iteration_opacity_reset_predicate_matches_trainer_schedule(self):
+        self.assertTrue(final_iteration_opacity_reset_applies(3000, 3000, 15_000))
+        self.assertTrue(final_iteration_opacity_reset_applies(6000, 3000, 15_000))
+        self.assertFalse(final_iteration_opacity_reset_applies(15_000, 3000, 15_000))
+        self.assertFalse(final_iteration_opacity_reset_applies(2999, 3000, 15_000))
+        self.assertFalse(final_iteration_opacity_reset_applies(3000, 0, 15_000))
+
     def test_perfect_match_gives_infinite_psnr_and_high_ssim(self):
         target = torch.rand(3, 16, 16)
         cameras = [_FakeCamera("a.jpg"), _FakeCamera("b.jpg")]

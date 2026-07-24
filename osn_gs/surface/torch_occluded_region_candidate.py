@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """Phase E (geometric) — pairwise bounded occluded-region candidate builder.
 
-docs/Urgent_Work/OSN_GS_Phase_E_Bounded_Candidate_Design.md,
+docs/Urgent_Work/OSN_GS_Boundary_Conditioned_Occlusion_Impl_Plan.md,
 impl plan docs/Urgent_Work/OSN_GS_Boundary_Conditioned_Occlusion_Impl_Plan.md section 7.
 
 Purely geometric: pairs `ContinuationDomain`s, builds a `(s,t)`-indexed

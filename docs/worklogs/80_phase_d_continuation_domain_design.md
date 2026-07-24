@@ -13,7 +13,7 @@
 >
 > 현재 canonical Phase D 계약은:
 > - 이 파일의 revision 2 이후 절(§7, §8)
-> - `docs/Urgent_Work/OSN_GS_Phase_D_Continuation_Domain_Design.md`
+> - `docs/Urgent_Work/OSN_GS_Boundary_Conditioned_Occlusion_Impl_Plan.md`
 >
 > 를 따른다.
 >
@@ -25,7 +25,7 @@
 > `local_surface_scale`의 canonical 집계 공식, `ContinuationDomainBuildError`를
 > 이용한 pre-grid 실패 구분, second-order diagnostic 명칭(`second_order_*`)도
 > §7 시점 이후 다시 한 번 개정됐다 — §7만 읽고 최신이라고 오해하지 말 것.
-> 항상 `OSN_GS_Phase_D_Continuation_Domain_Design.md` 자체를 canonical
+> 항상 `OSN_GS_Boundary_Conditioned_Occlusion_Impl_Plan.md` 자체를 canonical
 > source로 확인한다.
 
 ---
@@ -55,7 +55,7 @@
 
 ## 3. 설계 결과 요약
 
-전체 설계는 `docs/Urgent_Work/OSN_GS_Phase_D_Continuation_Domain_Design.md`에 기록했다. 핵심 결정만 요약한다.
+전체 설계는 `docs/Urgent_Work/OSN_GS_Boundary_Conditioned_Occlusion_Impl_Plan.md`에 기록했다. 핵심 결정만 요약한다.
 
 ### Outward 방향 — 축-비의존 general formula
 
@@ -87,7 +87,7 @@ Phase D는 boundary 하나당 독립된 `ContinuationDomain` 하나만 만든다
 
 ## 5. 문서 갱신
 
-- `docs/Urgent_Work/OSN_GS_Phase_D_Continuation_Domain_Design.md`(신규): 요청받은 8개 섹션 전체(입력 계약, 출력 계약, construction 방법, validity 조건, boundary pairing, fixture/test 계획 12건, 대안 비교, 권장 최소 구현 범위) + 승인 게이트 D 보고 표 초안(구현 후 채울 빈 표).
+- `docs/Urgent_Work/OSN_GS_Boundary_Conditioned_Occlusion_Impl_Plan.md`(신규): 요청받은 8개 섹션 전체(입력 계약, 출력 계약, construction 방법, validity 조건, boundary pairing, fixture/test 계획 12건, 대안 비교, 권장 최소 구현 범위) + 승인 게이트 D 보고 표 초안(구현 후 채울 빈 표).
 - `docs/Urgent_Work/OSN_GS_Boundary_Conditioned_Occlusion_Impl_Plan.md`: 최상위 상태 줄과 §11(승인 상태) 갱신 — Gate C 최종 승인 기록, Phase D를 "설계 완료, 구현 미승인"으로 표시, §6(Phase D) 작업 목록에 prerequisite 리팩터와 `reconciled_internal` 제외 규칙을 명시적으로 추가.
 - `docs/README.md`: 요약 항목 추가(다음 절에서 이어짐).
 
@@ -101,7 +101,7 @@ Phase D는 boundary 하나당 독립된 `ContinuationDomain` 하나만 만든다
 
 ## 7. 사용자 검토 후 설계 수정 (revision 2)
 
-사용자가 Phase D의 큰 방향(마스터 플랜 §6 역할 제한: "Visible NURBS boundary → sampled continuation strip → validity/uncertainty metadata"만 하고 최종 NURBS chart는 만들지 않음)은 승인했으나, §1-10 설계 문서 상태로는 구현 착수를 승인하지 않고 11개 항목의 교정을 요구했다. 새 문서를 만들지 않고 기존 두 파일(`OSN_GS_Phase_D_Continuation_Domain_Design.md`, `OSN_GS_Boundary_Conditioned_Occlusion_Impl_Plan.md`)만 수정했다.
+사용자가 Phase D의 큰 방향(마스터 플랜 §6 역할 제한: "Visible NURBS boundary → sampled continuation strip → validity/uncertainty metadata"만 하고 최종 NURBS chart는 만들지 않음)은 승인했으나, §1-10 설계 문서 상태로는 구현 착수를 승인하지 않고 11개 항목의 교정을 요구했다. 새 문서를 만들지 않고 기존 두 파일(`OSN_GS_Boundary_Conditioned_Occlusion_Impl_Plan.md`, `OSN_GS_Boundary_Conditioned_Occlusion_Impl_Plan.md`)만 수정했다.
 
 ### 반영한 핵심 교정
 
@@ -130,11 +130,11 @@ Phase D는 boundary 하나당 독립된 `ContinuationDomain` 하나만 만든다
 - `patch_id -> TorchNURBSSurface` 매핑 관례는 여전히 caller 책임이며 아직 확정되지 않았다.
 - `expected_patch_id` 자기일관성 체크만으로는 잘못된 surface/boundary 조합을 완전히 막을 수 없다는 한계를 설계 문서 §2에 명시했다.
 
-계획대로 문서 두 개(`OSN_GS_Phase_D_Continuation_Domain_Design.md`, `OSN_GS_Boundary_Conditioned_Occlusion_Impl_Plan.md`)만 수정하고 멈춘다. 새 worklog는 만들지 않았다. Phase D 코드 구현, Phase C evidence 실제 결합, Phase E candidate 생성, Phase F NURBS fitting, production integration은 모두 별도 승인 전까지 시작하지 않는다.
+계획대로 문서 두 개(`OSN_GS_Boundary_Conditioned_Occlusion_Impl_Plan.md`, `OSN_GS_Boundary_Conditioned_Occlusion_Impl_Plan.md`)만 수정하고 멈춘다. 새 worklog는 만들지 않았다. Phase D 코드 구현, Phase C evidence 실제 결합, Phase E candidate 생성, Phase F NURBS fitting, production integration은 모두 별도 승인 전까지 시작하지 않는다.
 
 ## 8. 사용자 검토 후 설계 수정 (revision 3)
 
-사용자가 Phase D의 큰 방향과 revision 2의 핵심 수학 계약(world-space outward 공식, sampled-grid source of truth, first-order canonical geometry, 상태 이름 `valid/degenerate/rejected` 등)을 승인했다. 다만 구현 착수 전 마지막으로 문서 5개 보완 항목(+ worklog banner, impl plan 상태 갱신)을 요구했다. 새 문서를 만들지 않고 기존 세 파일(`OSN_GS_Phase_D_Continuation_Domain_Design.md`, `OSN_GS_Boundary_Conditioned_Occlusion_Impl_Plan.md`, 이 worklog)만 수정했다.
+사용자가 Phase D의 큰 방향과 revision 2의 핵심 수학 계약(world-space outward 공식, sampled-grid source of truth, first-order canonical geometry, 상태 이름 `valid/degenerate/rejected` 등)을 승인했다. 다만 구현 착수 전 마지막으로 문서 5개 보완 항목(+ worklog banner, impl plan 상태 갱신)을 요구했다. 새 문서를 만들지 않고 기존 세 파일(`OSN_GS_Boundary_Conditioned_Occlusion_Impl_Plan.md`, `OSN_GS_Boundary_Conditioned_Occlusion_Impl_Plan.md`, 이 worklog)만 수정했다.
 
 ### 반영한 교정
 
@@ -159,4 +159,4 @@ Phase D는 boundary 하나당 독립된 `ContinuationDomain` 하나만 만든다
 - `patch_id -> TorchNURBSSurface` 매핑 관례는 여전히 caller 책임이며 아직 확정되지 않았다.
 - `arclength_epsilon`의 정확한 기본값/scale-aware 도출 방식은 이 문서에서 고정하지 않았다 — 구현 착수 시점에 확정한다.
 
-계획대로 문서 세 개(`OSN_GS_Phase_D_Continuation_Domain_Design.md`, `OSN_GS_Boundary_Conditioned_Occlusion_Impl_Plan.md`, 이 worklog)만 수정하고 멈춘다. 새 worklog나 새 설계 문서는 만들지 않았다. Phase D 코드 구현, diagnostics helper 리팩터, Phase C evidence 호출, Phase E/F 작업, production integration은 모두 사용자 승인 전까지 시작하지 않는다.
+계획대로 문서 세 개(`OSN_GS_Boundary_Conditioned_Occlusion_Impl_Plan.md`, `OSN_GS_Boundary_Conditioned_Occlusion_Impl_Plan.md`, 이 worklog)만 수정하고 멈춘다. 새 worklog나 새 설계 문서는 만들지 않았다. Phase D 코드 구현, diagnostics helper 리팩터, Phase C evidence 호출, Phase E/F 작업, production integration은 모두 사용자 승인 전까지 시작하지 않는다.

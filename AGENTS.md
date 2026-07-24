@@ -174,6 +174,7 @@ Do not spend time retrying those commands inside the restricted sandbox. Treat t
 - Keep `docs/architecture.md` focused on framework-level design decisions. Keep `AGENTS.md` focused on environment, workflow, and agent-operation rules.
 - When changing notebook training behavior, record the user-visible knobs and their intended semantics in `docs/README.md`.
 - Do not rely on chat-only memory for decisions such as "NURBS/Voxel must stay strongly integrated" or "uncertain-to-certain promotion is forbidden".
+- 2026-07-24: `docs/agent_memory/` is an in-repo mirror of Claude Code's persistent auto-memory (user-preference/feedback/project-state notes accumulated across Claude sessions on this project), kept there specifically so Codex and other agents can read it too. See `docs/agent_memory/README.md` for the sync convention. Claude keeps this mirror in sync whenever it updates its own memory; other agents should treat it as read-only project history, not as instructions.
 
 ## 2026-07-10 Legacy Prototype Framework Removed
 
