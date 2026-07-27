@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from osn_gs.gaussian.torch_model import TorchGaussianModel
+from osn_gs.gaussian.torch_surface_ownership import is_visible_patch_owned
 from osn_gs.surface.torch_nurbs import (
     TorchCurveSet,
     TorchNURBSSurface,
@@ -815,7 +816,16 @@ class TorchOSNGSPipeline:
             patch, _ = self._fit_visible_patch(component_points, resolution_u, resolution_v)
             new_patch_id = len(state.surface_patches)
             state.surface_patches.append(patch)
+            # Ownership synchronization invariant (docs/worklogs Occluded
+            # Chart Ownership Foundation): surface_owner_kind==VISIBLE_PATCH
+            # rows must always have surface_owner_id==cluster_id. This is the
+            # only production site that reassigns a certain Gaussian's patch
+            # membership after initial bootstrap, so both fields update
+            # together here. `component_indices` is already restricted to
+            # `~model.is_uncertain` (see the mask this loop's caller built),
+            # so no occluded-chart-owned row is ever touched by this line.
             model.cluster_ids[component_indices] = new_patch_id
+            model.surface_owner_id[component_indices] = new_patch_id
             model.surface_uv[component_indices] = project_torch_points_to_nurbs(
                 component_points,
                 patch,
@@ -1019,13 +1029,20 @@ class TorchOSNGSPipeline:
         dilation = max(0, int(self.config.surface_trim_dilation))
         uv = model.surface_uv.detach()
         cluster_ids = model.cluster_ids.detach()
+        # Ownership gate (docs/worklogs Occluded Chart Ownership Foundation):
+        # a visible patch's UV support/trim footprint must reflect only
+        # visible-patch-owned (observed) Gaussians. Without this gate, an
+        # occluded-chart-owned uncertain Gaussian whose `cluster_ids`
+        # compatibility projection happens to equal `patch_id` would inflate
+        # this patch's support mask with a location no camera ever observed.
+        visible_owned = is_visible_patch_owned(model.surface_owner_kind.detach())
         n_patches = len(patches)
         selected_patch_ids = range(n_patches) if patch_ids is None else patch_ids
         for patch_id in selected_patch_ids:
             patch = patches[patch_id]
-            assigned = cluster_ids == patch_id
+            assigned = visible_owned & (cluster_ids == patch_id)
             if patch_id == 0:
-                assigned = assigned | (cluster_ids < 0) | (cluster_ids >= n_patches)
+                assigned = assigned | (visible_owned & ((cluster_ids < 0) | (cluster_ids >= n_patches)))
             patch.uv_support_mask = self._uv_occupancy_mask(uv[assigned], resolution, dilation)
 
     @staticmethod

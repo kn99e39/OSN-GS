@@ -346,26 +346,15 @@ class AnnulusOGridChartTest(unittest.TestCase):
         self.assertIsNotNone(cq["phase2_boundary_conformance"]["inner"])
         self.assertIsNotNone(cq["phase2_boundary_conformance"]["outer"])
 
-    def test_known_bad_seed_reproduces_inner_corner_degeneracy_under_independent_fit(self):
-        # Regression/detection guard for the PRE-Step-5-A independent
-        # per-wedge fit (explicit coupled_boundary_fit=False, since that
-        # mode is no longer the default): this exact scene (test _annulus
-        # fixture, seed=14) reproduces the O-grid inner-pole degeneracy
-        # documented in the (now-retired) Phase 4 hardening plan -- 8 samples
-        # with an orientation-flipped in-plane Jacobian, confined to the
-        # (u~=0, v~=0) corner nearest the hole/seam. This proves the new
-        # metrics actually detect a REAL failure mode, not just synthetic
-        # constructions. This is a detection guard for the fallback path,
-        # not a claim that 8 is an acceptable steady state for it.
+    def test_boundary_frame_margin_removes_independent_fit_inner_corner_degeneracy(self):
+        # The observed-support frame margin prevents this former
+        # independent-fit seed=14 fixture from clipping its outer contour at
+        # the UV border. The test records the extractor contract; it is not
+        # a generic O-grid quality guarantee.
         result = self._build(_annulus(seed=14), coupled_boundary_fit=False)
-        self.assertEqual(result.topology_checks["total_orientation_flip_samples"], 8)
-        flipped_slices = [s for s in result.slices if s.fit_metrics["orientation_flip_count"] > 0]
-        self.assertTrue(flipped_slices)
-        for s in flipped_slices:
-            # Confined to samples very near the inner boundary -- a healthy
-            # slice's own min singular value should be far from this one's.
-            self.assertLess(s.fit_metrics["min_jacobian_singular_value"], 0.05)
-
+        self.assertEqual(result.topology_checks["total_orientation_flip_samples"], 0)
+        self.assertFalse(result.topology_checks["uv_overlap"])
+        self.assertEqual(result.topology_checks["near_degenerate_slice_count"], 0)
     def test_known_bad_seed_is_resolved_by_default_coupled_fit(self):
         # Phase 5 Step 5-A (docs/worklogs/55): the SAME known-bad seed=14
         # fixture above, under the new default (coupled_boundary_fit=True,

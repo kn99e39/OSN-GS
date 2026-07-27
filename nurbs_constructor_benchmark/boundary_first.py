@@ -362,9 +362,26 @@ def renderer_payload(
     scene_name: str,
     patches: list[dict[str, Any]],
     patch_boundaries: list[dict[str, Any]] | None = None,
+    *,
+    boundary_first_review: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
+    """Build the renderer-facing export.
+
+    ``boundary_first_review`` is an isolated-pipeline-only addition (one entry
+    per visible-result component) carrying observed-evidence, control-polygon,
+    and actual-evaluated-curve review layers -- ``observed_outer_boundary``,
+    ``observed_inner_boundary``, ``observed_interior_anchor``,
+    ``support_control_polygons``/``evaluated_support_curves``,
+    ``outer_boundary_control_polygons``/``reconstructed_outer_boundary``,
+    ``inner_boundary_control_polygons``/``reconstructed_inner_boundary``,
+    ``support_correspondence_chords``, ``support_crossing``, plus boundary
+    roles/correspondence -- kept as clearly distinct representation kinds
+    (see ``osn_gs.surface.torch_boundary_review_geometry``). It is optional and
+    additive so the legacy ``construct_boundary_first`` dispatcher call site
+    (which never passes it) is unaffected.
+    """
     primary = patches[0]
-    return {
+    payload = {
         "type": "boundary_first_surface",
         "iteration": 0,
         "parameter_domain": {"u": [0.0, 1.0], "v": [0.0, 1.0]},
@@ -388,3 +405,6 @@ def renderer_payload(
             "patch_boundary_count": 0 if patch_boundaries is None else len(patch_boundaries),
         },
     }
+    if boundary_first_review is not None:
+        payload["boundary_first_review"] = boundary_first_review
+    return payload

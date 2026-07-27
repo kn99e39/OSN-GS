@@ -258,6 +258,15 @@ def _shape_transaction_candidates(model: TorchGaussianModel, clone_idx, split_id
         "is_uncertain": model.is_uncertain,
         "surface_uv": model.surface_uv,
         "cluster_ids": model.cluster_ids,
+        # Ownership transport only (docs/worklogs Occluded Chart Ownership
+        # Foundation): carried through clone/split/prune exactly like
+        # cluster_ids, with no policy decision here. clone_idx/split_idx are
+        # always a subset of `certain` Gaussians (see the two masks in
+        # apply_adaptive_density_control), so a cloned/split row always
+        # inherits its VISIBLE_PATCH-owned parent's ownership unchanged --
+        # occluded-chart-owned rows are never cloned/split, only kept as-is.
+        "surface_owner_kind": model.surface_owner_kind,
+        "surface_owner_id": model.surface_owner_id,
     }
     additions = {key: [] for key in raw}
     if clone_idx.numel() > 0:
@@ -282,6 +291,8 @@ def _shape_transaction_candidates(model: TorchGaussianModel, clone_idx, split_id
             "is_uncertain": raw["is_uncertain"][split_idx].repeat_interleave(samples, dim=0),
             "surface_uv": raw["surface_uv"][split_idx].repeat_interleave(samples, dim=0),
             "cluster_ids": raw["cluster_ids"][split_idx].repeat_interleave(samples, dim=0),
+            "surface_owner_kind": raw["surface_owner_kind"][split_idx].repeat_interleave(samples, dim=0),
+            "surface_owner_id": raw["surface_owner_id"][split_idx].repeat_interleave(samples, dim=0),
         }
         for key, value in split_values.items():
             additions[key].append(value)
@@ -316,6 +327,8 @@ def _commit_shape_transaction(
         uncertain_mask=selected["is_uncertain"],
         surface_uv=selected["surface_uv"],
         cluster_ids=selected["cluster_ids"],
+        surface_owner_kind=selected["surface_owner_kind"],
+        surface_owner_id=selected["surface_owner_id"],
         optimizer_keep_indices=optimizer_keep_indices,
         preserve_parameter_gradients=preserve_gradients,
     )

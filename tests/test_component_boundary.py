@@ -106,6 +106,20 @@ class ComponentBoundaryExtractionTest(unittest.TestCase):
             areas.append(result.topology["refined_support_cells"])
         self.assertEqual(areas, sorted(areas))
 
+    def test_tiny_enclosed_artifacts_are_filled_for_support_validation(self):
+        from nurbs_constructor_benchmark.scenes import make_scene
+        from nurbs_constructor_benchmark.boundary_first_support import construct_boundary_first_support
+
+        result = construct_boundary_first_support(make_scene("sine", 600, seed=0))
+        boundary = result.boundary_results[0]
+        visible = result.visible_results[0]
+        self.assertEqual(boundary.topology["hole_count"], 0)
+        self.assertGreater(boundary.topology["filled_tiny_hole_cells"], 0)
+        self.assertEqual(visible.state, "constructed")
+        self.assertEqual(visible.provenance["boundary_roles"], ["outer_boundary", "interior_anchor"])
+        fidelity = visible.provenance["source_boundary_fidelity"]
+        self.assertGreater(fidelity["normalized_median_distance"], 0.0)
+        self.assertEqual(fidelity["source_point_count"], 600)
     def test_payload_serializes(self):
         import json
 

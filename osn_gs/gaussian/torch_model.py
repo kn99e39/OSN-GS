@@ -13,6 +13,7 @@ import math
 from pathlib import Path
 from typing import Any
 
+from osn_gs.gaussian.torch_surface_ownership import derive_default_ownership
 from osn_gs.utils.torch_ops import inverse_sigmoid, quaternion_identity, require_torch, rgb_to_sh_dc, sh_dc_to_rgb
 
 
@@ -64,6 +65,13 @@ class TorchGaussianModel:
         self.is_uncertain = torch.empty((0,), dtype=torch.bool, device=device)
         self.surface_uv = torch.empty((0, 2), dtype=torch.float32, device=device)
         self.cluster_ids = torch.empty((0,), dtype=torch.long, device=device)
+        # Canonical ownership (osn_gs/gaussian/torch_surface_ownership.py):
+        # authoritative source for "which surface owns this Gaussian
+        # behaviorally" -- visible-patch maintenance/support-mask/loss code
+        # must gate on these, never on `cluster_ids` alone (see that module's
+        # docstring for why `cluster_ids` is compatibility-only).
+        self.surface_owner_kind = torch.empty((0,), dtype=torch.long, device=device)
+        self.surface_owner_id = torch.empty((0,), dtype=torch.long, device=device)
         self.optimizer: Any | None = None
         self.spatial_lr_scale: float = 1.0
         self.xyz_gradient_accum = torch.empty((0, 1), dtype=torch.float32, device=device)
@@ -74,6 +82,31 @@ class TorchGaussianModel:
             "xyz_fallback": 0,
             "unavailable": 0,
         }
+        # Process-local, non-checkpointed duplicate-append ledger for
+        # UncertainGaussianAppendAdapter (osn_gs/gaussian/torch_uncertain_append_adapter.py).
+        # Owned by this MODEL instance (not by any adapter instance), so
+        # duplicate protection holds across different adapter instances that
+        # operate on the same model, and is naturally independent across
+        # different model instances. Not touched by replace_tensors/
+        # snapshot_state/restore_state: an append only registers a batch id
+        # here after its tensor commit and sidecar commit have already
+        # succeeded, so this set never needs rollback.
+        # Reset policy: there is no explicit reset API. A batch id's presence
+        # here is tied to this Python object's lifetime -- constructing a NEW
+        # TorchGaussianModel starts with an empty ledger. Checkpoint save/load
+        # persistence of this set is a deferred gap (see docs/worklogs/88).
+        self.appended_uncertain_batch_ids: set[str] = set()
+        # Process-local, non-checkpointed collision registry for synthetic
+        # occluded-chart owner ids (osn_gs/gaussian/torch_surface_ownership.py,
+        # `project_and_register_occluded_chart_owner_id`). Model-owned for the
+        # same reason as `appended_uncertain_batch_ids` above: an
+        # adapter-owned registry would be silently bypassed by swapping in a
+        # fresh adapter instance against this same model. Maps
+        # ``owner_id -> source_chart_id``; never rolled back by
+        # snapshot_state/restore_state (see that function's docstring) since
+        # a binding recorded once stays true regardless of whether the
+        # triggering append transaction itself later succeeds or rolls back.
+        self.occluded_chart_owner_registry: dict[int, str] = {}
 
     @property
     def get_xyz(self) -> Any:
@@ -142,6 +175,8 @@ class TorchGaussianModel:
         surface_uv: Any | None = None,
         cluster_ids: Any | None = None,
         confidence: Any | None = None,
+        surface_owner_kind: Any | None = None,
+        surface_owner_id: Any | None = None,
     ) -> None:
         """Initialize Gaussian parameter tensors from raw values.
 
@@ -184,6 +219,32 @@ class TorchGaussianModel:
         else:
             cluster_ids = torch.as_tensor(cluster_ids, dtype=torch.long, device=self.device).reshape(count)
 
+        # Ownership migration default (Occluded Chart Ownership Foundation
+        # Gate, final-contract round): `derive_default_ownership` maps
+        # cluster_id >= 0 -> VISIBLE_PATCH (owner_id = cluster_id) and
+        # cluster_id < 0 -> UNASSIGNED (owner_id = UNASSIGNED_OWNER_ID), so a
+        # Gaussian this method leaves without an explicit real patch
+        # assignment (e.g. `_initialize_stage1`'s inactive/skipped voxel
+        # leaves) is correctly UNASSIGNED rather than silently claimed as
+        # VISIBLE_PATCH. Occluded-chart ownership is NEVER derived here -- it
+        # is only ever assigned explicitly by the append adapter, which is
+        # the only caller expected to pass both arguments in.
+        if surface_owner_kind is None or surface_owner_id is None:
+            default_kind, default_owner_id = derive_default_ownership(cluster_ids)
+            surface_owner_kind = (
+                default_kind
+                if surface_owner_kind is None
+                else torch.as_tensor(surface_owner_kind, dtype=torch.long, device=self.device).reshape(count)
+            )
+            surface_owner_id = (
+                default_owner_id
+                if surface_owner_id is None
+                else torch.as_tensor(surface_owner_id, dtype=torch.long, device=self.device).reshape(count)
+            )
+        else:
+            surface_owner_kind = torch.as_tensor(surface_owner_kind, dtype=torch.long, device=self.device).reshape(count)
+            surface_owner_id = torch.as_tensor(surface_owner_id, dtype=torch.long, device=self.device).reshape(count)
+
         # Default confidence: certain=1, uncertain=0.25.
         if confidence is None:
             confidence = torch.where(
@@ -207,6 +268,8 @@ class TorchGaussianModel:
         self.is_uncertain = uncertain_mask
         self.surface_uv = surface_uv
         self.cluster_ids = cluster_ids
+        self.surface_owner_kind = surface_owner_kind
+        self.surface_owner_id = surface_owner_id
         self._reset_density_stats(count)
 
     def _reset_density_stats(self, count: int | None = None) -> None:
@@ -237,8 +300,29 @@ class TorchGaussianModel:
         cluster_ids: Any,
         optimizer_keep_indices: Any | None = None,
         preserve_parameter_gradients: bool = True,
+        surface_owner_kind: Any | None = None,
+        surface_owner_id: Any | None = None,
     ) -> None:
-        """Replace Gaussian tensors while preserving Adam rows when requested."""
+        """Replace Gaussian tensors while preserving Adam rows when requested.
+
+        ``surface_owner_kind``/``surface_owner_id`` are optional ONLY so an old
+        checkpoint (`osn_gs/utils/torch_checkpoint.py`, unmodified by this
+        change) that has no ownership tensors can still load -- it gets the
+        same migration default `initialize()` uses via
+        `derive_default_ownership`: a row with a valid nonnegative
+        ``cluster_ids`` entry migrates to VISIBLE_PATCH (owner_id =
+        cluster_id); a row with a negative (unassigned) ``cluster_ids`` entry
+        migrates to UNASSIGNED (owner_id = UNASSIGNED_OWNER_ID), never to
+        VISIBLE_PATCH. This is a load-time MIGRATION default for checkpoints
+        predating the ownership tensors -- it never derives OCCLUDED_CHART
+        ownership, which has no representation in an old checkpoint and must
+        be re-established explicitly by the caller if needed. Every call site
+        in THIS module that already tracks real ownership (``prune``, ADC's
+        ``_commit_shape_transaction``, ``append_gaussians_model_only``)
+        passes both explicitly and must keep doing so -- relying on the
+        fallback there would silently overwrite real occluded-chart ownership
+        with the cluster_ids-derived default.
+        """
 
         torch = self.torch
         xyz = torch.as_tensor(xyz, dtype=self.torch.float32, device=self.device)
@@ -263,6 +347,21 @@ class TorchGaussianModel:
         self.is_uncertain = torch.as_tensor(uncertain_mask, dtype=torch.bool, device=self.device).reshape(count)
         self.surface_uv = torch.as_tensor(surface_uv, dtype=self.torch.float32, device=self.device).reshape(count, 2)
         self.cluster_ids = torch.as_tensor(cluster_ids, dtype=torch.long, device=self.device).reshape(count)
+        if surface_owner_kind is None or surface_owner_id is None:
+            default_kind, default_owner_id = derive_default_ownership(self.cluster_ids)
+            self.surface_owner_kind = (
+                default_kind
+                if surface_owner_kind is None
+                else torch.as_tensor(surface_owner_kind, dtype=torch.long, device=self.device).reshape(count)
+            )
+            self.surface_owner_id = (
+                default_owner_id
+                if surface_owner_id is None
+                else torch.as_tensor(surface_owner_id, dtype=torch.long, device=self.device).reshape(count)
+            )
+        else:
+            self.surface_owner_kind = torch.as_tensor(surface_owner_kind, dtype=torch.long, device=self.device).reshape(count)
+            self.surface_owner_id = torch.as_tensor(surface_owner_id, dtype=torch.long, device=self.device).reshape(count)
         self._preserve_optimizer_state(old_params, keep_indices, old_count)
         if preserve_parameter_gradients:
             self._preserve_parameter_gradients(old_gradients, keep_indices, old_count)
@@ -370,6 +469,99 @@ class TorchGaussianModel:
             optimizer_keep_indices=keep_indices,
         )
 
+    def append_gaussians_model_only(
+        self, xyz: Any, features_dc: Any, features_rest: Any, opacity: Any,
+        scaling: Any, rotation: Any, confidence: Any, uncertain_mask: Any,
+        surface_uv: Any, cluster_ids: Any, surface_owner_kind: Any, surface_owner_id: Any,
+    ) -> None:
+        """Append pre-converted rows without optimizer-state changes.
+
+        ``surface_owner_kind``/``surface_owner_id`` are REQUIRED (no default)
+        -- unlike ``replace_tensors``'s own optional fallback (kept only for
+        old-checkpoint compatibility), this model-only append path is exactly
+        where real occluded-chart ownership must be assigned explicitly by the
+        caller (`UncertainGaussianAppendAdapter`); silently defaulting here
+        would reintroduce the "no ownership" bug this contract exists to fix.
+
+        NOT internally atomic: this delegates to ``replace_tensors``, which
+        assigns each of the twelve per-Gaussian tensors (plus the three
+        density stats it resets) via a sequential Python attribute
+        assignment, each involving its own ``.reshape(...)`` that can raise
+        on a shape mismatch. A raise partway through leaves this model with
+        mixed old/new-count tensors. Callers that need rollback safety across
+        this call must snapshot beforehand and restore on exception -- see
+        ``snapshot_state``/``restore_state``, which
+        ``UncertainGaussianAppendAdapter`` uses for exactly this purpose.
+        """
+        if self.optimizer is not None:
+            raise RuntimeError("model_only_append_requires_no_optimizer")
+        torch = self.torch
+        xyz = torch.as_tensor(xyz, dtype=torch.float32, device=self.device)
+        count = int(xyz.shape[0])
+        if count == 0:
+            return
+        rest_dim = (self.max_sh_degree + 1) ** 2 - 1
+        incoming = {
+            "xyz": xyz.reshape(count, 3),
+            "features_dc": torch.as_tensor(features_dc, dtype=torch.float32, device=self.device).reshape(count, 1, 3),
+            "features_rest": torch.as_tensor(features_rest, dtype=torch.float32, device=self.device).reshape(count, rest_dim, 3),
+            "opacity": torch.as_tensor(opacity, dtype=torch.float32, device=self.device).reshape(count, 1),
+            "scaling": torch.as_tensor(scaling, dtype=torch.float32, device=self.device).reshape(count, 3),
+            "rotation": torch.as_tensor(rotation, dtype=torch.float32, device=self.device).reshape(count, 4),
+            "confidence": torch.as_tensor(confidence, dtype=torch.float32, device=self.device).reshape(count, 1),
+            "uncertain_mask": torch.as_tensor(uncertain_mask, dtype=torch.bool, device=self.device).reshape(count),
+            "surface_uv": torch.as_tensor(surface_uv, dtype=torch.float32, device=self.device).reshape(count, 2),
+            "cluster_ids": torch.as_tensor(cluster_ids, dtype=torch.long, device=self.device).reshape(count),
+            "surface_owner_kind": torch.as_tensor(surface_owner_kind, dtype=torch.long, device=self.device).reshape(count),
+            "surface_owner_id": torch.as_tensor(surface_owner_id, dtype=torch.long, device=self.device).reshape(count),
+        }
+        if not all(torch.isfinite(value).all() for key, value in incoming.items() if key != "uncertain_mask"):
+            raise ValueError("model_only_append_nonfinite_tensor")
+        combined = {
+            "xyz": torch.cat([self._xyz.detach(), incoming["xyz"].detach()], dim=0),
+            "features_dc": torch.cat([self._features_dc.detach(), incoming["features_dc"].detach()], dim=0),
+            "features_rest": torch.cat([self._features_rest.detach(), incoming["features_rest"].detach()], dim=0),
+            "opacity": torch.cat([self._opacity.detach(), incoming["opacity"].detach()], dim=0),
+            "scaling": torch.cat([self._scaling.detach(), incoming["scaling"].detach()], dim=0),
+            "rotation": torch.cat([self._rotation.detach(), incoming["rotation"].detach()], dim=0),
+            "confidence": torch.cat([self._confidence.detach(), incoming["confidence"].detach()], dim=0),
+            "uncertain_mask": torch.cat([self.is_uncertain, incoming["uncertain_mask"]], dim=0),
+            "surface_uv": torch.cat([self.surface_uv, incoming["surface_uv"]], dim=0),
+            "cluster_ids": torch.cat([self.cluster_ids, incoming["cluster_ids"]], dim=0),
+            "surface_owner_kind": torch.cat([self.surface_owner_kind, incoming["surface_owner_kind"]], dim=0),
+            "surface_owner_id": torch.cat([self.surface_owner_id, incoming["surface_owner_id"]], dim=0),
+        }
+        self.replace_tensors(**combined, preserve_parameter_gradients=False)
+
+    _STATE_TENSOR_NAMES = (
+        "_xyz", "_features_dc", "_features_rest", "_opacity", "_scaling", "_rotation", "_confidence",
+        "is_uncertain", "surface_uv", "cluster_ids", "surface_owner_kind", "surface_owner_id",
+        "xyz_gradient_accum", "denom", "max_radii2D",
+    )
+    _STATE_PARAMETER_NAMES = frozenset(
+        {"_xyz", "_features_dc", "_features_rest", "_opacity", "_scaling", "_rotation", "_confidence"}
+    )
+
+    def snapshot_state(self) -> dict[str, Any]:
+        """Deep-copy every tensor `replace_tensors`/`append_gaussians_model_only`
+        mutates, for adapter-level rollback around a non-atomic commit.
+
+        Does not cover ``self.optimizer`` itself: this is intended for the
+        model-only append path, which requires ``self.optimizer is None``.
+        """
+
+        return {name: getattr(self, name).detach().clone() for name in self._STATE_TENSOR_NAMES}
+
+    def restore_state(self, snapshot: dict[str, Any]) -> None:
+        """Undo any partial mutation by restoring tensors from `snapshot_state`."""
+
+        torch = self.torch
+        for name in self._STATE_TENSOR_NAMES:
+            value = snapshot[name].clone()
+            if name in self._STATE_PARAMETER_NAMES:
+                value = torch.nn.Parameter(value.requires_grad_(True))
+            setattr(self, name, value)
+
     def training_setup(self, groups: GaussianParameterGroups) -> None:
         """Build the Adam optimizer with a per-parameter-group learning rate."""
 
@@ -470,6 +662,8 @@ class TorchGaussianModel:
             uncertain_mask=self.is_uncertain[keep_mask],
             surface_uv=self.surface_uv[keep_mask],
             cluster_ids=self.cluster_ids[keep_mask],
+            surface_owner_kind=self.surface_owner_kind[keep_mask],
+            surface_owner_id=self.surface_owner_id[keep_mask],
             optimizer_keep_indices=keep_indices,
         )
 

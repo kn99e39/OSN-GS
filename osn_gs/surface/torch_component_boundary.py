@@ -57,6 +57,7 @@ from osn_gs.surface.torch_boundary_refinement import (
     sample_nn_spacings,
 )
 from osn_gs.surface.torch_nurbs import UVFrame, uv_frame_from_axes
+from osn_gs.surface.torch_ordered_boundary import ordered_closed_boundary_world_loops
 from osn_gs.surface.torch_surface_components import SurfaceComponent
 from osn_gs.surface.torch_voxel_hierarchy import (
     TorchVoxelGaussianHierarchy,
@@ -76,6 +77,7 @@ class LoopDescriptor:
     area_world: float
     perimeter_cells: int
     boundary_world_points: list[list[float]]
+    ordered_boundary_world_points: list[list[float]] = field(default_factory=list)
     # For a hole loop: the outer-loop label it is enclosed by (None if none
     # found, e.g. a hole touching the domain border). Always None for
     # "outer"/"tiny_artifact" kinds.
@@ -219,6 +221,7 @@ def _build_loop_descriptors(
                 area_world=area * cell_world_area,
                 perimeter_cells=_cell_perimeter(mask, label_mask),
                 boundary_world_points=_world_boundary_points(frame, _boundary_cells(label_mask), resolution),
+                ordered_boundary_world_points=list(max(ordered_closed_boundary_world_loops(label_mask, frame), key=len, default=())),
             )
         )
     return descriptors, labels, count
@@ -236,6 +239,7 @@ def extract_component_boundary(
     filter_boundary_leaf_eligibility: bool = True,
     eligibility_thresholds: dict[str, float] = DEFAULT_ELIGIBILITY_THRESHOLDS,
     eligibility_gap_closing_cells: int = 1,
+    frame_margin: float = 0.05,
 ) -> ComponentBoundaryResult:
     """Extract the outer/hole boundary structure of one Phase 1 component.
 
@@ -293,7 +297,11 @@ def extract_component_boundary(
     torch = require_torch()
     node_by_id = {node.node_id: node for node in hierarchy.nodes}
     component_points = points[component.gaussian_indices]
-    frame = uv_frame_from_axes(component_points, component.centroid, component.tangent_u, component.tangent_v)
+    if not 0.0 <= float(frame_margin) < 0.5:
+        raise ValueError('frame_margin must lie in [0, 0.5).')
+    base_frame = uv_frame_from_axes(component_points, component.centroid, component.tangent_u, component.tangent_v)
+    margin = float(frame_margin)
+    frame = UVFrame(origin=base_frame.origin, axis_u=base_frame.axis_u, axis_v=base_frame.axis_v, coord_min=base_frame.coord_min - margin * base_frame.span, span=base_frame.span * (1.0 + 2.0 * margin))
     cell_world_area = float(frame.span[0] * frame.span[1]) / (resolution * resolution)
 
     # --- 2.1 Coarse support: union of member-voxel polygons in the shared frame.
@@ -357,6 +365,26 @@ def extract_component_boundary(
             values, counts = torch.unique(touching, return_counts=True)
             descriptor.nested_in_outer_label = int(values[torch.argmax(counts)])
 
+    # A closed complement island is not sufficient hole evidence by itself:
+    # sparse KDE can create tiny false holes on a simply connected sheet.
+    # Keep only holes with material area relative to the observed outer support.
+    significant_outer_area = max((descriptor.area_cells for descriptor in outer_descriptors if descriptor.kind == "outer"), default=0)
+    minimum_hole_cells = max(int(tiny_loop_area_cells), int(round(0.02 * significant_outer_area)))
+    for descriptor in hole_descriptors:
+        if descriptor.kind == "hole" and descriptor.area_cells < minimum_hole_cells:
+            descriptor.kind = "tiny_artifact"
+
+    # The same evidence contract must drive both topology reporting and
+    # interior-support validation.  Fill only enclosed holes already rejected
+    # as tiny KDE artifacts; material holes remain false cells and therefore
+    # preserve their explicit interior-boundary role.
+    tiny_hole_labels = [descriptor.label for descriptor in hole_descriptors if descriptor.kind == "tiny_artifact"]
+    tiny_hole_mask = torch.zeros_like(refined_mask)
+    for label in tiny_hole_labels:
+        tiny_hole_mask = tiny_hole_mask | (hole_labels == label)
+    refined_mask = refined_mask | tiny_hole_mask
+    filled_tiny_hole_cells = int(tiny_hole_mask.sum())
+
     outer_loops = [d for d in outer_descriptors if d.kind == "outer"]
     hole_loops = [d for d in hole_descriptors if d.kind == "hole"]
     tiny_artifact_loops = [d for d in outer_descriptors + hole_descriptors if d.kind == "tiny_artifact"]
@@ -385,6 +413,7 @@ def extract_component_boundary(
         "coarse_support_cells": int(coarse_mask.sum()),
         "refined_support_cells": int(refined_mask.sum()),
         "false_fill_cells": int((coarse_mask & ~refined_mask).sum()),
+        "filled_tiny_hole_cells": filled_tiny_hole_cells,
     }
     diagnostics = {
         "density_bandwidth_multiplier": float(density_bandwidth_multiplier),

@@ -2,7 +2,7 @@
 
 날짜: 2026-07-24
 
-상태: **구현·검증 완료, Gate F.1 사용자 승인 요청.** 자동 승인은 처리하지 않았다. Phase G, Gaussian proposal/append, global ranking·selection, conflict resolution, production integration은 미착수다.
+상태: **Gate F.1 사용자 승인 완료. Phase G/production integration 미착수.**
 
 ## 기준 상태와 결함 분류
 
