@@ -173,7 +173,14 @@ class TorchOSNGSPipeline:
         self.config = config
         self.device = device
 
-    def initialize(self, points: Any, colors: Any) -> TorchPipelineState:
+    def initialize(
+        self,
+        points: Any,
+        colors: Any,
+        *,
+        covariance_scales: Any | None = None,
+        covariance_rotations: Any | None = None,
+    ) -> TorchPipelineState:
         """Build the trainable state from observed points and colors.
 
         This Stage 1 path fits a visible parametric surface only. It does not
@@ -187,7 +194,12 @@ class TorchOSNGSPipeline:
 
         mode = str(self.config.nurbs_constructor_mode).lower()
         if mode == "voxel_patch_stage1":
-            return self._initialize_stage1(points, colors)
+            return self._initialize_stage1(
+                points,
+                colors,
+                covariance_scales=covariance_scales,
+                covariance_rotations=covariance_rotations,
+            )
         if mode != "legacy":
             raise ValueError(f"Unknown nurbs_constructor_mode: {mode!r}")
 
@@ -207,7 +219,7 @@ class TorchOSNGSPipeline:
         cluster_ids = self._point_region_ids(voxel_regions, count, points.device)
         surface_uv = self.project_points_to_patches(points, cluster_ids, surface_patches)
         opacities = torch.full((count, 1), 0.12, dtype=torch.float32, device=self.device)
-        scales = self._initial_covariance_scales(points)
+        scales = self._initial_covariance_scales(points) if covariance_scales is None else covariance_scales
         confidence = torch.ones((count, 1), dtype=torch.float32, device=self.device)
 
         model = TorchGaussianModel(sh_degree=self.config.sh_degree, device=self.device)
@@ -216,6 +228,7 @@ class TorchOSNGSPipeline:
             colors=colors,
             opacities=opacities,
             scales=scales,
+            rotations=covariance_rotations,
             uncertain_mask=uncertain_mask,
             surface_uv=surface_uv,
             cluster_ids=cluster_ids,
@@ -239,7 +252,14 @@ class TorchOSNGSPipeline:
             surface_fit_diagnostics=surface_fit_diagnostics,
         )
 
-    def _initialize_stage1(self, points: Any, colors: Any) -> TorchPipelineState:
+    def _initialize_stage1(
+        self,
+        points: Any,
+        colors: Any,
+        *,
+        covariance_scales: Any | None = None,
+        covariance_rotations: Any | None = None,
+    ) -> TorchPipelineState:
         """Stage 1 voxel-per-patch construction: one NURBS patch per active leaf.
 
         Differences from the legacy path, by design (migration plan §3):
@@ -462,7 +482,7 @@ class TorchOSNGSPipeline:
 
         uncertain_mask = torch.zeros((count,), dtype=torch.bool, device=self.device)
         opacities = torch.full((count, 1), 0.12, dtype=torch.float32, device=self.device)
-        scales = self._initial_covariance_scales(points)
+        scales = self._initial_covariance_scales(points) if covariance_scales is None else covariance_scales
         confidence = torch.ones((count, 1), dtype=torch.float32, device=self.device)
         model = TorchGaussianModel(sh_degree=self.config.sh_degree, device=self.device)
         model.initialize(
@@ -470,6 +490,7 @@ class TorchOSNGSPipeline:
             colors=colors,
             opacities=opacities,
             scales=scales,
+            rotations=covariance_rotations,
             uncertain_mask=uncertain_mask,
             surface_uv=surface_uv,
             cluster_ids=cluster_ids,

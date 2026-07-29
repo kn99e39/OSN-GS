@@ -44,10 +44,25 @@ REVIEW_SCHEMA_VERSION = "boundary_first_review/2"
 
 CROSSING_VALID_SHARED_POLE = "valid_shared_pole"
 CROSSING_VALID_SHARED_ENDPOINT = "valid_shared_boundary_endpoint"
-CROSSING_INVALID_INTERIOR = "invalid_interior_crossing"
+CROSSING_TRANSVERSAL_INTERSECTION = "transversal_intersection"
+CROSSING_OVERLAPPING_SUPPORT_PATH = "overlapping_support_path"
 CROSSING_NEAR_TOUCHING = "near_touching_ambiguous"
 CROSSING_NO_CROSSING = "no_crossing"
 CROSSING_NOT_CHECKED = "not_checked"
+CROSSING_INVALID_CLASSIFICATIONS = (CROSSING_TRANSVERSAL_INTERSECTION, CROSSING_OVERLAPPING_SUPPORT_PATH)
+
+# Crossing detection only checks a finite, deterministic bundle of actual
+# evaluated support curves -- never a continuous non-intersection proof over
+# the whole support family, and never patch-interior self-overlap, seam
+# tangent/Jacobian consistency, or foldover. Those stay explicitly not_checked
+# until their own dedicated diagnostics exist.
+CROSSING_SCOPE_REPRESENTATIVE_BUNDLE = "representative_support_curve_bundle_crossing"
+NOT_YET_CHECKED_CROSSING_CATEGORIES = (
+    "patch_overlap",
+    "jacobian_foldover",
+    "seam_inconsistency",
+    "full_support_family_crossing",
+)
 
 
 def _tensor_points(points: Any) -> Any:
@@ -318,8 +333,17 @@ def observed_evidence_entity(
     )
 
 
-def _curve_set_scale(curves: list[Any]) -> float:
-    """Median positive consecutive-sample spacing, used as the crossing tolerance basis."""
+def fallback_curve_bundle_scale(curves: list[Any]) -> float:
+    """Median positive consecutive-sample spacing of the curves being tested.
+
+    This is a FALLBACK ONLY: it is resolution-dependent (finer sampling of the
+    same physical curve shrinks this value), so it must not be the default
+    tolerance basis for a real pipeline run. Callers with a stable geometric
+    scale available (observed boundary/source-point spacing, local surface
+    scale, component bbox scale) must pass ``tolerance_scale`` explicitly
+    instead -- this exists so standalone/test callers without such a scale
+    still get a deterministic number.
+    """
     torch = require_torch()
     lengths = []
     for curve in curves:
@@ -333,26 +357,75 @@ def _curve_set_scale(curves: list[Any]) -> float:
     return float(positive.median()) if int(positive.numel()) else 1.0
 
 
+def _classify_interior_touch(
+    interior_a: Any, interior_b: Any, tolerance: float, ambiguous_band: float
+) -> tuple[str | None, float | None]:
+    """Distinguish an isolated transversal crossing from a sustained overlapping run.
+
+    A genuine single intersection's closest-approach point diverges quickly
+    moving along either curve; two curves running alongside each other stay
+    close at the neighboring sample too. When there are too few interior
+    samples to check a neighbor at all, this returns ``near_touching_ambiguous``
+    rather than guessing at a specific (and possibly wrong) defect kind --
+    conservative under-classification, never a silent pass.
+    """
+    torch = require_torch()
+    if int(interior_a.shape[0]) == 0 or int(interior_b.shape[0]) == 0:
+        return None, None
+    distances = torch.cdist(interior_a, interior_b)
+    min_distance = float(distances.min())
+    if min_distance > ambiguous_band:
+        return None, min_distance
+    if min_distance > tolerance:
+        return CROSSING_NEAR_TOUCHING, min_distance
+    flat_index = int(distances.argmin())
+    na, nb = int(interior_a.shape[0]), int(interior_b.shape[0])
+    i, j = divmod(flat_index, nb)
+    candidates = []
+    for di, dj in ((1, 1), (1, -1), (-1, 1), (-1, -1)):
+        ni, nj = i + di, j + dj
+        if 0 <= ni < na and 0 <= nj < nb:
+            candidates.append(float(torch.linalg.vector_norm(interior_a[ni] - interior_b[nj])))
+    if not candidates:
+        return CROSSING_NEAR_TOUCHING, min_distance
+    if min(candidates) <= tolerance * 2.0:
+        return CROSSING_OVERLAPPING_SUPPORT_PATH, min_distance
+    return CROSSING_TRANSVERSAL_INTERSECTION, min_distance
+
+
 def classify_support_curve_pair(
     curve_a: Any,
     curve_b: Any,
     *,
-    scale: float,
+    tolerance_scale: float,
+    tolerance_fraction: float = 0.05,
+    ambiguous_fraction: float = 0.2,
     expected_shared_point: Any | None = None,
     expected_shared_kind: str | None = None,
     endpoint_fraction: float = 0.15,
 ) -> dict[str, Any]:
     """Classify one pair of *actual evaluated* support curves for crossing.
 
-    ``expected_shared_point``/``expected_shared_kind`` name a structurally
-    known coincidence (e.g. a shared pole) so that intentional convergence is
-    never reported as a defect; any other near-zero-distance touching is
-    flagged as a crossing, never silently accepted.
+    ``tolerance_scale`` MUST be a geometric scale independent of how finely
+    these particular curves happen to be sampled (e.g. observed-boundary
+    median spacing) -- ``tolerance_fraction``/``ambiguous_fraction`` only
+    scale it further, they never substitute for it. ``expected_shared_point``/
+    ``expected_shared_kind`` name a structurally known coincidence (e.g. a
+    shared pole) so that intentional convergence is never reported as a
+    defect; any other near-zero-distance touching is flagged, never silently
+    accepted. A simple minimum-distance test cannot tell a transversal
+    crossing from two curves running alongside each other, so a close-enough
+    approach is further classified via :func:`_classify_interior_touch`; when
+    even that cannot decide, the conservative ``near_touching_ambiguous``
+    result is returned instead of guessing.
     """
     torch = require_torch()
     a, b = _tensor_points(curve_a), _tensor_points(curve_b)
     if int(a.shape[0]) < 2 or int(b.shape[0]) < 2:
         return {"classification": CROSSING_NOT_CHECKED, "reason": "curve_too_short", "min_distance": None}
+    tolerance = max(float(tolerance_scale) * float(tolerance_fraction), 1e-9)
+    ambiguous_band = max(float(tolerance_scale) * float(ambiguous_fraction), tolerance)
+
     distances = torch.cdist(a, b)
     flat_index = int(distances.argmin())
     b_count = int(b.shape[0])
@@ -361,8 +434,6 @@ def classify_support_curve_pair(
     a_count = int(a.shape[0])
     a_at_end = i == 0 or i == a_count - 1
     b_at_end = j == 0 or j == b_count - 1
-    tolerance = max(float(scale) * 0.05, 1e-9)
-    ambiguous_band = max(float(scale) * 0.2, tolerance)
 
     shared_ok = False
     if expected_shared_point is not None and a_at_end and b_at_end and min_distance <= tolerance:
@@ -379,47 +450,68 @@ def classify_support_curve_pair(
         buffer_b = max(1, round(b_count * endpoint_fraction))
         interior_a = a[buffer_a : a_count - buffer_a] if a_count > 2 * buffer_a else a[0:0]
         interior_b = b[buffer_b : b_count - buffer_b] if b_count > 2 * buffer_b else b[0:0]
-        if int(interior_a.shape[0]) and int(interior_b.shape[0]):
-            interior_min = float(torch.cdist(interior_a, interior_b).min())
-            if interior_min <= tolerance:
-                classification = CROSSING_INVALID_INTERIOR
-            elif interior_min <= ambiguous_band:
-                classification = CROSSING_NEAR_TOUCHING
+        touch, interior_min = _classify_interior_touch(interior_a, interior_b, tolerance, ambiguous_band)
+        if touch is not None:
+            return {
+                "classification": touch, "min_distance": min_distance, "interior_min_distance": interior_min,
+                "closest_index_a": i, "closest_index_b": j,
+            }
         return {"classification": classification, "min_distance": min_distance, "closest_index_a": i, "closest_index_b": j}
 
-    if min_distance <= tolerance:
-        classification = CROSSING_INVALID_INTERIOR
-    elif min_distance <= ambiguous_band:
-        classification = CROSSING_NEAR_TOUCHING
-    else:
-        classification = CROSSING_NO_CROSSING
+    touch, _ = _classify_interior_touch(a, b, tolerance, ambiguous_band)
+    classification = CROSSING_NO_CROSSING if touch is None else touch
     return {"classification": classification, "min_distance": min_distance, "closest_index_a": i, "closest_index_b": j}
 
 
 def detect_support_curve_crossings(
     curves: list[Any],
     *,
+    tolerance_scale: float | None = None,
+    tolerance_fraction: float = 0.05,
+    ambiguous_fraction: float = 0.2,
     expected_shared_point: Any | None = None,
     expected_shared_kind: str | None = None,
+    scope: str = CROSSING_SCOPE_REPRESENTATIVE_BUNDLE,
 ) -> dict[str, Any]:
-    """Pairwise crossing check across *actual evaluated* support curves only.
+    """Pairwise crossing check across a finite bundle of *actual evaluated* support curves.
 
     Control-polygon crossing is a different (weaker) diagnostic and must never
     substitute for this; callers should run this against
-    ``evaluated_support_curves``, never ``support_control_polygons``.
+    ``evaluated_support_curves``, never ``support_control_polygons``. This is
+    a REPRESENTATIVE, sampled check (``scope``), not a continuous NURBS
+    non-intersection guarantee -- ``not_checked_categories`` names the related
+    validity questions this function does not answer. If ``tolerance_scale``
+    is omitted, :func:`fallback_curve_bundle_scale` derives one from the
+    curves themselves (resolution-dependent -- convenience for standalone
+    callers only, never the production path's choice).
     """
     if len(curves) < 2:
-        return {"state": CROSSING_NOT_CHECKED, "reason": "fewer_than_two_curves", "pairs": [], "has_invalid_crossing": False}
-    scale = _curve_set_scale(curves)
+        return {
+            "state": CROSSING_NOT_CHECKED,
+            "reason": "fewer_than_two_curves",
+            "scope": scope,
+            "pairs": [],
+            "has_invalid_crossing": False,
+            "not_checked_categories": list(NOT_YET_CHECKED_CROSSING_CATEGORIES),
+        }
+    scale = float(tolerance_scale) if tolerance_scale is not None else fallback_curve_bundle_scale(curves)
     pairs = []
     invalid = False
     for i in range(len(curves)):
         for j in range(i + 1, len(curves)):
             result = classify_support_curve_pair(
-                curves[i], curves[j], scale=scale,
+                curves[i], curves[j], tolerance_scale=scale, tolerance_fraction=tolerance_fraction,
+                ambiguous_fraction=ambiguous_fraction,
                 expected_shared_point=expected_shared_point, expected_shared_kind=expected_shared_kind,
             )
             pairs.append({"curve_a": i, "curve_b": j, **result})
-            if result["classification"] == CROSSING_INVALID_INTERIOR:
+            if result["classification"] in CROSSING_INVALID_CLASSIFICATIONS:
                 invalid = True
-    return {"state": "checked", "scale": scale, "pairs": pairs, "has_invalid_crossing": invalid}
+    return {
+        "state": "checked",
+        "scope": scope,
+        "tolerance_scale": scale,
+        "pairs": pairs,
+        "has_invalid_crossing": invalid,
+        "not_checked_categories": list(NOT_YET_CHECKED_CROSSING_CATEGORIES),
+    }

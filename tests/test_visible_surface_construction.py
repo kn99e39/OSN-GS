@@ -1,0 +1,72 @@
+﻿from __future__ import annotations
+
+import unittest
+
+from nurbs_constructor_benchmark.gaussian_reliability_scenes import make_gaussian_reliability_scene
+from osn_gs.surface.torch_visible_surface_construction import construct_visible_nurbs_from_gaussians
+
+
+class VisibleSurfaceConstructionTest(unittest.TestCase):
+    def test_plane_runs_from_gaussian_input_and_retains_all_canonical_stages(self):
+        scene = make_gaussian_reliability_scene("plane")
+        result = construct_visible_nurbs_from_gaussians(scene.positions, covariance=scene.covariances, stable_ids=tuple(range(len(scene.positions))))
+        self.assertEqual(result.diagnostic_summary["input_gaussian_count"], len(scene.positions))
+        self.assertEqual(result.coverage_semantics, "reliable_core_only")
+        self.assertIn(result.construction_state, {"constructed", "partially_constructed", "review_required", "boundary_recovery_failed", "no_admissible_region"})
+        self.assertIsNotNone(result.covariance_frame)
+        self.assertIsNotNone(result.manifold_affinity)
+        self.assertIsNotNone(result.surface_regions)
+
+    def test_plane_and_curved_sheet_materialize_with_shared_methodology(self):
+        import torch
+        plane = make_gaussian_reliability_scene("plane")
+        curved = make_gaussian_reliability_scene("smooth_curved_sheet")
+        plane_result = construct_visible_nurbs_from_gaussians(plane.positions, covariance=plane.covariances)
+        curved_result = construct_visible_nurbs_from_gaussians(curved.positions, covariance=curved.covariances)
+        self.assertEqual(plane_result.construction_state, "constructed")
+        self.assertEqual(curved_result.construction_state, "constructed")
+        self.assertEqual(len(plane_result.materialized_visible_nurbs_surfaces), 1)
+        self.assertEqual(len(curved_result.materialized_visible_nurbs_surfaces), 1)
+        uv = torch.tensor([[0., 0.], [.5, .5], [1., 1.]])
+        samples = curved_result.materialized_visible_nurbs_surfaces[0].surface.evaluate(uv)
+        self.assertGreater(float(samples[:, 2].std()), 1e-4)
+    def test_end_to_end_invariance_for_plane_and_curved_sheet(self):
+        import torch
+        rotation = torch.tensor([[0., -1., 0.], [1., 0., 0.], [0., 0., 1.]])
+        for name in ("plane", "smooth_curved_sheet"):
+            scene = make_gaussian_reliability_scene(name)
+            ids = tuple(range(len(scene.positions)))
+            baseline = construct_visible_nurbs_from_gaussians(scene.positions, covariance=scene.covariances, stable_ids=ids)
+            variants = (
+                (scene.positions + torch.tensor([1.7, -0.8, 0.4]), scene.covariances),
+                (scene.positions @ rotation.T, rotation @ scene.covariances @ rotation.T),
+                (scene.positions * 1.7, scene.covariances * (1.7 ** 2)),
+                (scene.positions.flip(0), scene.covariances.flip(0), tuple(reversed(ids))),
+            )
+            base_members = tuple(sorted((frozenset(region.member_ids) for region in baseline.surface_regions.regions), key=lambda item: tuple(sorted(item))))
+            base_boundary = tuple(sorted((frozenset(component.ordered_source_ids) for component in baseline.ordered_boundary_components), key=lambda item: tuple(sorted(item))))
+            for variant in variants:
+                positions, covariance = variant[0], variant[1]
+                variant_ids = variant[2] if len(variant) == 3 else ids
+                result = construct_visible_nurbs_from_gaussians(positions, covariance=covariance, stable_ids=variant_ids)
+                self.assertEqual(result.construction_state, baseline.construction_state)
+                self.assertEqual(len(result.materialized_visible_nurbs_surfaces), len(baseline.materialized_visible_nurbs_surfaces))
+                self.assertEqual(tuple(sorted((frozenset(region.member_ids) for region in result.surface_regions.regions), key=lambda item: tuple(sorted(item)))), base_members)
+                self.assertEqual(tuple(sorted((frozenset(component.ordered_source_ids) for component in result.ordered_boundary_components), key=lambda item: tuple(sorted(item)))), base_boundary)
+    def test_separated_surface_controls_do_not_create_a_bridge_surface(self):
+        for name in ("close_parallel_sheets", "two_perpendicular_surfaces"):
+            scene = make_gaussian_reliability_scene(name)
+            result = construct_visible_nurbs_from_gaussians(scene.positions, covariance=scene.covariances)
+            materialized_regions = {item.input.source_region_id for item in result.materialized_visible_nurbs_surfaces}
+            self.assertTrue(materialized_regions.issubset({region.region_id for region in result.surface_regions.regions}))
+            self.assertLessEqual(len(materialized_regions), result.diagnostic_summary["region_count"])
+            self.assertNotEqual(result.construction_state, "constructed")
+    def test_open_or_unresolved_topology_never_creates_placeholder_surface(self):
+        scene = make_gaussian_reliability_scene("isolated_floater")
+        result = construct_visible_nurbs_from_gaussians(scene.positions, covariance=scene.covariances)
+        self.assertFalse(any(item.surface is not None and item.state != "materialized" for item in result.review_results))
+
+
+if __name__ == "__main__":
+    unittest.main()
+

@@ -190,3 +190,11 @@ Do not spend time retrying those commands inside the restricted sandbox. Treat t
 - Write worklogs in Korean. Keep headings, status, conclusions, decisions, metrics interpretation, and follow-up risks in Korean; technical identifiers, commands, paths, and literal API/CLI names may remain in English.
 - Keep these reports concise and link the final status from `docs/README.md` so Codex and Claude can continue from the same evidence.
 
+
+## Repository-Wide Pytest Timeout Handling
+
+- 전체 pytest는 이 환경에서 120초를 넘길 수 있다. 120초 도달로 종료되면 테스트 실패로 해석하지 말고, 우선 명령 timeout에 의한 중단인지 확인한다.
+- 전체 검증은 처음부터 최소 10분(600000 ms) timeout으로 실행한다: .venv\Scripts\python.exe -m pytest -q
+- 짧은 120초 실행이 중단된 경우에는 바로 충분한 timeout으로 한 번 재실행해 최종 결과를 확인한다. 동일 작업을 짧은 timeout으로 반복하지 않는다.
+- Windows stdout flush 오류(OSError: [Errno 22] Invalid argument)가 timeout 직후 동반될 수 있다. 이 경우에도 pytest summary 또는 충분한 timeout 재실행 결과를 기준으로 판정한다.
+

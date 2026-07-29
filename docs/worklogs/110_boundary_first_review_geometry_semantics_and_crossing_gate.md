@@ -99,3 +99,98 @@ targeted (52 tests): 전부 통과
 4. 위 항목이 정리된 뒤에만 quality_state의 `eligible` 상태 도입 여부를 사용자와 논의한다.
 
 Repository-wide pytest가 green이 아니고(기존 무관 실패 2건 잔존), 이번 작업으로 Boundary-first Gate 완료를 주장하지 않는다.
+
+## 2026-07-27 후속 — 상태 계약/seam semantic/crossing 정책 교정 (append-only)
+
+사용자가 review payload의 geometry semantics 자체를 더 교정하라고 지시했다. crossing/fidelity gate를 canonical로 승격하기 전에 처리해야 하는 교정이므로 기존 Worklog 110에 이어서 기록한다. anchor/support construction의 근본 수정(scene별 attribution, anchor 선택 hardening, boundary correspondence hardening)은 별도 Worklog 111로 분리한다.
+
+### 1. materialization_state / quality_state 분리 (`boundary_first_support_runner.py`)
+
+- `evaluate_scene()`이 이제 scene 및 component 수준에서 canonical `materialization_state`(`materialized`/`not_materialized`)와 `quality_state`(`unsupported`/`review_required`/`ineligible`, `eligible`는 vocabulary에만 존재하고 아직 어떤 경로도 도달하지 않음) + `quality_reason`을 계산한다. `_component_quality_state()`가 component 단위로, `_scene_quality_projection()`이 scene 단위로 집계한다.
+- 기존 `record["state"]`(`constructed`/`review_required`/`unsupported`)는 **compatibility projection으로만** 유지한다 — 하위 호환을 위한 필드이며 canonical이 아님을 코드 주석에 명시했다.
+- Invalid support crossing이 검출된 component는 `materialization_state="materialized"` + `quality_state="ineligible"` + `quality_reason="invalid_support_crossing"`으로 표현된다 — "surface를 못 만듦"과 "surface는 만들었지만 품질 검증 실패"가 이제 서로 다른 축의 다른 값이다.
+- RMS fidelity gate 초과는 component별로 `quality_state="review_required"`, `quality_reason="source_point_rms_exceeds_threshold"`로 반영되며, 이미 `ineligible`인 component는 덮어쓰지 않는다(crossing이 더 강한 결함).
+- `quality_state=="eligible"`은 vocabulary에는 존재하지만 어떤 경로도 아직 도달하지 못한다 — crossing 검사가 대표 표본(bundle)일 뿐 연속 보장이 아니고, bidirectional fidelity/false-hole hardening이 미구현이기 때문이다. 이 라벨은 isolated review 진단 전용이며 production Gate 승인과 무관함을 docstring에 명시했다.
+
+### 2. Fan seam semantic 교정 (`_anchor_fan_review_layers`)
+
+- 이전에는 pole↔corner 2점 correspondence chord를 그대로 `patch_seams`(→`patch_boundaries`)의 seam으로 사용했다. 이제는 별도로 `evaluate_iso_edge(surface, "u0", samples=5, ...)`를 호출해 **독립적으로 평가한** `evaluated_curve` seam entity를 만들고, 이것만 `patch_boundaries` export에 사용한다.
+- Pole↔corner 2점 데이터는 `support_correspondence_chords`에만 남는다. 두 표현이 기하학적으로 같은 직선(degree_v=1이라 정확히 일치)이어도 별도 entity로 유지한다 — 수치가 같다고 semantic entity를 합치지 않는다는 지시를 반영했다.
+- `_seam_payloads()`가 이제 `edge_a`("u1", 인접 patch 쪽), `edge_b`(entity의 `parameter_edge`, 항상 "u0"), `parameter_direction`, `same_orientation`(현재 구성상 항상 `True` — patch k의 u0 열과 patch k-1의 u1 열이 동일 control column을 그대로 재사용하기 때문), `shared_endpoint_policy`, `parameter_samples`를 추가로 보존한다.
+
+### 3. Crossing gate 범위 제한과 대표 bundle (`torch_boundary_review_geometry.py`, `_anchor_fan_review_layers`)
+
+- `detect_support_curve_crossings()`가 이제 `scope="representative_support_curve_bundle_crossing"`과 `not_checked_categories=["patch_overlap","jacobian_foldover","seam_inconsistency","full_support_family_crossing"]`를 항상 payload에 포함한다 — 이 gate가 patch 내부 self-overlap, seam tangent/Jacobian 일관성, 연속 non-intersection 증명 중 어느 것도 검사하지 않음을 명시한다.
+- Fan 경로의 `evaluated_support_curves`는 이제 patch당 단일 `u=0.5` 곡선이 아니라, **configurable** `interior_support_curve_fractions`(기본 `(0.25, 0.5, 0.75)`, CLI `--interior-support-curve-fractions`)의 각 값마다 실제 iso-curve를 평가한 bundle이다(8 patch × 3 = 24 curves). 하드코딩된 canonical 상수가 아니라 기본값이 있는 설정으로 구현했다.
+- Bundle 확장 결과 이전에는 patch 3/7만 비교하던 것이 이제 patch 3/7의 세 fraction 조합까지 포함해 더 넓은 interior 영역을 커버한다.
+
+### 4. Crossing tolerance/sampling 분리 (`torch_boundary_review_geometry.py`)
+
+- 이전 `scale`(curve 자신의 인접 표본 간격 median)을 tolerance 기준으로 쓰던 방식을 제거했다. `classify_support_curve_pair`/`detect_support_curve_crossings`는 이제 `tolerance_scale`을 **명시적으로 받는다.** 러너는 `_stable_tolerance_scale()`로 이미 계산돼 있는 `source_boundary_fidelity.local_spacing_median`(관측 raw point의 median nearest-neighbor 간격)을 사용한다 — curve 표본 해상도와 무관한 안정적 기하 척도다. `tolerance_scale`을 안 주면 예전 방식(`fallback_curve_bundle_scale`, resolution-dependent)으로 fallback하되, 이는 standalone/테스트 편의용이며 프로덕션 경로 기본값이 아니라고 docstring에 명시했다.
+- 분류를 6개로 재정의했다: `valid_shared_pole`, `valid_shared_boundary_endpoint`, `transversal_intersection`(단일 교차점), `overlapping_support_path`(구간 전체가 겹치는 병렬 주행 — `plane` scene 최초 발견의 실제 유형), `near_touching_ambiguous`, `no_crossing`, `not_checked`. 단순 최소거리만으로는 transversal과 overlapping을 구분할 수 없어, 최근접점의 인접 표본까지 함께 확인하는 `_classify_interior_touch()`를 추가했다 — 인접 표본을 확인할 해상도가 부족하면(예: 표본 1개) 추측하지 않고 `near_touching_ambiguous`로 보수적으로 반환한다.
+- `has_invalid_crossing`은 `transversal_intersection`과 `overlapping_support_path` 두 분류에만 True다. `near_touching_ambiguous`는 non-blocking이다.
+- Resolution-invariance 테스트(`test_explicit_tolerance_scale_is_resolution_independent`)로 동일 curve pair를 8/16/32/64 표본에서 재평가해도 (고정된 `tolerance_scale`을 쓰면) 분류가 바뀌지 않음을 확인했다.
+
+### 재검증한 15-scene sweep 결과 (tolerance 분리 + bundle 적용 후)
+
+| scene | invalid crossing (item 1-4 이후) | 비고 |
+| --- | --- | --- |
+| crease, elongated_plane | **있음** (`ineligible`) | 근본 원인 조사 필요 — Worklog 111 대상 |
+| plane, sine, triangle, close_parallel_sheets | **없음** (이전 라운드에서는 invalid였음) | 안정적 tolerance_scale 적용만으로 해소됨 |
+| density_gradient, u_shape | not_checked(unsupported) | 변화 없음 |
+| crescent, planar_hole, planar_hole_offcenter, planar_hole_elliptical, curved_annulus, mild_curved_sheet, planar_hole_density_gradient | 없음 | 변화 없음 |
+
+이전 라운드(worklog 110 최초 기록)에서 invalid로 보고했던 6개 scene 중 4개(`plane`, `sine`, `triangle`, `close_parallel_sheets`)는 **curve 표본 해상도에 근거한 부정확한 tolerance**가 원인이었고, 실제 관측 point 밀도 기준으로 재계산하니 `plane`의 patch 3/7 조합은 `near_touching_ambiguous`로 재분류됐다(거리 자체는 이전과 동일, 판정 기준만 교정됨). `crease`와 `elongated_plane`은 여전히 `ineligible`이며 이번 라운드로는 해소되지 않았다 — 사용자가 지정한 대로 이 둘은 근본 원인(anchor 선택, boundary correspondence, 또는 component segmentation) 조사가 필요한 대상으로 남겨두고, 억지로 anchor fan을 통과시키지 않았다.
+
+### 회귀
+
+새/갱신 테스트:
+
+- `tests/test_boundary_review_geometry.py`: `CROSSING_INVALID_INTERIOR`를 제거하고 `CROSSING_TRANSVERSAL_INTERSECTION`/`CROSSING_OVERLAPPING_SUPPORT_PATH`로 교체, `overlapping_support_path` 신규 테스트, 해상도 불변성 테스트, "판별 불가능하면 ambiguous" 테스트 추가(총 14 tests).
+- `tests/test_boundary_first_support_runner.py`: `materialization_state`/`quality_state`/`quality_reason` canonical 필드 검증, fan seam이 `evaluated_curve`(not chord)로 export됨 검증, bundle 적용 후 `evaluated_support_curves` 개수(`patch_count*3`) 검증, `plane`의 재분류(더 이상 invalid 아님, ambiguous 1건 이상) 검증, `elongated_plane`으로 `materialized + ineligible` 경로를 고정 fixture로 회귀에 반영, unsupported(u_shape)의 `materialization_state="not_materialized"`/`quality_state="unsupported"` 검증(총 6 tests).
+
+```text
+targeted (56 tests): 전부 통과
+- tests/test_patch_boundary.py
+- tests/test_boundary_first_visible_builder.py
+- tests/test_boundary_first_support_runner.py (6 tests)
+- tests/test_boundary_review_geometry.py (14 tests)
+- tests/test_boundary_support_network.py
+- tests/test_boundary_constrained_surface.py
+- tests/test_boundary_central_cap.py
+- tests/test_boundary_surface_quality.py
+- tests/test_boundary_first_support_pipeline.py
+- tests/test_boundary_multi_loop.py
+- tests/test_boundary_planar_partition.py
+- tests/test_boundary_source_fidelity.py
+- tests/test_component_boundary.py
+```
+
+전체 pytest:
+
+```text
+499 passed, 2 failed, 1 skipped, 1 warning, 8 subtests passed
+```
+
+기존 실패 2건은 이번 변경과 무관하다(`tests/test_trimmed_component_fitter.py`의 `degenerate_fraction` strict-zero 기대치, 실측 약 0.0017361111).
+
+### 아직 not_checked인 항목 (범위 밖, 변화 없음)
+
+- `patch_overlap`, `jacobian_foldover`, `seam_inconsistency`, `full_support_family_crossing` — crossing gate의 `not_checked_categories`로 명시적으로 유지.
+- Bidirectional source-boundary fidelity, false-hole persistence/raw-support/genuine-small-hole negative control, multi-hole 실제 patch materialization — 모두 미착수.
+- `quality_state=="eligible"`은 여전히 어떤 경로도 도달하지 않는다.
+
+### dispatcher/production 비접촉 확인
+
+`git status` 기준 이번 라운드에서 수정한 기존 추적 파일은 없다(`torch_boundary_review_geometry.py`, `boundary_first_support_runner.py`, `tests/test_boundary_review_geometry.py`는 이미 이번 세션 이전 라운드에서 untracked/modified 상태였던 파일이다). `boundary_first.py`(legacy dispatcher/`renderer_payload`)는 이번 라운드에서 추가로 수정하지 않았다. Default dispatcher, trainer, production pipeline, uncertain Gaussian proposal/append, ownership, checkpoint, multi-hole materialization 중 어느 것도 건드리지 않았다. Rectangle/PCA/box/trimmed fallback이나 synthetic center anchor를 추가하지 않았다. 자동 Gate 승인도 하지 않았다 — `quality_state=="eligible"`은 여전히 도달 불가능한 vocabulary 값이다.
+
+### 다음 작업 (Worklog 111 대상)
+
+anchor/support construction의 독립적인 근본 수정이 완료되면 새 Worklog 111을 사용한다(이 문서에는 더 이상 append하지 않는다).
+
+1. `crease`/`elongated_plane`(과 필요시 다른 scene)의 crossing 실패를 독립적으로 attribution한다: anchor clearance/boundary containment/angular coverage/correspondence ordering/component 근거를 각각 확인한다.
+2. Anchor 후보 선택을 observed evidence 기반으로 hardening한다(synthetic centroid 금지).
+3. Boundary correspondence(현재 순수 arclength 등분)를 anchor 기준 star-shaped 검증 없이 각도 정렬에 의존하지 않도록 hardening한다.
+4. `plane`/`triangle`/`elongated_plane`/`sine`을 positive control로, `crease`/`close_parallel_sheets`를 억지로 통과시키지 않는 것을 목표로 positive/negative regression을 추가한다.
+
+Repository-wide pytest가 green이 아니고, positive fixture에 invalid crossing이 남아 있으므로(현재 `elongated_plane`) 이번 라운드로 Boundary-first Gate 완료를 주장하지 않는다.

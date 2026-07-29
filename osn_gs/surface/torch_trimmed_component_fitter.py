@@ -54,10 +54,22 @@ def _jacobian_metrics(surface: TorchNURBSSurface, resolution: int = 24) -> dict[
     _, du, dv = surface.evaluate_with_derivatives(torch.stack((u.flatten(), v.flatten()), dim=1))
     jacobian = torch.cross(du, dv, dim=1).norm(dim=1)
     median = jacobian.median().clamp_min(1e-12)
+    # ``degenerate_fraction`` is a hard singularity signal.  It must not turn
+    # a valid flat chart red merely because one boundary sample has a smaller
+    # (but still positive) area than the interior.  Preserve that useful
+    # relative-tail warning separately as ``near_degenerate_fraction``.
+    degenerate_threshold = torch.maximum(
+        torch.tensor(1e-8, dtype=jacobian.dtype, device=jacobian.device),
+        median * 1e-6,
+    )
+    near_degenerate_threshold = median * 1e-3
     return {
         "jacobian_median": float(median.cpu()),
         "jacobian_min": float(jacobian.min().cpu()),
-        "degenerate_fraction": float((jacobian <= median * 1e-3).float().mean().cpu()),
+        "degenerate_fraction": float((jacobian <= degenerate_threshold).float().mean().cpu()),
+        "near_degenerate_fraction": float((jacobian <= near_degenerate_threshold).float().mean().cpu()),
+        "degenerate_threshold": float(degenerate_threshold.cpu()),
+        "near_degenerate_threshold": float(near_degenerate_threshold.cpu()),
     }
 
 

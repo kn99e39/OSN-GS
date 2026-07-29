@@ -171,6 +171,7 @@ class TorchGaussianModel:
         colors: Any,
         opacities: Any | None = None,
         scales: Any | None = None,
+        rotations: Any | None = None,
         uncertain_mask: Any | None = None,
         surface_uv: Any | None = None,
         cluster_ids: Any | None = None,
@@ -200,6 +201,14 @@ class TorchGaussianModel:
             scales = torch.full((count, 3), 0.02, dtype=self.torch.float32, device=self.device)
         else:
             scales = torch.as_tensor(scales, dtype=self.torch.float32, device=self.device).reshape(count, 3)
+
+        # A caller that owns observed covariance must not be reset to an
+        # identity orientation. Rotations are normalized wxyz quaternions.
+        if rotations is None:
+            rotations = quaternion_identity(count, self.device)
+        else:
+            rotations = torch.as_tensor(rotations, dtype=self.torch.float32, device=self.device).reshape(count, 4)
+            rotations = torch.nn.functional.normalize(rotations, dim=1, eps=1e-12)
 
         # uncertain_mask is the core flag separating certain/uncertain in loss and density policy.
         if uncertain_mask is None:
@@ -262,7 +271,7 @@ class TorchGaussianModel:
         self._features_dc = torch.nn.Parameter(rgb_to_sh_dc(colors).reshape(count, 1, 3).requires_grad_(True))
         self._features_rest = torch.nn.Parameter(torch.zeros((count, rest_dim, 3), device=self.device).requires_grad_(True))
         self._scaling = torch.nn.Parameter(torch.log(torch.clamp(scales, min=1e-6)).requires_grad_(True))
-        self._rotation = torch.nn.Parameter(quaternion_identity(count, self.device).requires_grad_(True))
+        self._rotation = torch.nn.Parameter(rotations.requires_grad_(True))
         self._opacity = torch.nn.Parameter(inverse_sigmoid(opacities).requires_grad_(True))
         self._confidence = torch.nn.Parameter(inverse_sigmoid(confidence).requires_grad_(True))
         self.is_uncertain = uncertain_mask

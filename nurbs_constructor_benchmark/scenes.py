@@ -48,6 +48,10 @@ class SyntheticGaussianScene:
     name: str
     points: torch.Tensor
     colors: torch.Tensor
+    # Linear scale and wxyz rotation from the observed Gaussian set.
+    covariance_scales: torch.Tensor
+    covariance_rotations: torch.Tensor
+    covariance_normals: torch.Tensor
     oracle: Oracle
     description: str
     surface_fn: HeightFn
@@ -65,6 +69,47 @@ class SyntheticGaussianScene:
 def _colors(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
     return torch.stack([(x + 1.0) * 0.5, (y + 1.0) * 0.5, 0.55 + 0.25 * x * y], dim=1).clamp(0.0, 1.0)
 
+
+def _tangent_frame_quaternion(normals: torch.Tensor) -> torch.Tensor:
+    """Deterministic wxyz frame whose local z axis follows the surface normal."""
+    normals = torch.nn.functional.normalize(normals, dim=1)
+    reference = torch.zeros_like(normals)
+    reference[:, 2] = 1.0
+    near_parallel = normals[:, 2].abs() > 0.9
+    reference[near_parallel] = torch.tensor([0.0, 1.0, 0.0], dtype=normals.dtype, device=normals.device)
+    tangent_u = torch.nn.functional.normalize(torch.linalg.cross(reference, normals, dim=1), dim=1)
+    tangent_v = torch.linalg.cross(normals, tangent_u, dim=1)
+    rotation = torch.stack((tangent_u, tangent_v, normals), dim=2)
+    trace = rotation[:, 0, 0] + rotation[:, 1, 1] + rotation[:, 2, 2]
+    qw = torch.sqrt(torch.clamp(1.0 + trace, min=1e-8)) * 0.5
+    denom = (4.0 * qw).clamp_min(1e-8)
+    qx = (rotation[:, 2, 1] - rotation[:, 1, 2]) / denom
+    qy = (rotation[:, 0, 2] - rotation[:, 2, 0]) / denom
+    qz = (rotation[:, 1, 0] - rotation[:, 0, 1]) / denom
+    return torch.nn.functional.normalize(torch.stack((qw, qx, qy, qz), dim=1), dim=1)
+
+
+def _baseline_like_surface_covariance(
+    points: torch.Tensor, normals: torch.Tensor, generator: torch.Generator
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Construct locally scaled, tangent-aligned covariance from baseline 3DGS statistics.
+
+    ``output/graphdeco_ab_3k`` has sampled major/minor anisotropy median 5.44,
+    p25/p75 3.14/10.09, and 90.9% of Gaussians above 2x.  The absolute size is
+    tied to local nearest-neighbor spacing so the law remains valid for every
+    deterministic synthetic resolution.
+    """
+    count = int(points.shape[0])
+    distances = torch.cdist(points, points)
+    distances.fill_diagonal_(float("inf"))
+    spacing = distances.min(dim=1).values.clamp_min(1e-4)
+    ratio = torch.exp(torch.log(torch.tensor(5.44)) + 0.92 * torch.randn(count, generator=generator))
+    ratio = ratio.clamp(1.5, 32.0).to(dtype=points.dtype, device=points.device)
+    tangent_major = (spacing * torch.exp(-0.65 + 0.32 * torch.randn(count, generator=generator))).clamp_min(2e-4)
+    tangent_minor = (tangent_major * torch.exp(0.20 * torch.randn(count, generator=generator))).clamp_min(2e-4)
+    normal = (torch.maximum(tangent_major, tangent_minor) / ratio).clamp_min(5e-5)
+    scales = torch.stack((tangent_major, tangent_minor, normal), dim=1).to(dtype=points.dtype, device=points.device)
+    return scales, _tangent_frame_quaternion(normals)
 
 # --- Analytic height fields z = f(x, y) over the [-1, 1]^2 xy domain. ---
 
@@ -84,6 +129,59 @@ def _crease_height(xy: torch.Tensor) -> torch.Tensor:
 def _mild_curved_height(xy: torch.Tensor) -> torch.Tensor:
     # Gentle paraboloid: curved everywhere but nowhere near a crease.
     return 0.12 * (xy[:, 0].square() + xy[:, 1].square())
+
+
+# --- Default benchmark family: depth-bearing 3D surface structures. ---
+
+def _saddle_shell_height(xy: torch.Tensor) -> torch.Tensor:
+    x, y = xy[:, 0], xy[:, 1]
+    return 0.82 * (x.square() - 0.72 * y.square()) + 0.16 * x * y
+
+
+def _spherical_cap_height(xy: torch.Tensor) -> torch.Tensor:
+    x, y = xy[:, 0], xy[:, 1]
+    return torch.sqrt(torch.clamp(2.45 - x.square() - y.square(), min=0.05)) - 0.55
+
+
+def _folded_roof_height(xy: torch.Tensor) -> torch.Tensor:
+    x, y = xy[:, 0], xy[:, 1]
+    return 0.72 * torch.sqrt(x.square() + 0.025) + 0.46 * torch.sqrt(y.square() + 0.04) - 0.40
+
+
+def _wave_annulus_height(xy: torch.Tensor) -> torch.Tensor:
+    x, y = xy[:, 0], xy[:, 1]
+    return 0.62 * torch.sin(2.5 * x) * torch.cos(2.0 * y) + 0.18 * (x.square() + y.square())
+
+
+def _saddle_shell_oracle(points: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    x, y = points[:, 0], points[:, 1]
+    residual = points[:, 2] - _saddle_shell_height(points[:, :2])
+    normals = torch.stack((-(1.64 * x + 0.16 * y), 1.1808 * y - 0.16 * x, torch.ones_like(x)), dim=1)
+    return residual, torch.nn.functional.normalize(normals, dim=1)
+
+
+def _spherical_cap_oracle(points: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    x, y = points[:, 0], points[:, 1]
+    cap = torch.sqrt(torch.clamp(2.45 - x.square() - y.square(), min=0.05))
+    residual = points[:, 2] - (cap - 0.55)
+    normals = torch.stack((x / cap, y / cap, torch.ones_like(x)), dim=1)
+    return residual, torch.nn.functional.normalize(normals, dim=1)
+
+
+def _folded_roof_oracle(points: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    x, y = points[:, 0], points[:, 1]
+    residual = points[:, 2] - _folded_roof_height(points[:, :2])
+    normals = torch.stack((-0.72 * x / torch.sqrt(x.square() + 0.025), -0.46 * y / torch.sqrt(y.square() + 0.04), torch.ones_like(x)), dim=1)
+    return residual, torch.nn.functional.normalize(normals, dim=1)
+
+
+def _wave_annulus_oracle(points: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    x, y = points[:, 0], points[:, 1]
+    residual = points[:, 2] - _wave_annulus_height(points[:, :2])
+    dzdx = 1.55 * torch.cos(2.5 * x) * torch.cos(2.0 * y) + 0.36 * x
+    dzdy = -1.24 * torch.sin(2.5 * x) * torch.sin(2.0 * y) + 0.36 * y
+    normals = torch.stack((-dzdx, -dzdy, torch.ones_like(x)), dim=1)
+    return residual, torch.nn.functional.normalize(normals, dim=1)
 
 
 _SHEET_GAP = 0.12  # close_parallel_sheets: z = +/- gap / 2
@@ -195,7 +293,7 @@ def _annulus_density_gradient_xy(
 def make_scene(name: str, count: int, seed: int = 0, noise_std: float = 0.0) -> SyntheticGaussianScene:
     """Create one named synthetic scene (see ``SCENE_NAMES``)."""
 
-    if name not in SCENE_NAMES:
+    if name not in ALL_SCENE_NAMES:
         raise ValueError(f"Unknown synthetic scene: {name}")
     generator = torch.Generator(device="cpu").manual_seed(seed)
     count = max(4, int(count))
@@ -208,7 +306,7 @@ def make_scene(name: str, count: int, seed: int = 0, noise_std: float = 0.0) -> 
         xy = _annulus_density_gradient_xy(count, generator)
     elif name in {
         "triangle", "u_shape", "crescent", "planar_hole", "elongated_plane",
-        "planar_hole_offcenter", "planar_hole_elliptical", "curved_annulus",
+        "planar_hole_offcenter", "planar_hole_elliptical", "curved_annulus", "wave_annulus",
     }:
         support_predicate, support_name = {
             "triangle": (triangle, "triangle"), "u_shape": (u_shape, "u_shape"),
@@ -217,6 +315,7 @@ def make_scene(name: str, count: int, seed: int = 0, noise_std: float = 0.0) -> 
             "planar_hole_offcenter": (annulus_off_center, "annulus_offcenter"),
             "planar_hole_elliptical": (annulus_elliptical, "annulus_elliptical"),
             "curved_annulus": (annulus, "annulus"),
+            "wave_annulus": (annulus, "annulus"),
         }[name]
         xy = sample_in_domain(support_predicate, count, generator)
     else:
@@ -225,9 +324,21 @@ def make_scene(name: str, count: int, seed: int = 0, noise_std: float = 0.0) -> 
     gt_patch_count, gt_patch_label = 1, _single_patch_label
     sheet_fns: tuple[HeightFn, ...] | None = None
     z_override: torch.Tensor | None = None
-    if name == "plane":
+    if name == "saddle_shell":
+        surface_fn, oracle = _saddle_shell_height, _saddle_shell_oracle
+        description = "Depth-bearing saddle shell: principal curvatures and normal rotation occupy all three world axes."
+    elif name == "spherical_cap":
+        surface_fn, oracle = _spherical_cap_height, _spherical_cap_oracle
+        description = "Spherical cap: strongly non-planar surface with depth extent comparable to its lateral extent."
+    elif name == "folded_roof":
+        surface_fn, oracle = _folded_roof_height, _folded_roof_oracle
+        description = "Rounded folded roof: two persistent curvature directions rather than a nearly planar height perturbation."
+    elif name == "wave_annulus":
+        surface_fn, oracle = _wave_annulus_height, _wave_annulus_oracle
+        description = "Curved annular shell: an observed inner boundary on a depth-bearing, rotating-normal surface."
+    elif name == "plane":
         surface_fn, oracle = _plane_height, _plane_oracle
-        description = "Flat chart: baseline fitting and normal stability."
+        description = "Legacy flat chart retained only for targeted compatibility tests."
     elif name == "sine":
         surface_fn, oracle = _sine_height, _sine_oracle
         description = "Smooth curved chart: LSQ and curvature fidelity."
@@ -280,10 +391,15 @@ def make_scene(name: str, count: int, seed: int = 0, noise_std: float = 0.0) -> 
     points = torch.stack([x, y, z], dim=1)
     if noise_std > 0.0:
         points = points + torch.randn(points.shape, generator=generator) * float(noise_std)
+    _, normals = oracle(points)
+    covariance_scales, covariance_rotations = _baseline_like_surface_covariance(points, normals, generator)
     return SyntheticGaussianScene(
         name=name,
         points=points,
         colors=_colors(x, y),
+        covariance_scales=covariance_scales,
+        covariance_rotations=covariance_rotations,
+        covariance_normals=normals,
         oracle=oracle,
         description=description,
         surface_fn=surface_fn,
@@ -295,8 +411,13 @@ def make_scene(name: str, count: int, seed: int = 0, noise_std: float = 0.0) -> 
     )
 
 
-SCENE_NAMES = (
+# ``SCENE_NAMES`` is the benchmark dataset. The former mostly planar scenes
+# remain callable for focused compatibility tests, but are no longer the
+# default evaluation population.
+SCENE_NAMES = ("saddle_shell", "spherical_cap", "folded_roof", "wave_annulus")
+LEGACY_SCENE_NAMES = (
     "plane", "sine", "crease", "density_gradient", "triangle", "u_shape", "crescent", "planar_hole",
     "elongated_plane", "mild_curved_sheet", "close_parallel_sheets",
     "planar_hole_offcenter", "planar_hole_elliptical", "planar_hole_density_gradient", "curved_annulus",
 )
+ALL_SCENE_NAMES = SCENE_NAMES + LEGACY_SCENE_NAMES

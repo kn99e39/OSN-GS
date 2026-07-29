@@ -95,6 +95,28 @@ class TrimmedComponentFitterTest(unittest.TestCase):
         self.assertGreater(metrics["jacobian_min"], 0.0)
         self.assertEqual(metrics["degenerate_fraction"], 0.0)
 
+    def test_jacobian_metrics_keep_relative_boundary_warning_separate_from_hard_degeneracy(self):
+        from osn_gs.surface.torch_trimmed_component_fitter import _jacobian_metrics
+
+        metrics = _jacobian_metrics(self._fit(_flat_plane()).surface)
+        self.assertEqual(metrics["degenerate_fraction"], 0.0)
+        self.assertGreater(metrics["near_degenerate_fraction"], 0.0)
+        self.assertGreater(metrics["near_degenerate_threshold"], metrics["degenerate_threshold"])
+
+    def test_jacobian_metrics_detect_an_actually_collapsed_surface(self):
+        from osn_gs.surface.torch_nurbs import TorchNURBSSurface
+        from osn_gs.surface.torch_trimmed_component_fitter import _jacobian_metrics
+
+        # Every control point varies only along u, so the v derivative and
+        # therefore every area Jacobian are exactly zero.
+        u = torch.linspace(0.0, 1.0, 3)
+        control_grid = torch.zeros((3, 3, 3))
+        control_grid[:, :, 0] = u[:, None]
+        surface = TorchNURBSSurface(control_grid=control_grid, weights=torch.ones((3, 3)))
+        metrics = _jacobian_metrics(surface)
+        self.assertEqual(metrics["degenerate_fraction"], 1.0)
+        self.assertEqual(metrics["near_degenerate_fraction"], 1.0)
+
     def test_control_grid_metrics_report_extent_and_edges(self):
         from osn_gs.surface.torch_trimmed_component_fitter import _control_grid_metrics
 

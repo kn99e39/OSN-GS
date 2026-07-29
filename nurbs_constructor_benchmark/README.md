@@ -1,81 +1,50 @@
-# Synthetic NURBS Constructor Benchmark
+﻿# NURBS Construction Synthetic Benchmark
 
-This isolated framework validates the OSN-GS visible-NURBS constructor with deterministic synthetic Gaussian scenes. By default (`--constructor boundary_first`) it runs the Phase 1-4 component/boundary/topology-routed-chart pipeline (`../docs/Urgent_Work/OSN_GS_Final_Boundary_First_NURBS_Direction.md`, `nurbs_constructor_benchmark/boundary_first.py`). `--constructor voxel_patch_stage1` runs the Stage 1 ablation baseline via `TorchOSNGSPipeline.initialize()` (`osn_gs/core/torch_pipeline.py`) for comparison. There is no `legacy` option in this benchmark.
+이 benchmark는 OSN-GS visible-surface constructor를 실제 3D Gaussian set 형태로 검증한다. 기본 dataset은 점 중심만 흩뿌린 평면 샘플이 아니라, depth extent·법선 회전·표면 접선 방향 covariance를 함께 갖는 관측 Gaussian set이다.
 
-## Run
+## 기본 3D dataset
 
-From the repository root:
+`python -m nurbs_constructor_benchmark`는 다음 네 장면을 실행한다.
 
-```bash
-python -m nurbs_constructor_benchmark
+- `saddle_shell`: 두 주곡률과 큰 depth 변화를 갖는 saddle shell
+- `spherical_cap`: lateral extent에 비견되는 depth를 갖는 spherical cap
+- `folded_roof`: 두 곡률 방향이 지속되는 rounded folded shell
+- `wave_annulus`: 곡면 위 observed inner boundary를 갖는 annular shell
+
+이전 `plane`, `sine`, `crease` 등은 focused compatibility test에서만 이름으로 호출할 수 있는 legacy scene이다. 기본 benchmark population에는 포함하지 않는다.
+
+## Gaussian covariance 계약
+
+각 scene은 `points`, `colors`뿐 아니라 다음을 제공한다.
+
+- `covariance_scales`: linear `(N, 3)` scale
+- `covariance_rotations`: normalized wxyz `(N, 4)` quaternion
+- `covariance_normals`: local surface normal
+
+covariance는 `output/graphdeco_ab_3k/point_cloud/iteration_3000/point_cloud.ply`의 baseline 3DGS 분포를 표본 분석해 구성한다. baseline의 Gaussian별 major/minor anisotropy는 median `5.44`, p25/p75 `3.14/10.09`, 2x 이상 비율 `90.9%`였다. synthetic set은 이 분포를 국소 nearest-neighbor spacing에 맞춰 scale하고, local z covariance axis를 analytic surface normal에 정렬한다. 따라서 절대 길이는 scene point density를 따르지만 "표면에 납작하게 붙는" covariance 패턴은 유지한다.
+
+`TorchOSNGSPipeline.initialize()`는 optional `covariance_scales`/`covariance_rotations` 입력을 받아 이를 보존한다. benchmark renderer export의 `point_cloud.ply`도 이 covariance를 그대로 사용한다.
+
+## 실행
+
+```powershell
+.venv\Scripts\python.exe -m nurbs_constructor_benchmark
 ```
 
-This runs `plane`, `sine`, `crease`, and `density_gradient` on CPU and writes `nurbs_constructor_benchmark/results/report.json`.
+빠른 실행:
 
-Useful variants:
-
-```bash
-# Exercise one smooth curved scene with the production voxel bootstrap.
-python -m nurbs_constructor_benchmark --scenes sine --points 1200
-
-# Compare the direct single-chart path without voxel partitioning.
-python -m nurbs_constructor_benchmark --scenes sine --disable-voxel
-
-# See density-adaptive voxel subdivision actually help a non-uniform scene.
-python -m nurbs_constructor_benchmark --scenes density_gradient --adaptive-voxel
-
-# Make a CI-style regression gate. The command exits non-zero on failure.
-python -m nurbs_constructor_benchmark --max-fit-rms 0.05 --max-chart-rms 0.10
+```powershell
+.venv\Scripts\python.exe -m nurbs_constructor_benchmark --points 180 --skip-renderer-export --output C:\tmp\osn_gs_3d_benchmark_smoke
 ```
 
-## What it tests
+특정 장면:
 
-- `plane`: baseline fit, UV projection, and normal stability.
-- `sine`: smooth-curvature fidelity of the LSQ fitting path.
-- `crease`: normal-boundary / multi-patch behavior around two joined planes.
-- `density_gradient`: same smooth sheet as `sine`, but Gaussian centers cluster densely near the origin with a sparse background instead of sampling uniformly. Every other scene is uniform, so this is the only one that actually stresses density-adaptive voxel subdivision (`--adaptive-voxel`); with a fixed-resolution grid the dense cluster is under-resolved and the sparse periphery is over-resolved.
-
-Each scene generates deterministic observed Gaussian centers and colors. The production pipeline constructs its normal `TorchGaussianModel`, including its internally initialized opacity, scale, rotation, UV, and patch metadata.
-
-The report contains input-point foot-point RMS, sampled reconstructed-chart residual against the analytic source surface, sampled normal error, patch/control-point counts, and a finite-value check. `surface_chart_rms` is a chart residual (vertical/implicit analytic residual), not a symmetric Chamfer distance.
-
-## Ground-truth NURBS metrics (three construction concerns)
-
-Because each scene knows its true surface `z = f(x, y)` and true patch topology, the generated NURBS is scored against ground truth on three **independent** concerns (in every result's `ground_truth` block; see `metrics.py`). The single chart residual above conflates these, so they are separated:
-
-1. **Surface Fitting Accuracy** — geometric closeness where both surfaces exist. `accuracy_rms` (generated → true surface, precision) and `completeness_rms` (observed true surface → generated, recall), combined as `chamfer_rms`.
-2. **Surface Support** — whether the surface exists in the right places. `support_coverage_uncovered_fraction` (holes / under-support over the observed region) and `support_extrapolation_fraction` (surface drawn where there is no input data / over-support). Patches carry a UV trim mask (`surface_trim_resolution`/`--trim-resolution`, `--trim-dilation`), so the support metric measures the trimmed surface the renderer would actually draw. Thresholds scale with the median input point spacing (so the highly non-uniform `density_gradient` reports a strict extrapolation figure — an artifact of the global threshold, not trimming).
-3. **Patch Topology** — whether the patch count and boundaries match ground truth. `topology_gen_patch_count` vs `topology_gt_patch_count` and `topology_label_ari` (Adjusted Rand Index of per-Gaussian generated `cluster_ids` vs GT patch labels; permutation-invariant, penalizes over-segmentation). `crease` has 2 GT patches; the other scenes have 1.
-
-These make different failure modes visible that the chart RMS hides — e.g. `crease` fits each sliver with low residual yet scores a low topology ARI (over-segmentation), and `density_gradient` has a high extrapolation fraction (surface drawn far past the clustered data).
-
-Optional regression gates (exit non-zero on breach), one per concern: `--max-chamfer-rms`, `--max-extrapolation`, `--min-topology-ari` (alongside `--max-fit-rms` / `--max-chart-rms`).
-
-## Renderer output
-
-Every run (unless `--skip-renderer-export`) also writes, per scene:
-
-```text
-results/NURBS_output/<scene>/point_cloud.ply
-results/NURBS_output/<scene>/nurbs_surface.json
-results/NURBS_output/<scene>_gt/nurbs_surface.json
+```powershell
+.venv\Scripts\python.exe -m nurbs_constructor_benchmark --scenes wave_annulus --points 600
 ```
 
-`point_cloud.ply` + `nurbs_surface.json` are the same pair a real training run writes to its `final` output directory (see `osn_gs/core/torch_trainer.py:save_outputs`), built from the exact same `nurbs_intermediate_payload()` helper so the two never drift apart. `<scene>_gt/nurbs_surface.json` is the **ground-truth NURBS** in the identical renderer format (`ground_truth.py`). GT charts are **boundary-conformal** — the parameterization itself carries the support topology, so no GT patch has a trim mask: annulus/crescent are polar charts (u = angle, v = inner→outer boundary; the hole IS the chart's inner boundary), the U is a swept strip along its path, the triangle a degenerate-corner chart, and rectangular-support scenes plain rectangular charts (two for `crease`, one per sheet for `close_parallel_sheets`). This is the *ideal target representation* for OSN-GS — parametric extension of occluded surface needs a surface-following parameterization — and the benchmark reports `support_conformality` (the fraction of each generated patch's support boundary realized as chart edges rather than trim contours) as the corresponding topology-ideal metric. Circular boundaries are dense degree-2 uniform-knot approximations (sag < 0.5% of radius); exact rational circles would need per-patch knot vectors, which the payload/evaluators do not carry yet. Load both folders at `3DGS_Renderer`/`WebRenderer` per `RENDERER_INPUT_FORMAT.md` to overlay the reconstructed surface on ground truth. Each file's top-level `control_grid` is the primary patch; the full `patches[]` array carries every patch for multi-patch scenes. GT chart consistency with the analytic predicates is enforced by `tests/test_gt_nurbs.py`.
+## 해석 규칙
 
-## Extending it
+이 benchmark가 chart를 materialize했다는 사실은 quality 승인이나 production integration 허가를 뜻하지 않는다. 특히 새로운 3D scenes는 기존 XY projection·planar support·component topology 가정에서 false hole, component split, `review_required` 또는 `unsupported`를 노출할 수 있다. 이런 결과는 숨기지 않고 report에 남겨 Boundary-first hardening의 입력으로 사용한다.
 
-Add a scene in `scenes.py`: provide its analytic height `surface_fn`, pointwise `oracle` (residual + normal), and ground-truth topology (`gt_patch_count`, `gt_patch_label`), then add its name to `SCENE_NAMES`. The GT metrics and GT-NURBS export pick these up automatically. Keep constructor changes in the production `osn_gs` modules; this benchmark will automatically evaluate the changed path.
-
-
-## Stage 1 voxel-per-patch constructor
-
-`--constructor voxel_patch_stage1` runs the retained experimental Stage 1 ablation baseline (see `../docs/worklogs/33_stage1_support_modes.md`): a recursive raw-count voxel hierarchy (`--voxel-min-count`, `--voxel-max-count`, `--voxel-max-depth`, `--voxel-min-size`), one NURBS patch per active leaf fitted to the raw Gaussians inside that voxel, and a per-patch support mask (`--stage1-support voxel_density|voxel|none`, see the same worklog for the mode comparison). `voxel` trims each chart to the exact plane-AABB intersection polygon of its source voxel. The default `voxel_density` (Stage 1-F) additionally refines **boundary leaves** (leaves with an exterior/unresolved face per the leaf face-adjacency classification): an adaptive-bandwidth KDE over the leaf's raw Gaussian UVs (bandwidth = `--stage1-density-bandwidth` x each sample's own NN spacing; support level = `--stage1-density-threshold` effective neighbors) is thresholded and intersected with the polygon, with marching-squares sub-cell contours exported. Active-active shared faces are never eroded (cross-face sample borrowing + a deterministic protection strip); interior leaves keep the pure polygon.
-
-Stage 1 additions to the report: a `patch_union` block (support topology on the world-space union of all trimmed patches — hole count/IoU, false-fill, Euler, patch overlap/gap ratios, component/hole area histograms exposing raster fragmentation) and a `stage1` block (leaf state counts, underdetermined-patch count, observations-per-control, per-patch provenance incl. source voxel, local plane, and support polygon). Extra scenes: `elongated_plane`, `mild_curved_sheet`, `close_parallel_sheets` (two sheets at z = ±0.06; XY-projected union/overlap metrics conflate stacked sheets — read them with that caveat). `scripts/stage1_ablation.py` runs the required ablation matrix and writes `results/stage1_ablation/summary.{json,md}`.
-
-## Support-domain scenes and metrics
-
-The deterministic support-domain scenes are triangle, u_shape, crescent, and planar_hole (annulus). Gaussian centers are sampled only inside each analytic GT predicate.
-
-The benchmark rasterizes the GT predicate and trim-respecting generated NURBS samples on the same XY grid. The ground_truth block records coverage, unsupported and uncovered fractions, precision/recall/IoU, component and hole counts, Euler-equivalent topology, topology mismatch, and boundary Chamfer/Hausdorff. report.json also links shared-XY support JSON/SVG and per-patch UV occupancy/trim-mask JSON/SVG artifacts.
+현재 constructor의 active scope와 integration 금지는 [Urgent Work Master](../docs/Urgent_Work/OSN_GS_Urgent_Work_Master.md)를 따른다.

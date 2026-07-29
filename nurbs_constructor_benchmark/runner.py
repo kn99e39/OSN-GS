@@ -263,7 +263,12 @@ def evaluate_scene(
 
     pipeline = TorchOSNGSPipeline(config, device=device)
     construct_start = time.perf_counter()
-    state = pipeline.initialize(scene.points, scene.colors)
+    state = pipeline.initialize(
+        scene.points,
+        scene.colors,
+        covariance_scales=scene.covariance_scales,
+        covariance_rotations=scene.covariance_rotations,
+    )
     construct_seconds = time.perf_counter() - construct_start
     if export_dir is not None:
         export_renderer_output(scene, state, export_dir)

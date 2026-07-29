@@ -1,4 +1,4 @@
-# Gaussian → NURBS 생성 파이프라인 (기술 상세)
+﻿# Gaussian → NURBS 생성 파이프라인 (기술 상세)
 
 이 문서는 OSN-GS가 관측된 3D Gaussian center 집합으로부터 실제로 어떻게 rational NURBS 표면(들)을 구성하는지, 코드 레벨에서 정확히 설명한다. 상위 개념/모티베이션은 `docs/architecture.md`를 참고하고, 이 문서는 **알고리즘과 수식 자체**에 집중한다.
 
@@ -300,6 +300,6 @@ weights.clamp_(1e-3, 1e3)   # rational weight 발산 방지
 ## 10. 알려진 한계 (코드/worklog 기준)
 
 - Voxel subdivision은 진짜 재귀 octree가 아니라 2단계(coarse/fully-subdivided)뿐이다.
-- LSQ의 선형성 가정은 `weights ≡ 1`일 때만 성립한다. 학습 중 rational weight가 1에서 멀어진 patch를 나중에 다시 LSQ로 재fit하는 경로는 아직 없다 (`docs/worklogs/11_least_squares_nurbs_fit.md` 남은 위험).
+- LSQ의 선형성 가정은 `weights ≡ 1`일 때만 성립한다. 학습 중 rational weight가 1에서 멀어진 patch를 나중에 다시 LSQ로 재fit하는 경로는 아직 없다 (과거 LSQ fitting 조사에서 확인된 남은 위험; 상세는 Git 이력 참조).
 - 데이터가 전혀 없는 UV 영역(구멍)에 대한 명시적 trimming/마스킹은 없다 — 그런 control point는 seed-anchoring으로 안정화될 뿐, "관측된 표면"이라는 의미는 없다.
-- Patch topology는 quantile 경계 근처에서 rebuild마다 흔들릴 수 있다 (`docs/worklogs/07_density_adaptive_voxel_nurbs.md` 남은 위험).
+- Patch topology는 quantile 경계 근처에서 rebuild마다 흔들릴 수 있다 (과거 topology 안정성 조사에서 확인된 남은 위험; 상세는 Git 이력 참조).

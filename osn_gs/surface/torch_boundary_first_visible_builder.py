@@ -168,6 +168,21 @@ def _materialize_boundary_role_network(
                 },
             )
         cap = build_boundary_central_cap(outer_role.curve, anchor, segment_count=curve_count)
+        if cap.state != "constructed_central_cap":
+            return BoundaryFirstVisibleSurfaceResult(
+                "unsupported",
+                "boundary_role_network",
+                cap.reason,
+                None,
+                {
+                    **role_provenance,
+                    **cap.provenance,
+                    "anchor_ray_support_coverage": coverage,
+                    "minimum_anchor_ray_support_coverage": 0.99,
+                    "anchor_ray_support_tolerance_cells": 1,
+                    **observed_layers,
+                },
+            )
         return BoundaryFirstVisibleSurfaceResult(
             "constructed",
             "boundary_role_network",
