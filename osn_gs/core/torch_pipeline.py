@@ -690,6 +690,7 @@ class TorchOSNGSPipeline:
                 local_sample = bundle.representative_indices
                 sample_model_indices = eligible_indices[local_sample]
                 event["canonical_sample_count"] = len(sample_stable_ids)
+                event["canonical_representative_stable_ids"] = sample_stable_ids
                 event["representative_selection_mode"] = bundle.selection.diagnostics.selection_mode
                 event["representative_occupied_cell_count"] = bundle.selection.diagnostics.occupied_cell_count
                 event["representative_candidate_mode_count"] = bundle.selection.diagnostics.total_candidate_mode_count
