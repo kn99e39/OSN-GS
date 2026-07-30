@@ -21,6 +21,7 @@ from osn_gs.surface.torch_density_preserving_representative_selection import (
     RepresentativeSelectionResult,
     select_density_preserving_representatives,
 )
+from osn_gs.surface.torch_full_cloud_continuation_shell import ContinuationShellInput
 from osn_gs.surface.torch_full_neighborhood_evidence import (
     FullNeighborhoodEvidence,
     assign_nearest_representative,
@@ -92,6 +93,7 @@ class CanonicalConstructionWithEvidence:
     evidence: FullNeighborhoodEvidence
     representative_indices: Any  # (M,) long, indices into the input full cloud
     representative_stable_ids: tuple[Any, ...]
+    nearest_representative_index: Any | None = None  # (N,) long, worklog 130: reused by propagation, never recomputed
 
 @dataclass
 class TorchPipelineConfig:
@@ -431,33 +433,53 @@ class TorchOSNGSPipeline:
         rep_covariance = covariance[rep_indices]
         rep_frame = _slice_covariance_frame(frame_full, rep_indices)
         rep_stable_ids = tuple(stable_ids_list[i] for i in rep_indices.detach().cpu().tolist())
+        downsampled = int(rep_indices.numel()) != int(points.shape[0])
 
-        evidence = compute_full_neighborhood_evidence(
-            points, frame_full, opacity, intrinsic_full, rep_points, rep_frame, rep_stable_ids
+        precomputed_assignment = (
+            assign_nearest_representative(points, rep_points) if downsampled else None
         )
-        if int(rep_indices.numel()) == int(points.shape[0]):
+        evidence = compute_full_neighborhood_evidence(
+            points, frame_full, opacity, intrinsic_full, rep_points, rep_frame, rep_stable_ids,
+            precomputed_assignment=precomputed_assignment,
+        )
+        if not downsampled:
             # No downsampling occurred: the representative set IS the full
             # cloud, so a representative's full-cloud "Voronoi cell" would
             # degenerate to itself (support count ~1) -- worse evidence than
             # the plain representative-only k-NN path, not better. Full-
             # neighborhood evidence only helps once representatives are a
             # bounded subset of a denser full cloud; fall back to the
-            # unchanged k-NN contextual path for the small-scene case.
+            # unchanged k-NN contextual path for the small-scene case. The
+            # same degeneracy argument applies to the continuation shell
+            # (worklog 130): a representative's shell would only ever contain
+            # itself, so it is skipped here too.
             reliability = evaluate_structural_reliability(rep_points, rep_frame)
+            construction = construct_visible_nurbs_from_gaussians(
+                rep_points, covariance=rep_covariance, stable_ids=rep_stable_ids, reliability=reliability,
+            )
         else:
             reliability = evaluate_structural_reliability_from_full_evidence(rep_frame, evidence)
-        construction = construct_visible_nurbs_from_gaussians(
-            rep_points,
-            covariance=rep_covariance,
-            stable_ids=rep_stable_ids,
-            reliability=reliability,
-        )
+            nearest_representative_index, _distance = precomputed_assignment
+            continuation_input = ContinuationShellInput(
+                full_positions=points,
+                full_frame=frame_full,
+                full_intrinsic=intrinsic_full,
+                full_opacity=opacity,
+                full_stable_ids=stable_ids_list,
+                nearest_representative_index=nearest_representative_index,
+                representative_mean_spacing=evidence.mean_spacing,
+            )
+            construction = construct_visible_nurbs_from_gaussians(
+                rep_points, covariance=rep_covariance, stable_ids=rep_stable_ids, reliability=reliability,
+                continuation_input=continuation_input,
+            )
         return CanonicalConstructionWithEvidence(
             construction=construction,
             selection=selection,
             evidence=evidence,
             representative_indices=rep_indices,
             representative_stable_ids=rep_stable_ids,
+            nearest_representative_index=precomputed_assignment[0] if precomputed_assignment is not None else None,
         )
 
     def _propagate_with_evidence_gating(
@@ -484,7 +506,10 @@ class TorchOSNGSPipeline:
         rep_indices = bundle.representative_indices
         rep_positions = points[rep_indices]
         full_frame = extract_covariance_frame(covariance)
-        nearest, _distance = assign_nearest_representative(points, rep_positions, chunk_size=int(self.config.surface_projection_chunk_size))
+        if bundle.nearest_representative_index is not None:
+            nearest = bundle.nearest_representative_index
+        else:
+            nearest, _distance = assign_nearest_representative(points, rep_positions, chunk_size=int(self.config.surface_projection_chunk_size))
 
         # Eigenvector sign is ambiguous by construction (see
         # torch_gaussian_covariance_frame.py); every metric below only ever

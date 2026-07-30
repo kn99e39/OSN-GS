@@ -28,6 +28,21 @@ class WorldSpaceBoundaryHalfEdgeCandidate:
     confidence: float
     ordering_state: str
     review_reasons: tuple[str, ...]
+    # --- optional full-cloud continuation-evidence payload (worklog 130) ---
+    # Populated only when the producer had access to a
+    # ``ContinuationTerminationQuery`` (see torch_full_cloud_continuation_shell.py);
+    # every existing producer/consumer of this dataclass leaves these at their
+    # defaults and is unaffected.
+    gap_width_degrees: float | None = None
+    same_mode_support_count: int = 0
+    same_mode_opacity_mass: float = 0.0
+    ambiguous_continuation_mass: float = 0.0
+    competing_mode_mass: float = 0.0
+    support_radius: float | None = None
+    reliability_frontier: bool = False
+    sampling_gap: bool = False
+    source_full_cloud_fingerprint: tuple[Any, ...] = ()
+    policy_version: str = "worklog121_v1"
 
 
 def extract_world_space_boundary_halfedge_candidates(positions: Any, normals: Any, region_result: RegionFormationResult, graph: ManifoldAffinityGraph, *, ids: Sequence[Any] | None = None) -> tuple[WorldSpaceBoundaryHalfEdgeCandidate, ...]:

@@ -25,6 +25,7 @@ nurbs_constructor_benchmark/results/
 
 # Generated review/audit artifacts
 artifacts/
+_test_output_unused/
 
 # Editable-install metadata
 osn_gs.egg-info/

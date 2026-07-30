@@ -131,6 +131,7 @@ def compute_full_neighborhood_evidence(
     representative_ids: Sequence[Any],
     *,
     config: FullNeighborhoodEvidenceConfig | None = None,
+    precomputed_assignment: tuple[Any, Any] | None = None,
 ) -> FullNeighborhoodEvidence:
     """Aggregate full-cloud evidence into each representative's Voronoi cell.
 
@@ -141,6 +142,13 @@ def compute_full_neighborhood_evidence(
     contributes to that representative's aggregate -- this is what lets a
     dense ADC-grown region translate into higher representative confidence
     even though the representative COUNT stays capped.
+
+    ``precomputed_assignment`` (worklog 130): an optional
+    ``(nearest_index, distance)`` pair already produced by
+    :func:`assign_nearest_representative` -- pass this when the caller also
+    needs the same Voronoi assignment for something else (e.g. a full-cloud
+    continuation shell query) so it is computed exactly once per canonical
+    construction call.
     """
     torch = require_torch()
     config = config or FullNeighborhoodEvidenceConfig()
@@ -149,9 +157,12 @@ def compute_full_neighborhood_evidence(
     m = int(representative_positions.shape[0])
     device = full_positions.device
 
-    nearest, spacing = assign_nearest_representative(
-        full_positions, representative_positions, chunk_size=config.chunk_size
-    )
+    if precomputed_assignment is not None:
+        nearest, spacing = precomputed_assignment
+    else:
+        nearest, spacing = assign_nearest_representative(
+            full_positions, representative_positions, chunk_size=config.chunk_size
+        )
 
     support_count = torch.zeros((m,), dtype=torch.long, device=device)
     support_count.index_add_(0, nearest, torch.ones_like(nearest, dtype=torch.long))

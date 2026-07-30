@@ -119,6 +119,11 @@ Do not spend time retrying those commands inside the restricted sandbox. Treat t
   this wrong once left the user's machine running all night waiting on a
   question that had already been answered.
 
+## Current Framework Reference Maintenance
+
+- `docs/current_framework.md` is the paper/research-facing reference for the **implemented current pipeline only**. Do not add future designs, intended modules, or speculative roadmap material.
+- Update it whenever a major pipeline structure changes or an implementation-complete module materially enters or leaves the active framework path.
+
 ## Ongoing Context Log
 
 - 2026-07-01: User requested that whenever the environment, project situation, or task direction changes, the relevant `.md` files should be updated with that context instead of relying only on chat history.

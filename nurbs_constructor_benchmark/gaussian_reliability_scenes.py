@@ -237,6 +237,41 @@ def _spherical_patch(
     return positions, covariances
 
 
+def make_gaussian_density_sweep_scene(
+    base_name: str, resolution_multiplier: int, *, seed: int = 0
+) -> GaussianReliabilityScene:
+    """Worklog 129 density sweep: the SAME box/cylinder geometry, resampled at
+    ``resolution_multiplier``x the base grid resolution -- i.e. genuinely more
+    Gaussians covering the same physical extent (higher real density), not
+    duplicated/jittered points. Mirrors what ADC does to a real scene: more
+    Gaussians appear in the same physical region as training progresses.
+
+    ``resolution_multiplier=1`` reproduces ``make_gaussian_reliability_scene(base_name)``
+    exactly (same seed, same count).
+    """
+    if base_name not in ("box", "cylinder"):
+        raise ValueError(f"Unsupported density-sweep base scene: {base_name!r}")
+    multiplier = max(1, int(resolution_multiplier))
+    if base_name == "box":
+        count_per_axis = 6 * multiplier + 1  # 7, 13, 19, ... -- always odd, matches base's 7
+        positions, covariances, labels = _box_faces((0.36, 0.36, 0.36), count_per_axis, seed=seed)
+    else:
+        positions, covariances, labels = _cylinder_surface(
+            radius=0.3,
+            height=0.6,
+            angular_count=24 * multiplier,
+            height_count=8 * multiplier + 1,
+            cap_count_per_axis=6 * multiplier + 1,
+            seed=seed,
+        )
+    return GaussianReliabilityScene(
+        f"density_sweep_{base_name}_x{multiplier}", positions, covariances,
+        f"{base_name} resampled at {multiplier}x base grid resolution ({positions.shape[0]} Gaussians) -- "
+        "density sweep: same geometry, genuinely denser real coverage.",
+        labels,
+    )
+
+
 def make_curvature_sweep_scene(radius: float, *, seed: int = 0) -> GaussianReliabilityScene:
     """Worklog 124 curvature sweep: a genuine spherical PATCH (not a sine
     height-field, and not the whole closed sphere -- density/extent are kept

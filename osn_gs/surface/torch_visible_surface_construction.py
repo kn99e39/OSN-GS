@@ -11,7 +11,8 @@ from dataclasses import dataclass, field
 from typing import Any, Sequence
 
 from osn_gs.surface.torch_canonical_region_tangent_frame import construct_canonical_region_tangent_frames
-from osn_gs.surface.torch_boundary_support_termination import extract_support_termination_candidates
+from osn_gs.surface.torch_boundary_support_termination import extract_support_termination_candidates, normalize_continuation_candidates
+from osn_gs.surface.torch_full_cloud_continuation_shell import ContinuationShellInput, build_continuation_shells_from_input
 from osn_gs.surface.torch_gaussian_covariance_frame import GaussianCovarianceFrame, extract_covariance_frame
 from osn_gs.surface.torch_gaussian_manifold_affinity import ManifoldAffinityConfig, ManifoldAffinityGraph, build_manifold_affinity_graph
 from osn_gs.surface.torch_gaussian_structural_reliability import StructuralReliabilityConfig, StructuralReliabilityResult, evaluate_structural_reliability
@@ -100,6 +101,7 @@ def construct_visible_nurbs_from_gaussians(
     stable_ids: Sequence[Any] | None = None,
     config: VisibleSurfaceConstructionConfig | None = None,
     reliability: StructuralReliabilityResult | None = None,
+    continuation_input: ContinuationShellInput | None = None,
 ) -> VisibleSurfaceConstructionResult:
     """Run the one experimental path from Gaussian evidence to NURBS.
 
@@ -112,12 +114,19 @@ def construct_visible_nurbs_from_gaussians(
     :func:`evaluate_structural_reliability` call is skipped and this result is
     used instead -- e.g. a caller that aggregated contextual evidence from the
     full observed Gaussian cloud rather than just this bounded representative
-    set (see ``torch_full_neighborhood_evidence.py``). This is the ONLY
-    injection point; every other canonical stage (affinity, region formation,
-    boundary recovery, materialization) is unchanged and still runs
-    exclusively on ``positions``/``covariance``. Not exposed as a CLI
-    selector -- callers pass this internally, production code always
-    populates it with an evidence source, never a stand-in constructor.
+    set (see ``torch_full_neighborhood_evidence.py``). This is the reliability
+    injection point; boundary recovery and materialization are unchanged and
+    still run exclusively on ``positions``/``covariance`` UNLESS
+    ``continuation_input`` is also supplied. Not exposed as a CLI selector --
+    callers pass this internally, production code always populates it with an
+    evidence source, never a stand-in constructor.
+
+    ``continuation_input`` is a second, independent optional override
+    (worklog 130): when provided, boundary-candidate generation
+    (``extract_support_termination_candidates``) uses a continuous circular
+    full-cloud support-gap query per node instead of the representative-only
+    8-sector histogram -- see ``torch_full_cloud_continuation_shell.py``. Also
+    not exposed as a CLI selector.
     """
     import torch
     from osn_gs.surface.torch_gaussian_covariance_frame import covariance_from_scale_rotation
@@ -146,7 +155,13 @@ def construct_visible_nurbs_from_gaussians(
     oriented_normals = _orient_normals_along_accepted_topology(frame.normal_candidate, accepted, ids)
     canonical_frames = construct_canonical_region_tangent_frames(positions, frame, reliability, regions, ids=ids)
     relation_halfedges = extract_world_space_boundary_halfedge_candidates(positions, oriented_normals, regions, graph, ids=ids)
-    termination_halfedges = extract_support_termination_candidates(positions, oriented_normals, frame.equivalent_tangent_scale, regions, ids=ids, sectors=config.support_termination_sectors, canonical_frames=canonical_frames)
+    continuation = (
+        build_continuation_shells_from_input(continuation_input, positions, frame, ids, regions, canonical_frames)
+        if continuation_input is not None
+        else None
+    )
+    termination_halfedges = extract_support_termination_candidates(positions, oriented_normals, frame.equivalent_tangent_scale, regions, ids=ids, sectors=config.support_termination_sectors, canonical_frames=canonical_frames, continuation=continuation)
+    termination_halfedges = normalize_continuation_candidates(termination_halfedges)
     # Relation-derived candidates stay diagnostic-only: they must never close a loop.
     halfedges = tuple(sorted(termination_halfedges, key=lambda item: item.half_edge_id))
     compatibility = build_boundary_compatibility(halfedges)
@@ -168,6 +183,33 @@ def construct_visible_nurbs_from_gaussians(
     attempts = tuple(attempts)
     materialized = tuple(item for item in attempts if item.state == "materialized")
     review = tuple(item for item in attempts if item.state != "materialized")
+
+    # Boundary-pipeline yield, stage by stage (worklog 130 item 2) -- never
+    # collapse straight to a single boundary_component_count=0 number.
+    genuine_candidates = sum(item.boundary_reason == "observed_support_termination" for item in halfedges)
+    reliability_frontier_candidates = sum(item.reliability_frontier for item in halfedges)
+    sampling_gap_candidates = sum(item.sampling_gap for item in halfedges)
+    crease_candidates = sum(item.boundary_reason == "crease_discontinuity" for item in halfedges)
+    parallel_conflict_candidates = sum(item.boundary_reason == "parallel_sheet_conflict" for item in halfedges)
+    ambiguous_candidates = sum(item.boundary_reason == "ambiguous_continuation" for item in halfedges)
+    closed_components = sum(item.ordering_state == "ordered_closed_loop" for item in components)
+    open_components = sum(item.ordering_state == "ordered_open_chain" for item in components)
+    branching_components = sum(item.ordering_state == "branching_boundary_graph" for item in components)
+    ambiguous_components = sum(item.ordering_state == "ambiguous_ordering" for item in components)
+    isolated_components = sum(item.ordering_state == "isolated_boundary_candidate" for item in components)
+
+    # A/B/C failure-stage classification -- distinct from `_state()` below,
+    # which describes the OVERALL construction outcome; this specifically
+    # locates where the boundary pipeline stopped producing yield.
+    if genuine_candidates == 0:
+        boundary_failure_stage = "A_candidate_generation_failed"
+    elif not components:
+        boundary_failure_stage = "B_candidate_linking_failed"
+    elif closed_components == 0:
+        boundary_failure_stage = "C_component_admission_failed"
+    else:
+        boundary_failure_stage = "not_failed"
+
     summary = {
         "input_gaussian_count": count,
         "reliable_count": sum(item == "reliable_structural_evidence" for item in reliability.reliability_class),
@@ -178,6 +220,19 @@ def construct_visible_nurbs_from_gaussians(
         "materialization_attempt_count": len(attempts), "materialized_surface_count": len(materialized),
         "review_count": len(review), "unresolved_ambiguity_count": len(regions.unresolved_membership_ids),
         "source_region_to_surface": {item.input.source_region_id: item.input.adapter_id for item in materialized},
+        "boundary_failure_stage": boundary_failure_stage,
+        "boundary_candidate_count": len(halfedges),
+        "boundary_genuine_termination_candidate_count": genuine_candidates,
+        "boundary_reliability_frontier_candidate_count": reliability_frontier_candidates,
+        "boundary_sampling_gap_candidate_count": sampling_gap_candidates,
+        "boundary_crease_candidate_count": crease_candidates,
+        "boundary_parallel_conflict_candidate_count": parallel_conflict_candidates,
+        "boundary_ambiguous_candidate_count": ambiguous_candidates,
+        "boundary_component_closed_count": closed_components,
+        "boundary_component_open_count": open_components,
+        "boundary_component_branching_count": branching_components,
+        "boundary_component_ambiguous_count": ambiguous_components,
+        "boundary_component_isolated_count": isolated_components,
     }
     return VisibleSurfaceConstructionResult(frame, reliability, graph, regions, accepted, phase_alias, halfedges, compatibility, components, components, attempts, materialized, review, summary, config.schema_version, "reliable_core_only", _state(attempts, components, regions))
 

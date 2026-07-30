@@ -5,6 +5,7 @@
 - [Urgent Work Master](Urgent_Work/OSN_GS_Urgent_Work_Master.md): 현재 방향, 활성 작업, 승인 경계의 단일 기준
 - [작업로그 보존 정책](worklogs/README.md): 유지 중인 최소 검증 기록 목록
 - [Architecture](architecture.md): 프레임워크 수준의 설계 결정
+- [현재 구현 파이프라인](current_framework.md): 논문·연구 보조용으로 현재 동작하는 Gaussian–canonical visible-NURBS–ADC lifecycle과 구현 수식을 설명
 - [NURBS Construction](nurbs_construction.md): NURBS 중간 표현과 구현 계약
 
 ## 현재 상태
