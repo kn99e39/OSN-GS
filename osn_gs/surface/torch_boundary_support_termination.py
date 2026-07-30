@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 """Topology-local, reference-rotation-invariant support termination evidence."""
 
@@ -40,6 +40,12 @@ def _largest_geometric_gap(local: Sequence[Any], axis_u: Any, axis_v: Any):
     angles = sorted(math.atan2(float(vector @ axis_v), float(vector @ axis_u)) for vector in local)
     gaps = [(angles[(i + 1) % len(angles)] - angles[i]) % (2 * math.pi) for i in range(len(angles))]
     index = max(range(len(gaps)), key=lambda item: gaps[item])
+    # The support resultant is a geometry-only outward direction. Unlike a
+    # sector-bin midpoint it is unchanged when the tangent-frame reference or
+    # the unoriented normal is reversed.
+    resultant = sum(local[1:], local[0].clone())
+    if float(resultant.norm()) > 1e-8:
+        return gaps[index], -_unit(resultant)
     center = angles[index] + gaps[index] * 0.5
     return gaps[index], axis_u * math.cos(center) + axis_v * math.sin(center)
 
@@ -122,4 +128,3 @@ def extract_support_termination_candidates(positions: Any, normals: Any, tangent
             review_reasons=("local_tangent_sector_missing_continuation",),
         ))
     return tuple(sorted(candidates, key=lambda item: item.half_edge_id))
-

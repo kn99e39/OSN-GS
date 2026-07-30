@@ -21,3 +21,8 @@
 - 119_ordered_world_space_boundary_graph_and_role_recovery.md: half-edge candidate의 experimental ordered component와 role recovery
 - 120_ordered_boundary_to_visible_nurbs_materialization_adapter.md: admissible ordered outer loop를 canonical evaluable visible NURBS로 전달하는 실험적 adapter
 - 121_gaussian_to_visible_nurbs_end_to_end_integration.md: Gaussian covariance에서 ordered boundary 및 visible NURBS adapter까지 연결한 canonical experimental execution path
+- 125_volumetric_gaussian_reliability_scene_dataset.md: 평면/사인곡면 fixture를 폐기하고 box/cylinder/sphere volumetric solid dataset으로 교체, 다운스트림 15개 테스트 파일 전체 재작성
+- 126_adc_synchronized_canonical_visible_nurbs_experiment.md: 구조적 ADC commit 뒤 canonical visible NURBS를 원자적으로 재구축하는 격리 스케줄, stable ID, fail-closed lifecycle, event 진단 및 controlled Gaussian invariance 검증
+- 127_notebook_canonical_adc_nurbs_schedule.md: Colab/local Train 셀이 현재 canonical NURBS 경로만 호출하고 구조적 ADC commit 뒤 재구성을 시도하도록 정리
+- 128_webrenderer_gaussian_diagnostics.md: OSN-GS PLY/WebSocket Gaussian metadata와 WebRenderer reliability·ownership 진단 모드
+- 128_osn_gs_benchmark_volumetric_solid_dataset_replacement.md: `osn-gs benchmark`가 실제로 로드하는 scenes.py/ground_truth.py/metrics.py를 box/cylinder/sphere 3D-native dataset으로 전면 교체, canonical constructor의 닫힌 다면체 미지원 갭 공개

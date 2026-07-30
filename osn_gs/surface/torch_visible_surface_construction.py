@@ -99,12 +99,25 @@ def construct_visible_nurbs_from_gaussians(
     rotations: Any | None = None,
     stable_ids: Sequence[Any] | None = None,
     config: VisibleSurfaceConstructionConfig | None = None,
+    reliability: StructuralReliabilityResult | None = None,
 ) -> VisibleSurfaceConstructionResult:
     """Run the one experimental path from Gaussian evidence to NURBS.
 
     Exactly one covariance representation is required: covariance, or the
     log-scale plus quaternion pair.  Unsupported topology is retained as a
     review result; it never receives a synthetic closure.
+
+    ``reliability`` is an optional pre-computed override (worklog 129): when
+    provided, the internal representative-only
+    :func:`evaluate_structural_reliability` call is skipped and this result is
+    used instead -- e.g. a caller that aggregated contextual evidence from the
+    full observed Gaussian cloud rather than just this bounded representative
+    set (see ``torch_full_neighborhood_evidence.py``). This is the ONLY
+    injection point; every other canonical stage (affinity, region formation,
+    boundary recovery, materialization) is unchanged and still runs
+    exclusively on ``positions``/``covariance``. Not exposed as a CLI
+    selector -- callers pass this internally, production code always
+    populates it with an evidence source, never a stand-in constructor.
     """
     import torch
     from osn_gs.surface.torch_gaussian_covariance_frame import covariance_from_scale_rotation
@@ -121,7 +134,8 @@ def construct_visible_nurbs_from_gaussians(
         covariance = covariance_from_scale_rotation(torch.exp(torch.as_tensor(log_scales)), rotations)
 
     frame = extract_covariance_frame(covariance)
-    reliability = evaluate_structural_reliability(positions, frame, config=config.reliability)
+    if reliability is None:
+        reliability = evaluate_structural_reliability(positions, frame, config=config.reliability)
     graph = build_manifold_affinity_graph(positions, frame, reliability, config=config.affinity, ids=ids)
     regions = form_surface_regions(positions, frame, reliability, graph, config=config.regions, ids=ids)
     accepted = tuple(sorted(

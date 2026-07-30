@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 """Torch-based OSN-GS training loop."""
 
@@ -59,15 +59,11 @@ class TorchTrainingConfig:
     surface_loss_patch_budget: int = 16
     surface_lr: float = 1.0e-4
     sh_increment_interval: int = 1000
-    # Compatibility name: this is now a quality-check interval, not a global rebuild.
+    # Reconstruct the complete canonical visible NURBS registry every N iterations.
     surface_rebuild_interval: int = 1000
-    # 0 checks every patch. Positive values rotate a bounded maintenance set.
-    surface_maintenance_patch_budget: int = 16
-    surface_residual_ratio_threshold: float = 0.03
-    surface_residual_patience: int = 3
-    surface_local_min_gaussians: int = 64
-    surface_local_min_component: int = 16
-    enable_local_surface_correction: bool = True
+    # initialize: current production behavior; adc_post_commit: experimental
+    # deferred canonical rebuilds; disabled: Gaussian-only control arm.
+    visible_nurbs_update_schedule: str = "initialize"
     density_control_interval: int = 500
     save_interval: int = 1000
     save_iterations: tuple[int, ...] = ()
@@ -121,6 +117,13 @@ class TorchOSNGSTrainer:
         self._streamed_iterations: dict[int, bool] = {}
         self._progress_bar: Any | None = None
         self._last_progress_iteration = 0
+        self._visible_nurbs_event_counter = 0
+        schedule = str(self.training_config.visible_nurbs_update_schedule).strip().lower()
+        if schedule not in {"initialize", "adc_post_commit", "disabled"}:
+            raise ValueError(
+                "visible_nurbs_update_schedule must be initialize, adc_post_commit, or disabled"
+            )
+        self.training_config.visible_nurbs_update_schedule = schedule
         self._print(f"OSN-GS rasterizer backend: {self.rasterizer.backend_source}")
 
     def _print(self, message: str) -> None:
@@ -142,7 +145,21 @@ class TorchOSNGSTrainer:
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        state = self.pipeline.initialize(scene.initial_points, scene.initial_colors)
+        schedule = self.training_config.visible_nurbs_update_schedule
+        if schedule == "initialize":
+            state = self.pipeline.initialize(scene.initial_points, scene.initial_colors)
+        else:
+            state = self.pipeline.initialize_deferred(
+                scene.initial_points,
+                scene.initial_colors,
+                state_label=(
+                    "unavailable_until_adc" if schedule == "adc_post_commit" else "disabled"
+                ),
+            )
+            self._print(
+                "OSN-GS visible NURBS deferred: "
+                f"schedule={schedule} state={state.visible_nurbs_state} patches=0"
+            )
         # Two different "scene scale" quantities, kept deliberately separate
         # (worklog 71): scene_extent (point-cloud-derived, outlier-robust)
         # answers "how far apart are the things we've actually observed" and
@@ -284,18 +301,15 @@ class TorchOSNGSTrainer:
             self._record_timing(timings, "save", phase_start, timed)
             phase_start = self._time_now(timed)
 
-            if self.training_config.surface_rebuild_interval > 0 and iteration % self.training_config.surface_rebuild_interval == 0:
-                report = self.pipeline.maintain_surface_from_certain(
-                    state,
-                    residual_ratio_threshold=self.training_config.surface_residual_ratio_threshold,
-                    residual_patience=self.training_config.surface_residual_patience,
-                    local_min_gaussians=self.training_config.surface_local_min_gaussians,
-                    local_min_component=self.training_config.surface_local_min_component,
-                    enable_local_correction=self.training_config.enable_local_surface_correction,
-                    patch_ids=self._maintenance_patch_ids(state),
-                )
+            if (
+                self.training_config.visible_nurbs_update_schedule == "initialize"
+                and self.training_config.surface_rebuild_interval > 0
+                and iteration % self.training_config.surface_rebuild_interval == 0
+            ):
+                report = self.pipeline.maintain_surface_from_certain(state)
                 if report["topology_changed"]:
-                    self._sync_surface_optimizer(state)
+                    # Canonical rebuild replaces the complete patch registry.
+                    self._setup_surface_optimizer(state)
                 self._print(
                     "OSN-GS surface maintenance: "
                     f"iteration={iteration} checked={report['checked']} "
@@ -306,12 +320,34 @@ class TorchOSNGSTrainer:
                     f"uv_refreshed={report.get('uv_refreshed', 0)}"
                 )
 
+            pending_adc_event: dict[str, Any] | None = None
             if should_run_adc(iteration, self.training_config.density_control):
                 adc_before = self._adc_stats(state)
+                adc_pre_count = len(state.model)
+                adc_pre_fingerprint = self.pipeline._visible_source_fingerprint(state.model)
+                adc_started = time.perf_counter()
                 gradient_sources = dict(getattr(state.model, "density_gradient_sources", {}))
                 report = apply_adaptive_density_control(
                     state.model, self.training_config.density_control, calibration_extent, iteration=iteration
                 )
+                structural_adc = (report.cloned + report.split + report.pruned) > 0
+                if structural_adc:
+                    self._visible_nurbs_event_counter += 1
+                    pending_adc_event = {
+                        "event_index": self._visible_nurbs_event_counter,
+                        "adc_pre_count": adc_pre_count,
+                        "adc_clone_count": report.cloned,
+                        "adc_clone_parent_count": report.clone_parents,
+                        "adc_split_child_count": report.split,
+                        "adc_split_parent_count": report.split_parents,
+                        "adc_prune_count": report.pruned,
+                        "adc_pruned_opacity": report.pruned_opacity,
+                        "adc_pruned_screen": report.pruned_screen,
+                        "adc_pruned_world": report.pruned_world,
+                        "adc_opacity_reset": False,
+                        "adc_commit_seconds": time.perf_counter() - adc_started,
+                        "adc_pre_fingerprint": adc_pre_fingerprint,
+                    }
                 self._print(
                     "OSN-GS ADC: "
                     f"iteration={iteration} clone_parents={report.clone_parents} "
@@ -343,17 +379,34 @@ class TorchOSNGSTrainer:
                 and iteration % reset_interval == 0
             ):
                 state.model.reset_opacity()
+                if pending_adc_event is not None:
+                    pending_adc_event["adc_opacity_reset"] = True
                 self._print(f"OSN-GS ADC: iteration={iteration} opacity_reset=0.01")
 
             if self.training_config.density_control_interval > 0 and iteration % self.training_config.density_control_interval == 0:
                 report = apply_uncertain_density_control(state.model, self.training_config.density_control)
                 if report.changed:
+                    if pending_adc_event is not None:
+                        pending_adc_event["uncertain_pruned_after_adc"] = report.uncertain_pruned
                     self._print(
                         "OSN-GS uncertain cleanup: "
                         f"iteration={iteration} pruned={report.uncertain_pruned} gaussians={len(state.model)}"
                     )
             state.model.optimizer.step()
             self._clamp_uncertain_confidence(state)
+            if (
+                pending_adc_event is not None
+                and self.training_config.visible_nurbs_update_schedule == "adc_post_commit"
+            ):
+                pending_adc_event["adc_post_count"] = len(state.model)
+                pending_adc_event["adc_post_fingerprint"] = self.pipeline._visible_source_fingerprint(state.model)
+                self._run_visible_nurbs_update(
+                    state,
+                    output_dir,
+                    iteration=iteration,
+                    reason="structural_adc_post_commit",
+                    event_metadata=pending_adc_event,
+                )
             self._record_timing(timings, "density", phase_start, timed)
             phase_start = self._time_now(timed)
 
@@ -365,11 +418,92 @@ class TorchOSNGSTrainer:
                 timings["avg_iter"] = (time.perf_counter() - train_wall_start) / max(iteration, 1)
                 self._log_timing(iteration, timings)
 
+        if self.training_config.visible_nurbs_update_schedule == "adc_post_commit":
+            current_fingerprint = self.pipeline._visible_source_fingerprint(state.model)
+            if (
+                state.visible_nurbs_last_attempt_iteration != int(state.iteration)
+                or state.visible_nurbs_source_fingerprint != current_fingerprint
+            ):
+                self._visible_nurbs_event_counter += 1
+                self._run_visible_nurbs_update(
+                    state,
+                    output_dir,
+                    iteration=int(state.iteration),
+                    reason="training_terminal",
+                    event_metadata={
+                        "event_index": self._visible_nurbs_event_counter,
+                        "adc_pre_count": len(state.model),
+                        "adc_post_count": len(state.model),
+                        "adc_clone_count": 0,
+                        "adc_split_child_count": 0,
+                        "adc_prune_count": 0,
+                        "adc_opacity_reset": False,
+                        "terminal": True,
+                    },
+                )
         self._stream_snapshot(state, include_nurbs=self._should_stream_nurbs(state, force=True))
         self._finish_stream_worker()
         self._close_stream_socket()
         if self.training_config.write_output_files:
             self.save_outputs(state, output_dir / "final", self._preview_camera(scene))
+
+    def _run_visible_nurbs_update(
+        self,
+        state: TorchPipelineState,
+        output_dir: Path,
+        *,
+        iteration: int,
+        reason: str,
+        event_metadata: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Reconstruct after a committed Gaussian state and persist diagnostics."""
+
+        event = self.pipeline.reconstruct_visible_after_adc(
+            state,
+            iteration=iteration,
+            reason=reason,
+            event_metadata=event_metadata,
+        )
+        if event.get("success"):
+            try:
+                self._setup_surface_optimizer(state)
+            except Exception as exc:
+                self.pipeline._clear_visible_nurbs_state(
+                    state,
+                    construction=state.visible_surface_construction,
+                    lifecycle_state="optimizer_commit_failed",
+                    failure_reason=f"{type(exc).__name__}: {exc}",
+                )
+                event["success"] = False
+                event["failure"] = dict(state.visible_nurbs_last_failure)
+                state.visible_nurbs_event_history[-1] = dict(event)
+        else:
+            state.surface_optimizer = None
+        event["cumulative_runtime_seconds"] = sum(
+            float(item.get("runtime_seconds", 0.0))
+            for item in state.visible_nurbs_event_history
+        )
+        event["materialized_surface_count"] = len(state.surface_patches)
+        self._append_visible_nurbs_event(output_dir, event)
+        self._print(
+            "OSN-GS ADC-synchronized visible NURBS: "
+            f"iteration={iteration} reason={reason} success={bool(event.get('success'))} "
+            f"state={state.visible_nurbs_state} patches={len(state.surface_patches)} "
+            f"sample_coverage={float(event.get('sample_coverage_ratio', 0.0)):.4f} "
+            f"full_coverage={float(event.get('full_coverage_ratio', 0.0)):.4f} "
+            f"runtime={float(event.get('runtime_seconds', 0.0)):.3f}s"
+        )
+        return event
+
+    @staticmethod
+    def _append_visible_nurbs_event(
+        output_dir: Path, event: dict[str, Any]
+    ) -> None:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        path = output_dir / "visible_nurbs_adc_events.jsonl"
+        with path.open("a", encoding="utf-8", newline="\n") as handle:
+            handle.write(json.dumps(event, ensure_ascii=False, sort_keys=True, default=str))
+            handle.write("\n")
 
     def _preview_camera(self, scene: TorchScene):
         """Fixed camera for render.ppm previews: name-sorted first train camera.
@@ -382,18 +516,6 @@ class TorchOSNGSTrainer:
         """
 
         return min(scene.cameras, key=lambda camera: camera.image_name)
-
-    def _maintenance_patch_ids(self, state: TorchPipelineState) -> tuple[int, ...] | None:
-        """Rotate a bounded patch set at each maintenance checkpoint."""
-
-        count = len(state.surface_patches)
-        budget = max(0, int(self.training_config.surface_maintenance_patch_budget))
-        if budget == 0 or budget >= count:
-            return None
-        interval = max(1, int(self.training_config.surface_rebuild_interval))
-        maintenance_pass = max(0, int(state.iteration) // interval - 1)
-        start = (maintenance_pass * budget) % count
-        return tuple((start + offset) % count for offset in range(budget))
 
     def _needs_metric_scalars(self, iteration: int) -> bool:
         """True when this iteration's loss/PSNR host scalars will be read.
@@ -430,7 +552,11 @@ class TorchOSNGSTrainer:
             return False
         if force:
             return True
-        shape = tuple(int(value) for value in state.surface.control_grid.shape)
+        shape = (
+            tuple(int(value) for value in state.surface.control_grid.shape)
+            if state.surface is not None
+            else ()
+        )
         signature = (int(state.iteration), shape)
         if self._streamed_nurbs_signature is None:
             return True
@@ -593,6 +719,13 @@ class TorchOSNGSTrainer:
             color = self._snapshot_tensor(torch.clamp(sh_dc_to_rgb(model.get_features_dc[idx, 0, :].detach().float()), 0.0, 1.0))
             sh_degree = int(model.active_sh_degree)
             sh_coefficients = self._snapshot_tensor(model.get_features[idx, : (sh_degree + 1) ** 2, :].float())
+            stable_ids = self._snapshot_tensor(model.stable_gaussian_ids[idx].long())
+            uncertain = self._snapshot_tensor(model.is_uncertain[idx].to(dtype=torch.int32))
+            confidence = self._snapshot_tensor(model.get_confidence[idx].float().reshape(-1))
+            surface_uv = self._snapshot_tensor(model.surface_uv[idx].float())
+            cluster_ids = self._snapshot_tensor(model.cluster_ids[idx].long())
+            surface_owner_kind = self._snapshot_tensor(model.surface_owner_kind[idx].long())
+            surface_owner_id = self._snapshot_tensor(model.surface_owner_id[idx].long())
 
         count = int(xyz.shape[0])
         payload: dict[str, Any] = {
@@ -605,6 +738,13 @@ class TorchOSNGSTrainer:
             "colors": color.reshape(-1),
             "opacities": opacity.reshape(-1),
             "rotations": rotation.reshape(-1),
+            "ids": stable_ids.reshape(-1),
+            "uncertain": uncertain.reshape(-1),
+            "confidences": confidence.reshape(-1),
+            "surfaceUvs": surface_uv.reshape(-1),
+            "clusterIds": cluster_ids.reshape(-1),
+            "surfaceOwnerKinds": surface_owner_kind.reshape(-1),
+            "surfaceOwnerIds": surface_owner_id.reshape(-1),
             "shDegree": sh_degree,
             "shCoefficients": sh_coefficients.reshape(-1),
             "metadata": {
@@ -628,6 +768,9 @@ class TorchOSNGSTrainer:
 
     def _nurbs_stream_payload(self, state: TorchPipelineState) -> dict[str, Any]:
         surface = state.surface
+        if surface is None:
+            self._streamed_nurbs_signature = (int(state.iteration), ())
+            return nurbs_intermediate_payload(state)
         grid = self._snapshot_tensor(surface.control_grid)
         self._streamed_nurbs_signature = (
             int(state.iteration),
@@ -656,46 +799,15 @@ class TorchOSNGSTrainer:
                 for patch_id, patch in enumerate(state.surface_patches)
             ],
             "metadata": {
-                "source": "osn_gs_stage1_visible_reconstruction_stream",
+                "source": "osn_gs_canonical_visible_surface_construction_stream",
                 "gaussian_count": len(state.model),
                 "uncertain_count": int(state.model.is_uncertain.sum().item()),
-                "voxel_role": "initial_bootstrap",
                 "surface_topology_version": int(state.surface_topology_version),
                 "patch_residual_ratios": dict(state.surface_patch_residuals),
                 "flattened": True,
             },
         }
-        voxel_payload = self._voxel_regions_payload(state, flatten=True)
-        if voxel_payload is not None:
-            payload["voxel_regions"] = voxel_payload
-        return payload
 
-    def _voxel_regions_payload(self, state: TorchPipelineState, flatten: bool = False) -> dict[str, Any] | None:
-        regions = state.voxel_regions
-        if regions is None:
-            return None
-
-        def snapshot(value, *, flatten_value: bool = False):
-            cpu = self._snapshot_tensor(value) if flatten else value.detach().cpu()
-            if flatten_value:
-                cpu = cpu.reshape(-1)
-            return cpu if flatten else cpu.tolist()
-
-        boundary = regions.boundary_mask.detach()
-        payload: dict[str, Any] = {
-            "type": "voxel_surface_regions",
-            "count": int(regions.region_centers.shape[0]),
-            "boundary_count": int(boundary.sum().item()),
-            "centers": snapshot(regions.region_centers, flatten_value=flatten),
-            "normals": snapshot(regions.region_normals, flatten_value=flatten),
-            "boundary_mask": snapshot(boundary),
-            "voxel_indices": snapshot(regions.voxel_indices, flatten_value=flatten),
-            "region_patch_ids": snapshot(regions.region_patch_ids),
-            "region_levels": snapshot(regions.region_levels),
-            "region_density": snapshot(regions.region_density),
-            "region_bounds": snapshot(regions.region_bounds, flatten_value=flatten),
-            "flattened": bool(flatten),
-        }
         return payload
 
     def _accumulate_density_stats(self, state: TorchPipelineState, render_packages) -> None:
@@ -895,7 +1007,11 @@ class TorchOSNGSTrainer:
         """Make the initial visible NURBS patches part of the optimization graph."""
 
         parameters = []
-        for patch in state.surface_patches or [state.surface]:
+        if not state.surface_patches:
+            state.surface = None
+            state.surface_optimizer = None
+            return
+        for patch in state.surface_patches:
             patch.control_grid = patch.control_grid.detach().requires_grad_(True)
             patch.weights = patch.weights.detach().requires_grad_(True)
             parameters.extend([patch.control_grid, patch.weights])
@@ -965,9 +1081,6 @@ class TorchOSNGSTrainer:
         """Save the visible NURBS-like intermediate for external visualization."""
 
         payload = nurbs_intermediate_payload(state)
-        voxel_payload = self._voxel_regions_payload(state, flatten=False)
-        if voxel_payload is not None:
-            payload["voxel_regions"] = voxel_payload
         path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
     def _save_training_state(self, path: Path, state: TorchPipelineState) -> None:

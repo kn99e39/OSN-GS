@@ -43,13 +43,13 @@ def _member_sets(result):
 
 class CoreAndBridgeRegressionTest(unittest.TestCase):
     def test_clean_plane_is_one_stable_core_region(self):
-        result = _form(make_gaussian_reliability_scene("plane"))
+        result = _form(make_gaussian_reliability_scene("box_face"))
         self.assertEqual(len(result.regions), 1)
         self.assertEqual(len(result.regions[0].member_ids), 81)
         self.assertIn(result.regions[0].region_state, (REGION_CORE, REGION_STABLE))
 
     def test_an_isolated_same_surface_pair_cannot_seed_a_core_region(self):
-        scene = make_gaussian_reliability_scene("plane")
+        scene = make_gaussian_reliability_scene("box_face")
         two_node_scene = type(scene)(
             "two_node_same_surface_pair", scene.positions[:2], scene.covariances[:2], "isolated pair",
         )
@@ -57,7 +57,7 @@ class CoreAndBridgeRegressionTest(unittest.TestCase):
         self.assertEqual(result.regions, ())
 
     def test_rejected_nodes_are_not_members_of_any_region(self):
-        scene = make_gaussian_reliability_scene("isotropic_blob")
+        scene = make_gaussian_reliability_scene("box_isotropic_contamination")
         result = _form(scene)
         rejected = [i for i, label in enumerate(scene.group_labels) if label == "isotropic"]
         self.assertTrue(rejected)
@@ -78,19 +78,19 @@ class CoreAndBridgeRegressionTest(unittest.TestCase):
 
     def test_perpendicular_surfaces_and_oversized_bridge_do_not_merge(self):
         for scene in (
-            make_gaussian_reliability_scene("two_perpendicular_surfaces"),
+            make_gaussian_reliability_scene("box"),
             make_anisotropic_planar_bridge_scene(),
         ):
             result = _form(scene)
             for region in result.regions:
                 labels = {scene.group_labels[i] for i in region.member_ids}
-                self.assertFalse({"floor", "wall"}.issubset(labels), scene.name)
+                self.assertFalse({"face_pz", "face_px"}.issubset(labels), scene.name)
 
 
 class SmoothnessAndDeterminismRegressionTest(unittest.TestCase):
     def test_smooth_curvature_and_density_controls_remain_unfragmented(self):
         scenes = (
-            make_curvature_sweep_scene(0.05),
+            make_curvature_sweep_scene(5.0),
             make_density_variation_scene("gradual_gradient"),
             make_density_variation_scene("sparse_but_continuous"),
         )
@@ -100,7 +100,7 @@ class SmoothnessAndDeterminismRegressionTest(unittest.TestCase):
             self.assertNotEqual(result.regions[0].region_state, REGION_SMALL_REVIEW, scene.name)
 
     def test_stable_ids_make_membership_input_order_deterministic(self):
-        scene = make_gaussian_reliability_scene("two_perpendicular_surfaces")
+        scene = make_gaussian_reliability_scene("box")
         ids = list(range(scene.positions.shape[0]))
         baseline = _member_sets(_form(scene, ids=ids))
         for seed in range(3):

@@ -61,15 +61,16 @@ def _rotation_matrix(axis: str, degrees: float, dtype=torch.float64) -> torch.Te
 
 def _production_initial_fields(points: torch.Tensor, scale_multiplier: float = 1.0):
     config = TorchPipelineConfig(
-        covariance_init="knn",
         covariance_knn_chunk_size=max(1, int(points.shape[0])),
         covariance_scale_multiplier=float(scale_multiplier),
     )
     pipeline = TorchOSNGSPipeline(config, device="cpu")
-    scales = pipeline._initial_covariance_scales(points.float()).double()
-    rotations = torch.zeros((points.shape[0], 4), dtype=torch.float64)
-    rotations[:, 0] = 1.0
-    covariance = covariance_from_scale_rotation(scales, rotations)
+    scales, rotations, covariance = pipeline._canonical_initial_covariance(
+        points.float(), covariance_scales=None, covariance_rotations=None
+    )
+    scales = scales.double()
+    rotations = rotations.double()
+    covariance = covariance.double()
     opacity = torch.full((points.shape[0],), 0.12, dtype=torch.float64)
     return covariance, opacity, scales, rotations
 

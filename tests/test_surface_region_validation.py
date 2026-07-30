@@ -16,7 +16,7 @@ from osn_gs.surface.torch_surface_region_validation import (
 
 class BoundaryInputReadinessTest(unittest.TestCase):
     def test_clean_plane_exposes_readiness_without_constructing_a_boundary(self):
-        scene = make_gaussian_reliability_scene("plane")
+        scene = make_gaussian_reliability_scene("box_face")
         frame = extract_covariance_frame(scene.covariances)
         reliability = evaluate_structural_reliability(scene.positions, frame)
         graph = build_manifold_affinity_graph(scene.positions, frame, reliability)

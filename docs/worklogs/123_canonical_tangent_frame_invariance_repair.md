@@ -35,3 +35,10 @@ tests/test_visible_surface_construction.py와 신규 tests/test_visible_surface_
 
 이 수정은 fixture 범위의 Gaussian-only visible surface construction에 한정된다. arbitrary multi-hole, T-junction, crossing sheet, trained-scene coverage 및 production dispatcher는 여전히 범위 밖이다.
 
+
+## 보강 검증 (후속)
+
+- covariance 복제 검사를 제거했다. extract_covariance_frame 경계에서 tangent_u, tangent_v, normal_candidate를 실제로 부호 반전한 frame을 주입해 end-to-end 검증한다. covariance 행렬 자체에는 eigenvector 부호가 저장되지 않으므로 이 방식이 실제 표현 등가성을 검증한다.
+- 각 rigid rotation, uniform scale, shuffle 및 sign-flip variant는 materialized surface를 11x11 UV grid로 sample한다. inverse transform 후 bidirectional Chamfer, nearest-sample normal alignment, scale-normalized boundary/interior residual을 baseline과 비교한다.
+- materialization adapter는 이제 sampled NURBS에 대한 boundary_residual과 interior_residual을 명시적으로 기록한다.
+

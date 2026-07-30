@@ -33,9 +33,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from osn_gs.core.torch_pipeline import TorchOSNGSPipeline, TorchPipelineConfig
 from osn_gs.data.colmap_scene import read_colmap_points3d
 from osn_gs.interop.colab_args import (
-    add_stage1_constructor_arguments,
     add_surface_fit_arguments,
-    stage1_constructor_config_kwargs,
     surface_fit_config_kwargs,
 )
 from osn_gs.utils.torch_ops import default_device, require_torch, sh_dc_to_rgb
@@ -67,86 +65,32 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--device", type=str, default="", help="cuda, cpu, or empty for auto.")
     parser.add_argument("--max_points", type=int, default=0, help="Optional cap on sparse points used. 0 uses all.")
 
-    parser.add_argument("--base_curve_count", type=int, default=8)
-    parser.add_argument("--visible_surface_resolution_u", type=int, default=8)
-    parser.add_argument("--visible_surface_resolution_v", type=int, default=4)
-    parser.add_argument("--visible_surface_resolution_scale", type=float, default=4.0, help="Notebook Train default: 4.0.")
-    parser.add_argument("--max_surface_control_points", type=int, default=65536)
-    parser.add_argument("--visible_surface_fit_device", type=str, default=default_device(prefer_cuda=True), choices=("cpu", "cuda", "auto"), help="Notebook Train default: active training device.")
-    parser.add_argument("--visible_surface_fit_chunk_size", type=int, default=0)
-    add_surface_fit_arguments(parser)
-
-    parser.add_argument("--disable_voxel_surface_regions", action="store_true")
-    parser.add_argument("--voxel_grid_resolution", type=int, default=16)
-    parser.add_argument("--disable_adaptive_voxel_density", action="store_true")
-    parser.add_argument("--voxel_max_subdivision_depth", type=int, default=1)
-    parser.add_argument("--voxel_density_quantile", type=float, default=0.75)
-    parser.add_argument("--voxel_density_covariance_weight_cap", type=float, default=10.0)
-    parser.add_argument("--voxel_normal_knn", type=int, default=16)
-    parser.add_argument("--voxel_boundary_angle_degrees", type=float, default=35.0)
-    parser.add_argument("--voxel_min_points_per_region", type=int, default=1)
-    parser.add_argument("--voxel_normal_chunk_size", type=int, default=4096)
-    add_stage1_constructor_arguments(parser)
-
-    parser.add_argument("--covariance_init", type=str, default="knn", choices=("knn", "constant"))
+    parser.add_argument("--canonical_covariance_knn", type=int, default=8)
+    parser.add_argument("--canonical_construction_max_points", type=int, default=2048)
     parser.add_argument("--covariance_knn_chunk_size", type=int, default=0)
     parser.add_argument("--covariance_min_scale", type=float, default=1e-4)
     parser.add_argument("--covariance_max_scale_ratio", type=float, default=0.05)
     parser.add_argument("--covariance_scale_multiplier", type=float, default=1.0)
+    add_surface_fit_arguments(parser)
     return parser
 
 
 def build_pipeline_config(args: argparse.Namespace) -> TorchPipelineConfig:
     return TorchPipelineConfig(
-        base_curve_count=args.base_curve_count,
-        visible_surface_resolution_u=args.visible_surface_resolution_u,
-        visible_surface_resolution_v=args.visible_surface_resolution_v,
-        visible_surface_resolution_scale=args.visible_surface_resolution_scale,
-        max_surface_control_points=max(4, int(args.max_surface_control_points)),
-        visible_surface_fit_device=args.visible_surface_fit_device,
-        visible_surface_fit_chunk_size=args.visible_surface_fit_chunk_size,
-        use_voxel_surface_regions=not args.disable_voxel_surface_regions,
-        voxel_grid_resolution=args.voxel_grid_resolution,
-        adaptive_voxel_density=not args.disable_adaptive_voxel_density,
-        voxel_max_subdivision_depth=max(0, int(args.voxel_max_subdivision_depth)),
-        voxel_density_quantile=min(1.0, max(0.0, float(args.voxel_density_quantile))),
-        voxel_density_covariance_weight_cap=max(0.1, float(args.voxel_density_covariance_weight_cap)),
-        voxel_normal_knn=args.voxel_normal_knn,
-        voxel_boundary_angle_degrees=args.voxel_boundary_angle_degrees,
-        voxel_min_points_per_region=args.voxel_min_points_per_region,
-        voxel_normal_chunk_size=args.voxel_normal_chunk_size,
-        covariance_init=args.covariance_init,
-        covariance_knn_chunk_size=args.covariance_knn_chunk_size,
-        covariance_min_scale=args.covariance_min_scale,
-        covariance_max_scale_ratio=args.covariance_max_scale_ratio,
-        covariance_scale_multiplier=args.covariance_scale_multiplier,
+        canonical_covariance_knn=max(3, int(args.canonical_covariance_knn)),
+        canonical_construction_max_points=max(
+            16, int(args.canonical_construction_max_points)
+        ),
+        covariance_knn_chunk_size=max(0, int(args.covariance_knn_chunk_size)),
+        covariance_min_scale=max(0.0, float(args.covariance_min_scale)),
+        covariance_max_scale_ratio=max(
+            0.0, float(args.covariance_max_scale_ratio)
+        ),
+        covariance_scale_multiplier=max(
+            0.0, float(args.covariance_scale_multiplier)
+        ),
         **surface_fit_config_kwargs(args),
-        **stage1_constructor_config_kwargs(args),
     )
-
-
-def voxel_regions_payload(regions) -> dict | None:
-    if regions is None:
-        return None
-    centers = regions.region_centers.detach().cpu()
-    normals = regions.region_normals.detach().cpu()
-    boundary = regions.boundary_mask.detach().cpu()
-    voxel_indices = regions.voxel_indices.detach().cpu()
-    return {
-        "type": "voxel_surface_regions",
-        "count": int(centers.shape[0]),
-        "boundary_count": int(boundary.sum().item()),
-        "centers": centers.reshape(-1).tolist(),
-        "normals": normals.reshape(-1).tolist(),
-        "boundary_mask": boundary.tolist(),
-        "voxel_indices": voxel_indices.reshape(-1).tolist(),
-        "region_patch_ids": regions.region_patch_ids.detach().cpu().tolist(),
-        "region_levels": regions.region_levels.detach().cpu().tolist(),
-        "region_density": regions.region_density.detach().cpu().tolist(),
-        "region_bounds": regions.region_bounds.detach().cpu().reshape(-1).tolist(),
-        "flattened": True,
-    }
-
 
 def build_stream_payload(state, quality_report: dict) -> dict:
     torch = require_torch()
@@ -203,18 +147,14 @@ def build_stream_payload(state, quality_report: dict) -> dict:
             for patch_id, patch in enumerate(state.surface_patches)
         ],
         "metadata": {
-            "source": "osn_gs_visible_surface_inspect",
+            "source": "osn_gs_canonical_visible_surface_construction_inspect",
             "gaussian_count": len(state.model),
             "uncertain_count": 0,
-            "voxel_role": "initial_bootstrap",
             "surface_topology_version": int(state.surface_topology_version),
             "patch_residual_ratios": quality_report["patch_residual_ratios"],
             "flattened": True,
         },
     }
-    voxel_payload = voxel_regions_payload(state.voxel_regions)
-    if voxel_payload is not None:
-        nurbs_payload["voxel_regions"] = voxel_payload
     payload["nurbs_surface"] = nurbs_payload
     return payload
 
@@ -228,13 +168,7 @@ def evaluate_surface_quality(pipeline: TorchOSNGSPipeline, state) -> dict:
     split or modify any patch.
     """
 
-    report = pipeline.maintain_surface_from_certain(
-        state,
-        residual_ratio_threshold=0.0,
-        residual_patience=1,
-        enable_local_correction=False,
-        refresh_uv=True,
-    )
+    report = pipeline.maintain_surface_from_certain(state)
     return {
         "patches": report["patches"],
         "checked_gaussians": report["checked"],
@@ -282,7 +216,6 @@ def main() -> None:
     summary_lines = [
         f"source={args.source_path}",
         f"gaussians={len(state.model)}",
-        f"voxel_regions={0 if state.voxel_regions is None else int(state.voxel_regions.region_centers.shape[0])}",
         f"patches={quality_report['patches']}",
         f"checked_gaussians={quality_report['checked_gaussians']}",
         f"max_residual_ratio={quality_report['max_residual_ratio']:.6g}",

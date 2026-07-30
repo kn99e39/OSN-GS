@@ -257,7 +257,7 @@ def evaluate_scene(
     device: str,
     export_dir: Path | None = None,
 ) -> dict[str, Any]:
-    """Construct with the production pipeline (``legacy``/``voxel_patch_stage1``) and score against scene truth."""
+    """Construct with the canonical production pipeline and score against scene truth."""
 
     import time
 
@@ -283,7 +283,7 @@ def evaluate_scene_boundary_first(
     """Construct with the boundary-first Phase 1-4 pipeline and score against scene truth.
 
     Reuses ``score_state`` -- the exact same scoring body as
-    ``legacy``/``voxel_patch_stage1`` -- so all three constructors land in one
+    the canonical constructor -- so both comparison paths land in one
     ``report.json`` with directly comparable numbers, instead of separate
     per-phase report scripts.
     """
@@ -463,36 +463,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--points", type=int, default=600)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--noise-std", type=float, default=0.0)
-    parser.add_argument("--disable-voxel", action="store_true")
-    parser.add_argument("--adaptive-voxel", action="store_true")
-    parser.add_argument("--voxel-grid", type=int, default=6)
     parser.add_argument(
         "--constructor",
-        choices=("voxel_patch_stage1", "boundary_first"),
-        default="boundary_first",
-        help=(
-            "NURBS constructor architecture. 'boundary_first' (default) runs the Phase 1-4 "
-            "component/boundary/topology-routed-chart pipeline "
-            "(docs/Urgent_Work/OSN_GS_Final_Boundary_First_NURBS_Direction.md); see the --bf-* options. "
-            "'voxel_patch_stage1' is the Stage 1 ablation baseline, kept for comparison only. "
-            "The legacy pipeline is retired from this benchmark and cannot be selected here."
-        ),
+        choices=("canonical", "boundary_first"),
+        default="canonical",
+        help="Canonical Gaussian visible-surface construction (default), or the standalone boundary-first research comparator.",
     )
-    parser.add_argument("--voxel-min-count", type=int, default=10, help="[stage1] Minimum raw Gaussian count for an active leaf voxel.")
-    parser.add_argument("--voxel-max-count", type=int, default=150, help="[stage1] Raw count above which a voxel subdivides.")
-    parser.add_argument("--voxel-max-depth", type=int, default=6, help="[stage1] Maximum subdivision depth.")
-    parser.add_argument("--voxel-min-size", type=float, default=0.0, help="[stage1] Minimum voxel edge length (0 disables).")
-    parser.add_argument(
-        "--stage1-support",
-        choices=("voxel_density", "voxel", "none"),
-        default="voxel_density",
-        help="[stage1] Patch support mask: plane-AABB polygon + density-refined boundary ('voxel_density'), polygon only ('voxel'), or untrimmed ('none').",
-    )
-    parser.add_argument("--stage1-obs-per-control", type=float, default=2.0, help="[stage1] Target observations per control point when sizing patch grids.")
-    parser.add_argument("--stage1-density-resolution", type=int, default=32, help="[stage1-F] Boundary-leaf density grid resolution.")
-    parser.add_argument("--stage1-density-bandwidth", type=float, default=2.0, help="[stage1-F] Adaptive KDE bandwidth as a multiple of each sample's own UV NN spacing.")
-    parser.add_argument("--stage1-density-threshold", type=float, default=2.0, help="[stage1-F] Absolute support level in effective-neighbor units.")
-    parser.add_argument("--no-stage1-boundary-refinement", action="store_true", help="[stage1-F] Disable density boundary refinement (voxel_density falls back to polygon-only).")
     parser.add_argument("--bf-normal-threshold-degrees", type=float, default=40.0, help="[boundary_first] Phase 1 leaf-merge normal-angle tolerance.")
     parser.add_argument("--bf-offset-threshold-ratio", type=float, default=0.5, help="[boundary_first] Phase 1 leaf-merge coplanarity tolerance.")
     parser.add_argument("--bf-boundary-resolution", type=int, default=64, help="[boundary_first] Phase 2 per-component UV raster resolution.")
@@ -534,9 +510,6 @@ def build_parser() -> argparse.ArgumentParser:
         default=0,
         help="[boundary_first diagnostics] Deterministic per-node degree cap; 0 keeps all candidates for recall analysis.",
     )
-    parser.add_argument("--resolution-u", type=int, default=8)
-    parser.add_argument("--resolution-v", type=int, default=4)
-    parser.add_argument("--fit-mode", choices=("lsq", "idw"), default="lsq")
     parser.add_argument("--trim-resolution", type=int, default=None, help="UV trim mask resolution per patch. 0 disables trimming; omit to use the pipeline default.")
     parser.add_argument("--trim-dilation", type=int, default=None, help="UV trim mask dilation (cells) to close gaps; omit to use the pipeline default.")
     parser.add_argument("--max-fit-rms", type=float, default=None, help="Fail if a scene's input-point RMS exceeds this value.")
@@ -566,28 +539,17 @@ def main(argv: list[str] | None = None) -> int:
         ]
     else:
         config = TorchPipelineConfig(
-            base_curve_count=4,
-            visible_surface_resolution_u=max(2, args.resolution_u),
-            visible_surface_resolution_v=max(2, args.resolution_v),
-            surface_fit_mode=args.fit_mode,
-            use_voxel_surface_regions=not args.disable_voxel,
-            voxel_grid_resolution=max(2, args.voxel_grid),
-            adaptive_voxel_density=args.adaptive_voxel,
-            voxel_max_subdivision_depth=1 if args.adaptive_voxel else 0,
-            max_surface_control_points=4096,
-            nurbs_constructor_mode=args.constructor,
-            voxel_min_gaussian_count=max(1, args.voxel_min_count),
-            voxel_max_gaussian_count=max(1, args.voxel_max_count),
-            voxel_max_depth=max(0, args.voxel_max_depth),
-            voxel_min_size=max(0.0, args.voxel_min_size),
-            stage1_support_mode=args.stage1_support,
-            stage1_observations_per_control=max(0.1, args.stage1_obs_per_control),
-            stage1_boundary_refinement_enabled=not args.no_stage1_boundary_refinement,
-            stage1_boundary_density_resolution=max(4, args.stage1_density_resolution),
-            stage1_boundary_density_bandwidth=max(0.1, args.stage1_density_bandwidth),
-            stage1_boundary_density_threshold=max(0.0, args.stage1_density_threshold),
-            **({"surface_trim_resolution": args.trim_resolution} if args.trim_resolution is not None else {}),
-            **({"surface_trim_dilation": args.trim_dilation} if args.trim_dilation is not None else {}),
+            canonical_construction_max_points=max(16, int(args.points)),
+            **(
+                {"surface_trim_resolution": args.trim_resolution}
+                if args.trim_resolution is not None
+                else {}
+            ),
+            **(
+                {"surface_trim_dilation": args.trim_dilation}
+                if args.trim_dilation is not None
+                else {}
+            ),
         )
         results = [
             evaluate_scene(make_scene(name, args.points, args.seed, args.noise_std), config, args.device, export_dir)

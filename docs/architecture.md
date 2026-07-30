@@ -485,3 +485,11 @@ Initial Gaussians -> one-time density-adaptive voxel bootstrap -> initial patch 
 - 기존 control-point tensor와 Adam state는 유지하고 새 patch parameter만 optimizer에 등록한다.
 - ADC child는 부모 binding을 계속 상속한다. Initial voxel snapshot과 local correction topology를 동일한 전역 voxel graph로 혼합하지 않는다.
 - Occluded surface 생성과 uncertain-to-certain promotion은 여전히 수행하지 않는다.
+
+## 2026-07-30 Canonical Visible NURBS Runtime Decision
+
+- The training runtime has one visible-surface constructor: `construct_visible_nurbs_from_gaussians`.
+- Legacy voxel bootstrap, voxel-per-patch Stage 1, IDW seed fitting, and local split/refit are not fallback paths and are not selectable runtime architectures.
+- Canonical materialization is fail-closed. Unsupported open, branched, or ambiguous topology must stop initialization/rebuild instead of synthesizing a placeholder NURBS or retaining an older patch registry.
+- O(N^2) canonical topology work is bounded by deterministic voxel-center sampling. The resulting covariance frames, patch ownership, and NURBS UV bindings are propagated to the complete Gaussian set.
+- Full arbitrary trained-scene coverage remains a canonical-constructor capability gap, not authorization to restore a retired fallback.

@@ -21,7 +21,7 @@ def _signature(positions, covariances, ids):
 
 class SurfaceRegionInvarianceTest(unittest.TestCase):
     def test_region_membership_is_stable_under_rigid_scale_and_order_changes(self):
-        scene = make_gaussian_reliability_scene("two_perpendicular_surfaces")
+        scene = make_gaussian_reliability_scene("box")
         ids = list(range(scene.positions.shape[0]))
         baseline = _signature(scene.positions, scene.covariances, ids)
         rotation = torch.tensor([[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])

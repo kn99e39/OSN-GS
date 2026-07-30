@@ -28,7 +28,7 @@ def _sub(a, b): return tuple(x-y for x,y in zip(a,b))
 def _norm(a): return max(sum(x*x for x in a) ** .5, 1e-12)
 
 
-def recover_directed_boundary_components(candidates: Sequence[WorldSpaceBoundaryHalfEdgeCandidate], accepted_topology: Sequence[tuple[object, object]] = ()) -> tuple[tuple[DirectedBoundarySuccessor, ...], tuple[OrderedBoundaryComponent, ...]]:
+def _recover_directed_boundary_components(candidates: Sequence[WorldSpaceBoundaryHalfEdgeCandidate], accepted_topology: Sequence[tuple[object, object]] = ()) -> tuple[tuple[DirectedBoundarySuccessor, ...], tuple[OrderedBoundaryComponent, ...]]:
     """Select one mutual forward successor, never all compatible pairs."""
     candidates = tuple(item for item in candidates if item.boundary_reason == "observed_support_termination")
     by_id = {item.half_edge_id: item for item in candidates}
@@ -114,3 +114,20 @@ def recover_directed_boundary_components(candidates: Sequence[WorldSpaceBoundary
         role = "outer_boundary_candidate" if closed else "unresolved_boundary_role"
         output.append(OrderedBoundaryComponent(f"region:{source.source_region_id}:directed:{min(chain)}",source.source_region_id,tuple(chain),tuple(by_id[x].source_gaussian_id for x in chain),state,closed,(),{"observed_support_termination":len(chain)},.7,role,"reliable_core_only",False,() if closed else ("mutual_successor_cycle_not_proven",)))
     return mutual, tuple(output)
+
+
+def recover_directed_boundary_components(candidates: Sequence[WorldSpaceBoundaryHalfEdgeCandidate], accepted_topology: Sequence[tuple[object, object]] = ()) -> tuple[tuple[DirectedBoundarySuccessor, ...], tuple[OrderedBoundaryComponent, ...]]:
+    """Recover ordering while treating a region-wide tangent reversal as equivalent."""
+    from dataclasses import replace
+    direct = _recover_directed_boundary_components(candidates, accepted_topology)
+    # Covariance normals define an unoriented surface. Reversing every tangent
+    # in a region is therefore the same loop with the opposite traversal.
+    reversed_candidates = tuple(
+        replace(item, boundary_direction=tuple(-value for value in item.boundary_direction), local_tangent_direction=tuple(-value for value in item.local_tangent_direction))
+        for item in candidates
+    )
+    reverse = _recover_directed_boundary_components(reversed_candidates, accepted_topology)
+    def quality(result):
+        edges, components = result
+        return (sum(component.ordering_state == "ordered_closed_loop" for component in components), -sum(component.ordering_state != "ordered_closed_loop" for component in components), len(edges))
+    return reverse if quality(reverse) > quality(direct) else direct

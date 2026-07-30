@@ -71,7 +71,7 @@ class StateContractTest(unittest.TestCase):
     """Worklog 114 SS2/SS5: intrinsic/contextual split and orthogonal edge state."""
 
     def test_crease_gaussian_is_intrinsically_reliable_but_contextually_mixed(self):
-        scene = make_gaussian_reliability_scene("two_perpendicular_surfaces")
+        scene = make_gaussian_reliability_scene("box")
         _, reliability, _ = _pipeline(scene)
         # A real crease must NOT collapse to the same bucket as an
         # intrinsically-bad Gaussian: it stays intrinsically reliable, only
@@ -84,7 +84,7 @@ class StateContractTest(unittest.TestCase):
         self.assertTrue(mixed_but_reliable)
 
     def test_isotropic_gaussian_is_intrinsically_rejected_regardless_of_context(self):
-        scene = make_gaussian_reliability_scene("isotropic_blob")
+        scene = make_gaussian_reliability_scene("box_isotropic_contamination")
         _, reliability, _ = _pipeline(scene)
         isotropic_indices = [i for i, l in enumerate(scene.group_labels) if l == "isotropic"]
         for index in isotropic_indices:
@@ -99,7 +99,7 @@ class StateContractTest(unittest.TestCase):
         from osn_gs.surface.torch_gaussian_covariance_frame import covariance_from_scale_rotation
         from nurbs_constructor_benchmark.gaussian_reliability_scenes import GaussianReliabilityScene
 
-        scene = make_gaussian_reliability_scene("plane")
+        scene = make_gaussian_reliability_scene("box_face")
         rejected_floater_position = torch.tensor([[3.0, 3.0, 3.0]])
         rejected_floater_scale = torch.tensor([[0.05, 0.05, 0.05]])  # isotropic -> intrinsically rejected
         rejected_floater_quaternion = torch.tensor([[1.0, 0.0, 0.0, 0.0]])
@@ -108,7 +108,7 @@ class StateContractTest(unittest.TestCase):
         covariances = torch.cat((scene.covariances, rejected_floater_cov), dim=0)
         composed = GaussianReliabilityScene(
             "rejected_floater_worked_example", positions, covariances, "",
-            ("plane",) * scene.positions.shape[0] + ("rejected_floater",),
+            ("face",) * scene.positions.shape[0] + ("rejected_floater",),
         )
         _, _, graph = _pipeline(composed)
         floater_index = composed.group_labels.index("rejected_floater")
@@ -120,7 +120,7 @@ class StateContractTest(unittest.TestCase):
             self.assertEqual(edge.manifold_relation, RELATION_NOT_EVALUATED)
 
     def test_state_compatibility_projection_preserves_old_semantics(self):
-        scene = make_gaussian_reliability_scene("plane")
+        scene = make_gaussian_reliability_scene("box_face")
         _, _, graph = _pipeline(scene)
         # Old callers reading `.state` alone should see the pre-114 bucket
         # (not_evaluated -> proximity_only) even though the richer axes exist.
@@ -135,14 +135,14 @@ class ScaleContractTest(unittest.TestCase):
     """Worklog 114 SS3: independently-preserved scale fields, never one scalar."""
 
     def test_scale_fields_are_independent_not_collapsed(self):
-        scene = make_gaussian_reliability_scene("plane")
+        scene = make_gaussian_reliability_scene("box_face")
         frame = extract_covariance_frame(scene.covariances)
         # A thin wide surfel: tangent scales >> normal thickness.
         self.assertTrue(bool((frame.tangent_major_scale > 10 * frame.normal_thickness).all()))
         self.assertTrue(bool((frame.tangent_minor_scale > 10 * frame.normal_thickness).all()))
 
     def test_close_parallel_separation_uses_normal_thickness_not_tangent_scale(self):
-        scene = make_gaussian_reliability_scene("close_parallel_sheets")
+        scene = make_gaussian_reliability_scene("thin_slab")
         _, _, graph = _pipeline(scene)
         labels = scene.group_labels
         cross_edges = [e for e in graph.edges if labels[e.source] != labels[e.target] and e.metrics is not None]
@@ -156,7 +156,7 @@ class ScaleContractTest(unittest.TestCase):
         cfg = ManifoldAffinityConfig(candidate_neighbor_count=20, max_candidate_count_per_node=24)
         _, _, graph = _pipeline(scene, config=cfg)
         bridge_index = scene.group_labels.index("anisotropic_bridge")
-        floor_indices = {i for i, l in enumerate(scene.group_labels) if l == "floor"}
+        floor_indices = {i for i, l in enumerate(scene.group_labels) if l == "face_pz"}
         bridge_floor_edges = [
             e for e in graph.edges
             if (e.source == bridge_index and e.target in floor_indices) or (e.target == bridge_index and e.source in floor_indices)
@@ -169,7 +169,7 @@ class CandidateGraphTest(unittest.TestCase):
     """Worklog 114 SS4: candidate generation separated from relation classification."""
 
     def test_distance_only_hit_never_becomes_same_surface(self):
-        scene = make_gaussian_reliability_scene("isolated_floater")
+        scene = make_gaussian_reliability_scene("box_isolated_floater")
         _, _, graph = _pipeline(scene)
         floater_index = scene.group_labels.index("floater")
         edges = [e for e in graph.edges if e.source == floater_index or e.target == floater_index]
@@ -177,7 +177,7 @@ class CandidateGraphTest(unittest.TestCase):
         self.assertTrue(all(e.candidate_status == CANDIDATE_STATUS_OUTSIDE_SUPPORT for e in edges))
 
     def test_candidate_status_and_manifold_relation_are_independent_axes(self):
-        scene = make_gaussian_reliability_scene("two_perpendicular_surfaces")
+        scene = make_gaussian_reliability_scene("box")
         cfg = ManifoldAffinityConfig(max_candidate_count_per_node=4)
         _, _, graph = _pipeline(scene, config=cfg)
         capped = [e for e in graph.edges if e.candidate_status == CANDIDATE_STATUS_CAPPED_OUT]
@@ -190,7 +190,7 @@ class CandidateGraphTest(unittest.TestCase):
         self.assertTrue(all(e.manifold_relation != RELATION_NOT_EVALUATED for e in candidates))
 
     def test_pair_identity_is_order_independent_via_stable_ids(self):
-        scene = make_gaussian_reliability_scene("plane")
+        scene = make_gaussian_reliability_scene("box_face")
         _, _, graph = _pipeline(scene, ids=list(range(scene.positions.shape[0])))
         seen = set()
         for e in graph.edges:
@@ -203,7 +203,7 @@ class InvarianceTest(unittest.TestCase):
     """Worklog 114 SS8: translation/rotation/uniform-scale/order invariance."""
 
     def _scene(self):
-        return make_gaussian_reliability_scene("two_perpendicular_surfaces")
+        return make_gaussian_reliability_scene("box")
 
     def test_translation_invariance(self):
         scene = self._scene()
@@ -287,12 +287,13 @@ class RobustnessMatrixTest(unittest.TestCase):
         self.assertEqual(diag_low.region_count, 1)
         self.assertGreaterEqual(diag_high.region_count, diag_low.region_count)
 
-    def test_low_curvature_does_not_fragment_a_smooth_sheet(self):
-        for amplitude in (0.0, 0.02, 0.05):
-            scene = make_curvature_sweep_scene(amplitude)
+    def test_low_curvature_does_not_fragment_a_smooth_patch(self):
+        # Larger radius -> flatter local patch (the sweep's low-curvature end).
+        for radius in (1.0, 5.0, 50.0):
+            scene = make_curvature_sweep_scene(radius)
             _, reliability, graph = _pipeline(scene)
             diag = diagnose_same_surface_regions(scene.positions.shape[0], graph, reliability)
-            self.assertEqual(diag.region_count, 1, amplitude)
+            self.assertEqual(diag.region_count, 1, radius)
 
     def test_anisotropic_planar_bridge_is_blocked_by_footprint_not_isotropic_rejection(self):
         scene = make_anisotropic_planar_bridge_scene()
@@ -304,7 +305,7 @@ class RobustnessMatrixTest(unittest.TestCase):
         self.assertEqual(frame.shape_class[bridge_index], "planar_surfel")
         reliability = evaluate_structural_reliability(scene.positions, frame)
         graph = build_manifold_affinity_graph(scene.positions, frame, reliability, config=cfg)
-        floor_indices = {i for i, l in enumerate(scene.group_labels) if l == "floor"}
+        floor_indices = {i for i, l in enumerate(scene.group_labels) if l == "face_pz"}
         bridge_floor_edges = [
             e for e in graph.edges
             if (e.source == bridge_index and e.target in floor_indices) or (e.target == bridge_index and e.source in floor_indices)
@@ -345,7 +346,7 @@ class ContaminationTest(unittest.TestCase):
         scene = make_contamination_regression_scene()
         _, reliability, graph = _pipeline(scene)
         labels = scene.group_labels
-        plane_indices = [i for i, l in enumerate(labels) if l == "plane"]
+        plane_indices = [i for i, l in enumerate(labels) if l == "face"]
         same_surface = graph.same_surface_neighbors(scene.positions.shape[0])
         visited = {plane_indices[0]}
         frontier = [plane_indices[0]]
@@ -368,17 +369,17 @@ class ContaminationTest(unittest.TestCase):
     def test_rejected_excluded_aggregation_prevents_isotropic_neighbor_contamination(self):
         # Direct re-analysis of the worklog 113 finding: compare aggregation
         # methods on the same isotropic-blob scene.
-        scene = make_gaussian_reliability_scene("isotropic_blob")
+        scene = make_gaussian_reliability_scene("box_isotropic_contamination")
         frame = extract_covariance_frame(scene.covariances)
         labels = scene.group_labels
-        plane_count = sum(1 for l in labels if l == "plane")
+        plane_count = sum(1 for l in labels if l == "face")
 
         def contaminated_count(method):
             cfg = StructuralReliabilityConfig(contextual=ContextualConsistencyConfig(aggregation_method=method))
             reliability = evaluate_structural_reliability(scene.positions, frame, config=cfg)
             return sum(
                 1 for i in range(len(labels))
-                if labels[i] == "plane" and reliability.reliability_class[i] != "reliable_structural_evidence"
+                if labels[i] == "face" and reliability.reliability_class[i] != "reliable_structural_evidence"
             )
 
         mean_contaminated = contaminated_count(AGGREGATION_MEAN)

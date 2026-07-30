@@ -12,7 +12,7 @@ from osn_gs.surface.torch_world_space_boundary_halfedges import extract_world_sp
 
 class WorldSpaceBoundaryHalfedgeTest(unittest.TestCase):
     def test_perpendicular_surfaces_expose_crease_candidates_without_boundary_loop(self):
-        scene = make_gaussian_reliability_scene("two_perpendicular_surfaces")
+        scene = make_gaussian_reliability_scene("box")
         frame = extract_covariance_frame(scene.covariances)
         reliability = evaluate_structural_reliability(scene.positions, frame)
         graph = build_manifold_affinity_graph(scene.positions, frame, reliability)

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-"""Adversarial region-formation fixtures for Worklog 117.
+"""Adversarial region-formation fixtures for Worklog 117/124.
 
 They contain positions and covariance only; neither scene names nor labels are
 read by the formation code.
@@ -11,7 +11,22 @@ import torch
 from nurbs_constructor_benchmark.gaussian_reliability_scenes import (
     GaussianReliabilityScene,
     _flat_grid,
+    make_gaussian_reliability_scene,
 )
+
+
+def make_cylinder_phase_alias_scene(*, seed: int = 0) -> GaussianReliabilityScene:
+    """Worklog 124: a genuine volumetric phase-alias stress fixture. A
+    cylinder's side wall is periodic in the circumferential direction, so two
+    points on OPPOSITE sides of the ring have exactly anti-parallel normals --
+    under the orientation-insensitive ``abs(dot(n_i, n_j))`` comparison used
+    throughout this pipeline, that reads as PERFECTLY aligned (1.0), even
+    though the two points are on opposite faces of the real object and
+    geodesically far apart along the surface. A wide candidate radius is
+    needed to even surface these long-range pairs as candidates; this replaces
+    the earlier ad hoc sine-sheet "long shortcut" fixture with a real solid's
+    own periodicity."""
+    return make_gaussian_reliability_scene("cylinder", seed=seed)
 
 
 def make_genuine_narrow_connection_scene() -> GaussianReliabilityScene:

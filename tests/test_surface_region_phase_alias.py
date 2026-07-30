@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import unittest
 
-from nurbs_constructor_benchmark.gaussian_reliability_scenes import make_curvature_sweep_scene
-from nurbs_constructor_benchmark.surface_region_adversarial_scenes import make_genuine_narrow_connection_scene
+from nurbs_constructor_benchmark.surface_region_adversarial_scenes import (
+    make_cylinder_phase_alias_scene,
+    make_genuine_narrow_connection_scene,
+)
 from osn_gs.surface.torch_gaussian_covariance_frame import extract_covariance_frame
 from osn_gs.surface.torch_gaussian_manifold_affinity import ManifoldAffinityConfig, build_manifold_affinity_graph
 from osn_gs.surface.torch_gaussian_structural_reliability import evaluate_structural_reliability
@@ -27,8 +29,13 @@ def _form(scene, *, broad=False):
 
 
 class PhaseAliasAndNarrowConnectionTest(unittest.TestCase):
-    def test_auto_policy_excludes_broad_curved_shortcuts_from_accepted_topology(self):
-        scene = make_curvature_sweep_scene(0.05)
+    def test_auto_policy_excludes_broad_cylinder_ring_shortcuts_from_accepted_topology(self):
+        # A cylinder's side wall is periodic: opposite-side points have
+        # anti-parallel (hence abs(dot)-aligned) normals, a genuine
+        # volumetric analogue of the earlier ad hoc sine-sheet phase-alias
+        # fixture. A wide candidate radius surfaces these as long-range
+        # same_surface candidates that must never enter accepted topology.
+        scene = make_cylinder_phase_alias_scene()
         graph, result = _form(scene, broad=True)
         shortcuts = {
             tuple(sorted((edge.source, edge.target)))
@@ -38,7 +45,15 @@ class PhaseAliasAndNarrowConnectionTest(unittest.TestCase):
         accepted = {tuple(sorted(edge)) for region in result.regions for edge in region.internal_accepted_edge_ids}
         self.assertTrue(shortcuts)
         self.assertFalse(shortcuts & accepted)
-        self.assertEqual(len(result.regions), 1)
+        # No region may ever mix "side" wall members with either end cap --
+        # that would mean a phase-alias shortcut (or the circular crease)
+        # was used as real same-surface evidence. The wide "broad" candidate
+        # radius used here is itself allowed to split the side wall into
+        # several conservative pieces; only cross-face mixing is a failure.
+        labels = scene.group_labels
+        for region in result.regions:
+            member_labels = {labels[index] for index in region.member_ids}
+            self.assertLessEqual(len(member_labels), 1, member_labels)
 
     def test_genuine_multi_edge_neck_remains_one_region(self):
         _, result = _form(make_genuine_narrow_connection_scene())

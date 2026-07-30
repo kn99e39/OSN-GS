@@ -35,6 +35,10 @@ def save_torch_checkpoint(path: str | Path, state: TorchPipelineState, extra: di
             "is_uncertain": model.is_uncertain.detach().cpu(),
             "surface_uv": model.surface_uv.detach().cpu(),
             "cluster_ids": model.cluster_ids.detach().cpu(),
+            "surface_owner_kind": model.surface_owner_kind.detach().cpu(),
+            "surface_owner_id": model.surface_owner_id.detach().cpu(),
+            "stable_gaussian_ids": model.stable_gaussian_ids.detach().cpu(),
+            "next_stable_gaussian_id": int(model.next_stable_gaussian_id),
         },
         "density_stats": {
             "xyz_gradient_accum": model.xyz_gradient_accum.detach().cpu(),
@@ -59,6 +63,14 @@ def save_torch_checkpoint(path: str | Path, state: TorchPipelineState, extra: di
             "bad_checks": dict(state.surface_bad_checks),
             "topology_version": int(state.surface_topology_version),
         },
+        "visible_nurbs_lifecycle": {
+            "state": state.visible_nurbs_state,
+            "coverage_semantics": state.visible_nurbs_coverage_semantics,
+            "adc_version": int(state.visible_nurbs_adc_version),
+            "source_fingerprint": state.visible_nurbs_source_fingerprint,
+            "last_attempt_iteration": int(state.visible_nurbs_last_attempt_iteration),
+            "last_failure": dict(state.visible_nurbs_last_failure),
+        },
         "extra": extra or {},
     }
     torch.save(payload, path)
@@ -82,7 +94,13 @@ def load_torch_checkpoint(
         opacity=raw["opacity"], scaling=raw["scaling"], rotation=raw["rotation"],
         confidence=raw["confidence"], uncertain_mask=raw["is_uncertain"],
         surface_uv=raw["surface_uv"], cluster_ids=raw["cluster_ids"],
+        surface_owner_kind=raw.get("surface_owner_kind"),
+        surface_owner_id=raw.get("surface_owner_id"),
+        stable_gaussian_ids=raw.get("stable_gaussian_ids"),
     )
+    state.model.next_stable_gaussian_id = int(raw.get(
+        "next_stable_gaussian_id", state.model.next_stable_gaussian_id
+    ))
     state.model.training_setup(parameter_groups)
     if payload.get("model_optimizer") is not None:
         state.model.optimizer.load_state_dict(payload["model_optimizer"])
@@ -103,10 +121,13 @@ def load_torch_checkpoint(
             uv_support_mask=None if saved_mask is None else saved_mask.to(state.model.device),
         ))
     state.surface_patches = patches
-    state.surface = patches[0]
+    state.surface = patches[0] if patches else None
     parameters = [tensor for patch in patches for tensor in (patch.control_grid, patch.weights)]
-    state.surface_optimizer = torch.optim.Adam(parameters, lr=float(surface_lr), eps=1e-15)
-    if payload.get("surface_optimizer") is not None:
+    state.surface_optimizer = (
+        torch.optim.Adam(parameters, lr=float(surface_lr), eps=1e-15)
+        if parameters else None
+    )
+    if payload.get("surface_optimizer") is not None and state.surface_optimizer is not None:
         state.surface_optimizer.load_state_dict(payload["surface_optimizer"])
     maintenance = payload.get("surface_maintenance", {})
     state.surface_patch_residuals = {
@@ -118,6 +139,17 @@ def load_torch_checkpoint(
         for key, value in maintenance.get("bad_checks", {}).items()
     }
     state.surface_topology_version = int(maintenance.get("topology_version", 0))
+    lifecycle = payload.get("visible_nurbs_lifecycle", {})
+    state.visible_nurbs_state = str(lifecycle.get(
+        "state", "materialized" if patches else "checkpoint_empty"
+    ))
+    state.visible_nurbs_coverage_semantics = str(lifecycle.get(
+        "coverage_semantics", "reliable_core_only"
+    ))
+    state.visible_nurbs_adc_version = int(lifecycle.get("adc_version", 0))
+    state.visible_nurbs_source_fingerprint = str(lifecycle.get("source_fingerprint", ""))
+    state.visible_nurbs_last_attempt_iteration = int(lifecycle.get("last_attempt_iteration", -1))
+    state.visible_nurbs_last_failure = dict(lifecycle.get("last_failure", {}))
     state.iteration = int(payload["iteration"])
     state.last_loss = float(payload.get("last_loss", 0.0))
     state.last_psnr = float(payload.get("last_psnr", 0.0))

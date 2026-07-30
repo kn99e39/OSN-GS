@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 """Notebook-compatible OSN-GS training entrypoint.
 
@@ -25,7 +25,6 @@ from osn_gs.interop.colab_args import (
     output_dir_from_args,
     save_interval_from_args,
     save_iterations_from_args,
-    stage1_constructor_config_kwargs,
     surface_fit_config_kwargs,
 )
 from osn_gs.render.diff_gaussian_loader import validate_diff_gaussian_build_environment
@@ -52,15 +51,6 @@ def main() -> None:
     save_iterations = save_iterations_from_args(args)
     stream_iterations = tuple(sorted({int(value) for value in args.stream_iterations if int(value) > 0}))
     train_resolution_scale = max(1, int(args.train_resolution_scale))
-    uncertain_samples_u = args.uncertain_samples_u
-    uncertain_samples_v = args.uncertain_samples_v
-    max_uncertain_gaussians = max(0, int(args.max_uncertain_gaussians))
-    if args.low_vram:
-        train_resolution_scale = max(train_resolution_scale, 2)
-        uncertain_samples_u = min(uncertain_samples_u, 8)
-        uncertain_samples_v = min(uncertain_samples_v, 2)
-        if max_uncertain_gaussians == 0:
-            max_uncertain_gaussians = 128
     if args.eval and train_resolution_scale > 1:
         print(
             f"OSN-GS --eval: ignoring train_resolution_scale={train_resolution_scale} "
@@ -91,44 +81,25 @@ def main() -> None:
     )
 
     pipeline_config = TorchPipelineConfig(
-        base_curve_count=args.base_curve_count,
-        visible_surface_resolution_u=args.visible_surface_resolution_u,
-        visible_surface_resolution_v=args.visible_surface_resolution_v,
-        visible_surface_resolution_scale=args.visible_surface_resolution_scale,
-        max_surface_control_points=max(4, int(args.max_surface_control_points)),
-        covariance_init=args.covariance_init,
-        covariance_knn_chunk_size=args.covariance_knn_chunk_size,
-        covariance_min_scale=args.covariance_min_scale,
-        covariance_max_scale_ratio=args.covariance_max_scale_ratio,
-        covariance_scale_multiplier=args.covariance_scale_multiplier,
-        visible_surface_fit_device=args.visible_surface_fit_device,
-        visible_surface_fit_chunk_size=args.visible_surface_fit_chunk_size,
-        use_voxel_surface_regions=not args.disable_voxel_surface_regions,
-        voxel_grid_resolution=args.voxel_grid_resolution,
-        adaptive_voxel_density=not args.disable_adaptive_voxel_density,
-        voxel_max_subdivision_depth=max(0, int(args.voxel_max_subdivision_depth)),
-        voxel_density_quantile=min(1.0, max(0.0, float(args.voxel_density_quantile))),
-        voxel_density_covariance_weight_cap=max(0.1, float(args.voxel_density_covariance_weight_cap)),
-        voxel_normal_knn=args.voxel_normal_knn,
-        voxel_boundary_angle_degrees=args.voxel_boundary_angle_degrees,
-        voxel_min_points_per_region=args.voxel_min_points_per_region,
-        voxel_normal_chunk_size=args.voxel_normal_chunk_size,
-        uncertain_samples_u=uncertain_samples_u,
-        uncertain_samples_v=uncertain_samples_v,
-        max_uncertain_gaussians=max_uncertain_gaussians,
+        canonical_covariance_knn=max(3, int(args.canonical_covariance_knn)),
+        canonical_construction_max_points=max(
+            16, int(args.canonical_construction_max_points)
+        ),
+        covariance_knn_chunk_size=max(0, int(args.covariance_knn_chunk_size)),
+        covariance_min_scale=max(0.0, float(args.covariance_min_scale)),
+        covariance_max_scale_ratio=max(
+            0.0, float(args.covariance_max_scale_ratio)
+        ),
+        covariance_scale_multiplier=max(
+            0.0, float(args.covariance_scale_multiplier)
+        ),
         **surface_fit_config_kwargs(args),
-        **stage1_constructor_config_kwargs(args),
     )
     training_config = TorchTrainingConfig(
         iterations=args.iterations,
         surface_rebuild_interval=max(0, int(args.surface_update_interval)),
+        visible_nurbs_update_schedule=args.visible_nurbs_update_schedule,
         surface_loss_patch_budget=max(0, int(args.surface_loss_patch_budget)),
-        surface_maintenance_patch_budget=max(0, int(args.surface_maintenance_patch_budget)),
-        surface_residual_ratio_threshold=max(0.0, float(args.surface_residual_ratio_threshold)),
-        surface_residual_patience=max(1, int(args.surface_residual_patience)),
-        surface_local_min_gaussians=max(4, int(args.surface_local_min_gaussians)),
-        surface_local_min_component=max(4, int(args.surface_local_min_component)),
-        enable_local_surface_correction=not args.disable_local_surface_correction,
         density_control_interval=args.density_control_interval,
         save_interval=save_interval,
         save_iterations=save_iterations,
@@ -244,6 +215,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-
-

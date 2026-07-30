@@ -1,14 +1,21 @@
 """Analytic ground-truth surface + a ground-truth NURBS the renderer can overlay.
 
-The synthetic scenes know their true surface ``z = f(x, y)`` and true patch
-topology. This module turns that knowledge into:
+Height-field scenes know their true surface ``z = f(x, y)`` and true patch
+topology; genuinely 3D volumetric scenes (box/cylinder/sphere, worklog 127)
+instead carry ``scene.faces`` -- a tuple of :class:`GroundTruthFace`, each with
+its OWN local ``[-1, 1]^2`` parameter domain and analytic world map, since a
+face oriented away from the shared xy view (e.g. a box's side wall) cannot be
+expressed as one height field. Every function below dispatches on
+``scene.faces is not None`` and is otherwise unchanged for legacy scenes. This
+module turns whichever ground truth is available into:
 
 - ``gt_surface_points`` / ``observed_gt_surface_points``: dense samples on the
   true surface, used by the GT-based accuracy and support metrics.
 - ``gt_nurbs_payload``: a degree-1 NURBS (one patch per ground-truth region,
-  e.g. two for ``crease``) written next to the generated ``nurbs_surface.json``
-  as ``nurbs_surface_gt.json`` in the exact renderer format, so the true and
-  reconstructed surfaces can be overlaid visually.
+  e.g. two for ``crease``, or one per face for a volumetric solid) written
+  next to the generated ``nurbs_surface.json`` as ``nurbs_surface_gt.json`` in
+  the exact renderer format, so the true and reconstructed surfaces can be
+  overlaid visually.
 """
 
 from __future__ import annotations
@@ -17,7 +24,7 @@ from typing import Any
 
 import torch
 
-from .scenes import SyntheticGaussianScene
+from .scenes import GroundTruthFace, SyntheticGaussianScene
 
 _DOMAIN = (-1.0, 1.0)
 
@@ -33,9 +40,26 @@ def _sheet_fns(scene: SyntheticGaussianScene):
     return scene.sheet_fns if getattr(scene, "sheet_fns", None) else (scene.surface_fn,)
 
 
-def gt_surface_points(scene: SyntheticGaussianScene, grid_n: int = 128) -> torch.Tensor:
-    """Dense samples on the true surface (union of all sheets) over the domain."""
+def _face_dense_points(face: GroundTruthFace, grid_n: int) -> torch.Tensor:
+    uv = _grid_xy(_DOMAIN, _DOMAIN, grid_n, grid_n)
+    uv = uv[face.support_predicate(uv)]
+    if uv.numel() == 0:
+        return torch.empty((0, 3))
+    return face.to_world(uv)
 
+
+def gt_solid_surface_points(scene: SyntheticGaussianScene, grid_n: int = 128) -> torch.Tensor:
+    """Dense world-space samples on a genuinely 3D volumetric solid's true
+    boundary -- the union of every face's own dense local-domain sample."""
+
+    return torch.cat([_face_dense_points(face, grid_n) for face in scene.faces], dim=0)
+
+
+def gt_surface_points(scene: SyntheticGaussianScene, grid_n: int = 128) -> torch.Tensor:
+    """Dense samples on the true surface (union of all sheets/faces) over the domain."""
+
+    if scene.faces is not None:
+        return gt_solid_surface_points(scene, grid_n)
     xy = _grid_xy(_DOMAIN, _DOMAIN, grid_n, grid_n)
     xy = xy[scene.support_predicate(xy)]
     return torch.cat(
@@ -50,12 +74,18 @@ def observed_gt_surface_points(
 
     The observed surface only exists where Gaussians are, so support/coverage
     metrics must ignore true-surface area with no nearby observation. A grid
-    sample is kept when its ``xy`` is within ``radius`` of some input point.
+    sample is kept when it is within ``radius`` of some input point -- in full
+    3D world space for volumetric solids (a face oriented away from xy makes
+    an xy-only distance meaningless), or by ``xy`` alone for legacy height
+    fields (unchanged).
     """
 
     pts = gt_surface_points(scene, grid_n)
     if radius is None:
         return pts
+    if scene.faces is not None:
+        d = torch.cdist(pts, scene.points).min(dim=1).values
+        return pts[d <= radius]
     input_xy = scene.points[:, :2]
     d = torch.cdist(pts[:, :2], input_xy).min(dim=1).values
     return pts[d <= radius]
@@ -147,9 +177,31 @@ def _crescent_inner_radius(theta: torch.Tensor) -> torch.Tensor:
     return projection + torch.sqrt(projection.square() + 0.48 ** 2 - 0.28 ** 2)
 
 
+def _face_chart(face: GroundTruthFace, nu: int = 12, nv: int = 12) -> tuple[torch.Tensor, int, int, str]:
+    """One boundary-conformal chart for a single volumetric-solid face.
+
+    A ``circle``-support face (e.g. a cylinder cap) is a disk, not a square --
+    charted as a polar (angle, radius) grid so its boundary is the chart's own
+    parameter-domain edge, never a trim mask (matching the boundary-conformal
+    ideal used throughout this module for legacy scenes).
+    """
+
+    if face.support_name == "circle":
+        theta = torch.linspace(0.0, 2.0 * torch.pi, nu)
+        v = torch.linspace(0.0, 1.0, nv)
+        uv = torch.stack((v[None, :] * theta.cos()[:, None], v[None, :] * theta.sin()[:, None]), dim=-1).reshape(-1, 2)
+        grid = face.to_world(uv).reshape(nu, nv, 3)
+        return grid, 2, 1, "polar"
+    uv = _grid_xy(_DOMAIN, _DOMAIN, nu, nv)
+    grid = face.to_world(uv).reshape(nu, nv, 3)
+    return grid, 1, 1, "rect"
+
+
 def gt_nurbs_charts(scene: SyntheticGaussianScene) -> list[tuple[torch.Tensor, int, int, str]]:
     """Boundary-conformal ``(control_grid, degree_u, degree_v, chart_kind)`` per GT patch."""
 
+    if scene.faces is not None:  # genuinely 3D volumetric solid: one chart per face
+        return [_face_chart(face) for face in scene.faces]
     sheets = _sheet_fns(scene)
     if len(sheets) > 1:  # multi-sheet scenes: one full-domain chart per sheet
         return [_rect_chart(_DOMAIN, _DOMAIN, fn) for fn in sheets]

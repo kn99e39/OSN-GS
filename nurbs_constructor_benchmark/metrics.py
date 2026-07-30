@@ -76,15 +76,24 @@ def adjusted_rand_index(a: torch.Tensor, b: torch.Tensor) -> float:
     return _adjusted_rand_index(a, b)
 
 def support_domain_metrics(scene: SyntheticGaussianScene, state: Any, resolution: int = 128) -> tuple[dict[str, Any], dict[str, Any]]:
-    gt = mask_on_grid(scene.support_predicate, resolution)
-    # Use the same extent-adaptive UV oversampling as patch_union_metrics.
-    # Sampling only one UV point per output raster cell fragments a trimmed
-    # 64x64 chart when it is scored on this 128x128 world grid, producing
-    # artificial enclosed background cells that look like thousands of holes.
-    # The union raster is the supported surface representation being measured.
-    generated = torch.zeros((resolution, resolution), dtype=torch.bool)
-    for patch in state.surface_patches:
-        generated |= _patch_xy_mask(patch, resolution)
+    if scene.faces is not None:
+        # Genuinely 3D volumetric solid: a single shared xy raster cannot
+        # represent a face oriented away from that view (e.g. a box side
+        # wall), so ground truth and generated support are both rasterized
+        # PER FACE in that face's own local domain, then combined -- see
+        # `_face_aware_masks`.
+        gt, generated, face_count = _face_aware_masks(scene, state, resolution)
+    else:
+        gt = mask_on_grid(scene.support_predicate, resolution)
+        # Use the same extent-adaptive UV oversampling as patch_union_metrics.
+        # Sampling only one UV point per output raster cell fragments a trimmed
+        # 64x64 chart when it is scored on this 128x128 world grid, producing
+        # artificial enclosed background cells that look like thousands of holes.
+        # The union raster is the supported surface representation being measured.
+        generated = torch.zeros((resolution, resolution), dtype=torch.bool)
+        for patch in state.surface_patches:
+            generated |= _patch_xy_mask(patch, resolution)
+        face_count = None
     intersection = gt & generated
     gt_count, gen_count, common = int(gt.sum()), int(generated.sum()), int(intersection.sum())
     precision = common / gen_count if gen_count else 0.0
@@ -105,6 +114,7 @@ def support_domain_metrics(scene: SyntheticGaussianScene, state: Any, resolution
         "support_gt_euler": gt_components - gt_holes, "support_generated_euler": gen_components - gen_holes,
         "support_topology_mismatch": (gt_components != gen_components) or (gt_holes != gen_holes),
         "support_boundary_chamfer": boundary_chamfer, "support_boundary_hausdorff": boundary_hausdorff,
+        "support_face_count": face_count,
     }
     return metrics, {"resolution": resolution, "gt_mask": gt.tolist(), "generated_mask": generated.tolist(), "intersection_mask": intersection.tolist()}
 
@@ -200,6 +210,105 @@ def _patch_xy_mask(
     return _rasterize_xy(patch.evaluate(uv).detach().cpu(), resolution)
 
 
+def _assign_patch_to_face(scene: SyntheticGaussianScene, patch: Any) -> int:
+    """Nearest analytic GT face for one reconstructed patch (majority vote over
+    its control grid) -- used to route a patch's raster into the RIGHT face's
+    own local 2D domain instead of a single shared xy view, which cannot
+    represent a face oriented away from that view (e.g. a box side wall)."""
+
+    grid = patch.control_grid.detach().reshape(-1, 3)
+    labels = scene.gt_patch_label(grid)
+    if labels.numel() == 0:
+        return 0
+    return int(torch.mode(labels).values)
+
+
+def _patch_face_mask(patch: Any, face: Any, resolution: int, respect_trim: bool = True, support_mask: Any = None) -> torch.Tensor:
+    """One patch's supported surface rasterized in ONE face's own local 2D
+    domain (via that face's analytic ``to_local`` inverse), mirroring
+    ``_patch_xy_mask`` but genuinely 3D-native instead of a shared xy drop."""
+
+    grid = patch.control_grid.detach().reshape(-1, 3)
+    local_grid = face.to_local(grid)
+    extent = float((local_grid.max(dim=0).values - local_grid.min(dim=0).values).max())
+    cell = 2.0 / max(1, resolution)
+    per_axis = int(min(384, max(16, -(-extent // cell) * 2 + 2)))
+    lin = torch.linspace(0.0, 1.0, per_axis, device=patch.control_grid.device)
+    u, v = torch.meshgrid(lin, lin, indexing="ij")
+    uv = torch.stack([u.reshape(-1), v.reshape(-1)], dim=1)
+    if support_mask is not None:
+        uv = uv[_uv_in_mask(uv, support_mask)]
+    elif respect_trim and getattr(patch, "uv_support_mask", None) is not None:
+        uv = uv[patch.support(uv)]
+    if not uv.numel():
+        return torch.zeros((resolution, resolution), dtype=torch.bool)
+    world_points = patch.evaluate(uv).detach().cpu()
+    return _rasterize_xy(face.to_local(world_points), resolution)
+
+
+def _combined_face_raster(masks: list[torch.Tensor], resolution: int) -> torch.Tensor:
+    """Concatenate each face's own local raster side by side, separated by a
+    full-width false gap, so 4-connected component/hole analysis on the
+    combined raster can never spuriously bridge two DIFFERENT faces -- this
+    lets every existing 2D hole/topology/boundary helper below run UNCHANGED
+    on a genuinely multi-face (3D-native) input instead of a single shared xy
+    projection."""
+
+    if not masks:
+        return torch.zeros((resolution, 0), dtype=torch.bool)
+    gap = torch.zeros((resolution, resolution), dtype=torch.bool)
+    parts: list[torch.Tensor] = []
+    for index, mask in enumerate(masks):
+        if index > 0:
+            parts.append(gap)
+        parts.append(mask)
+    return torch.cat(parts, dim=1)
+
+
+def _combined_width(num_faces: int, resolution: int) -> int:
+    return 0 if num_faces == 0 else (2 * num_faces - 1) * resolution
+
+
+def _face_block_offset(face_index: int, resolution: int) -> int:
+    return face_index * 2 * resolution
+
+
+def _patch_combined_mask(
+    patch: Any, face: Any, face_index: int, resolution: int, total_width: int, respect_trim: bool = True, support_mask: Any = None,
+) -> torch.Tensor:
+    """One patch's face-local mask, placed at its face's own column block
+    within the shared multi-face combined raster (all other columns false)."""
+
+    local_mask = _patch_face_mask(patch, face, resolution, respect_trim=respect_trim, support_mask=support_mask)
+    combined = torch.zeros((resolution, total_width), dtype=torch.bool)
+    offset = _face_block_offset(face_index, resolution)
+    combined[:, offset:offset + resolution] = local_mask
+    return combined
+
+
+def _face_aware_masks(
+    scene: SyntheticGaussianScene, state: Any, resolution: int, mask_override: list[Any] | None = None,
+) -> tuple[torch.Tensor, torch.Tensor, int]:
+    """(gt_combined_raster, generated_combined_raster, face_count) for a
+    genuinely 3D volumetric scene -- the face-aware counterpart of
+    ``mask_on_grid(scene.support_predicate, ...)`` + the per-patch xy union."""
+
+    patch_faces = [_assign_patch_to_face(scene, patch) for patch in state.surface_patches]
+    gt_masks, gen_masks = [], []
+    for face in scene.faces:
+        gt_masks.append(mask_on_grid(face.support_predicate, resolution))
+        assigned = [
+            (patch, mask_override[i] if mask_override is not None else None)
+            for i, patch in enumerate(state.surface_patches)
+            if patch_faces[i] == face.face_id
+        ]
+        gen_mask = torch.zeros((resolution, resolution), dtype=torch.bool)
+        for patch, override in assigned:
+            gen_mask |= _patch_face_mask(patch, face, resolution, support_mask=override)
+        gen_masks.append(gen_mask)
+    return _combined_face_raster(gt_masks, resolution), _combined_face_raster(gen_masks, resolution), len(scene.faces)
+
+
 def patch_union_metrics(
     scene: SyntheticGaussianScene,
     state: Any,
@@ -215,15 +324,43 @@ def patch_union_metrics(
     fragmentation is visible instead of silently smoothed away.
     """
 
-    gt = mask_on_grid(scene.support_predicate, resolution)
-    if mask_override is not None:
-        patch_masks = [
-            _patch_xy_mask(patch, resolution, support_mask=mask)
-            for patch, mask in zip(state.surface_patches, mask_override)
-        ]
+    if scene.faces is not None:
+        # Genuinely 3D volumetric solid: rasterize ground truth and every
+        # patch's support in its OWN assigned face's local domain, then
+        # combine into one gap-separated multi-face raster (see
+        # `_combined_face_raster`) so hole/topology analysis never bridges
+        # two different faces -- a single shared xy view cannot represent a
+        # face oriented away from it (e.g. a box side wall).
+        patch_faces = [_assign_patch_to_face(scene, patch) for patch in state.surface_patches]
+        face_index_by_id = {face.face_id: index for index, face in enumerate(scene.faces)}
+        raster_width = _combined_width(len(scene.faces), resolution)
+        gt = _combined_face_raster([mask_on_grid(face.support_predicate, resolution) for face in scene.faces], resolution)
+        if mask_override is not None:
+            patch_masks = [
+                _patch_combined_mask(
+                    patch, scene.faces[face_index_by_id[patch_faces[i]]], face_index_by_id[patch_faces[i]],
+                    resolution, raster_width, support_mask=mask,
+                )
+                for i, (patch, mask) in enumerate(zip(state.surface_patches, mask_override))
+            ]
+        else:
+            patch_masks = [
+                _patch_combined_mask(
+                    patch, scene.faces[face_index_by_id[patch_faces[i]]], face_index_by_id[patch_faces[i]], resolution, raster_width,
+                )
+                for i, patch in enumerate(state.surface_patches)
+            ]
     else:
-        patch_masks = [_patch_xy_mask(patch, resolution) for patch in state.surface_patches]
-    coverage_count = torch.zeros((resolution, resolution), dtype=torch.long)
+        raster_width = resolution
+        gt = mask_on_grid(scene.support_predicate, resolution)
+        if mask_override is not None:
+            patch_masks = [
+                _patch_xy_mask(patch, resolution, support_mask=mask)
+                for patch, mask in zip(state.surface_patches, mask_override)
+            ]
+        else:
+            patch_masks = [_patch_xy_mask(patch, resolution) for patch in state.surface_patches]
+    coverage_count = torch.zeros((resolution, raster_width), dtype=torch.long)
     for mask in patch_masks:
         coverage_count += mask.long()
     union = coverage_count > 0
@@ -237,7 +374,7 @@ def patch_union_metrics(
     hole_intersection = int((gt_holes & union_holes).sum())
 
     # Inter-patch gap: uncovered GT cells adjacent to >= 2 distinct patches.
-    neighbor_patches = torch.zeros((resolution, resolution), dtype=torch.long)
+    neighbor_patches = torch.zeros((resolution, raster_width), dtype=torch.long)
     for mask in patch_masks:
         dilated = torch.nn.functional.max_pool2d(mask.float()[None, None], 3, 1, 1)[0, 0] > 0.5
         neighbor_patches += dilated.long()
@@ -275,6 +412,7 @@ def patch_union_metrics(
 
     metrics = {
         "union_resolution": resolution,
+        "union_face_count": len(scene.faces) if scene.faces is not None else None,
         "union_patch_count": len(patch_masks),
         "union_gt_cells": gt_count,
         "union_generated_cells": union_count,

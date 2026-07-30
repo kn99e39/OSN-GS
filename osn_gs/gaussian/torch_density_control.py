@@ -267,11 +267,16 @@ def _shape_transaction_candidates(model: TorchGaussianModel, clone_idx, split_id
         # occluded-chart-owned rows are never cloned/split, only kept as-is.
         "surface_owner_kind": model.surface_owner_kind,
         "surface_owner_id": model.surface_owner_id,
+        "stable_gaussian_ids": model.stable_gaussian_ids,
     }
     additions = {key: [] for key in raw}
     if clone_idx.numel() > 0:
         for key, value in raw.items():
-            additions[key].append(value[clone_idx])
+            if key != "stable_gaussian_ids":
+                additions[key].append(value[clone_idx])
+        additions["stable_gaussian_ids"].append(
+            model.allocate_stable_gaussian_ids(int(clone_idx.numel()))
+        )
     if split_idx.numel() > 0:
         parent_scale = model.get_scaling.detach()[split_idx]
         repeated_scale = parent_scale.repeat_interleave(samples, dim=0)
@@ -293,6 +298,9 @@ def _shape_transaction_candidates(model: TorchGaussianModel, clone_idx, split_id
             "cluster_ids": raw["cluster_ids"][split_idx].repeat_interleave(samples, dim=0),
             "surface_owner_kind": raw["surface_owner_kind"][split_idx].repeat_interleave(samples, dim=0),
             "surface_owner_id": raw["surface_owner_id"][split_idx].repeat_interleave(samples, dim=0),
+            "stable_gaussian_ids": model.allocate_stable_gaussian_ids(
+                int(split_idx.numel()) * samples
+            ),
         }
         for key, value in split_values.items():
             additions[key].append(value)
@@ -329,6 +337,7 @@ def _commit_shape_transaction(
         cluster_ids=selected["cluster_ids"],
         surface_owner_kind=selected["surface_owner_kind"],
         surface_owner_id=selected["surface_owner_id"],
+        stable_gaussian_ids=selected["stable_gaussian_ids"],
         optimizer_keep_indices=optimizer_keep_indices,
         preserve_parameter_gradients=preserve_gradients,
     )

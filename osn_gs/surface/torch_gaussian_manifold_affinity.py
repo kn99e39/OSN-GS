@@ -42,7 +42,7 @@ EDGE_PROXIMITY_ONLY = RELATION_PROXIMITY_ONLY
 EDGE_AMBIGUOUS = RELATION_AMBIGUOUS
 EDGE_REJECTED = RELATION_REJECTED
 
-# --- Candidate status (worklog 114 §4) ---
+# --- Candidate status (worklog 114 짠4) ---
 CANDIDATE_STATUS_CANDIDATE = "candidate"
 CANDIDATE_STATUS_OUTSIDE_SUPPORT = "outside_candidate_support"
 CANDIDATE_STATUS_CAPPED_OUT = "capped_out"
@@ -55,7 +55,7 @@ CANDIDATE_REASON_FOOTPRINT_OVERLAP = "footprint_overlap"
 CANDIDATE_REASON_DISTANCE_ONLY = "distance_only"
 CANDIDATE_REASON_DETERMINISTIC_CAP = "deterministic_cap"
 
-# --- Endpoint structural status (worklog 114 §5) ---
+# --- Endpoint structural status (worklog 114 짠5) ---
 ENDPOINT_BOTH_RELIABLE = "both_intrinsically_reliable"
 ENDPOINT_ONE_UNRELIABLE = "one_intrinsically_unreliable"
 ENDPOINT_BOTH_UNRELIABLE = "both_intrinsically_unreliable"
@@ -91,7 +91,7 @@ class ManifoldAffinityConfig:
     parallel_separate_min_normal_alignment: float = 0.85
     parallel_separate_max_mutual_residual: float = 3.0
     # Close-parallel-surface detection uses the NORMAL-direction gap
-    # normalized by normal thickness (not tangent scale) -- worklog 114 §3/§6.
+    # normalized by normal thickness (not tangent scale) -- worklog 114 짠3/짠6.
     parallel_separate_min_normal_gap_over_thickness: float = 1.5
     # Oversized-planar-bridge guard: a candidate whose footprint is much
     # larger than its neighbor's is never allowed to become same_surface,
@@ -101,7 +101,7 @@ class ManifoldAffinityConfig:
 
 @dataclass(frozen=True)
 class PairAffinityMetrics:
-    """All independently-preserved pairwise metrics (worklog 114 §6). None of
+    """All independently-preserved pairwise metrics (worklog 114 짠6). None of
     these alone decides ``manifold_relation`` -- see ``_classify_relation``."""
 
     normal_alignment: float
@@ -251,7 +251,13 @@ def _compute_pair_metrics(
     tangent_component = displacement - (displacement * frame.normal_candidate[a]).sum() * frame.normal_candidate[a]
     tangent_direction_displacement_ratio = float(torch.linalg.vector_norm(tangent_component)) / max(average_tangent_major, 1e-12)
 
-    average_normal = torch.nn.functional.normalize(frame.normal_candidate[a] + frame.normal_candidate[b], dim=0)
+    # Covariance normals are unoriented lines. Align before averaging so an
+    # eigensolver sign flip cannot collapse the pair normal to zero.
+    normal_a = frame.normal_candidate[a]
+    normal_b = frame.normal_candidate[b]
+    if float(normal_a @ normal_b) < 0.0:
+        normal_b = -normal_b
+    average_normal = torch.nn.functional.normalize(normal_a + normal_b, dim=0)
     normal_thickness_a, normal_thickness_b = frame.normal_thickness[a], frame.normal_thickness[b]
     average_thickness = float((normal_thickness_a + normal_thickness_b) / 2.0)
     normal_direction_gap = float((displacement * average_normal).sum().abs())
@@ -318,7 +324,7 @@ def build_manifold_affinity_graph(
     """Classify candidate spatial-neighbor pairs into orthogonal (candidate
     status, endpoint status, manifold relation, confidence) axes.
 
-    Candidate generation (worklog 114 §4) combines kNN with scale-normalized
+    Candidate generation (worklog 114 짠4) combines kNN with scale-normalized
     radius and tangent-footprint-overlap checks -- a pure kNN hit that fails
     BOTH of those scale checks is ``outside_candidate_support`` (nothing
     behind it but index proximity), never silently treated as a real
@@ -369,7 +375,7 @@ def build_manifold_affinity_graph(
             footprint_overlap = distance <= config.footprint_overlap_multiplier * max(footprint_sum, 1e-12)
             pending.append((a, b, distance, mutual, within_radius, footprint_overlap))
 
-    # Deterministic-cap ordering (worklog 114 §8): the per-node candidate cap
+    # Deterministic-cap ordering (worklog 114 짠8): the per-node candidate cap
     # must never depend on which positional index happens to be walked first
     # (that leaks raw array order into the result). Sort scale-backed
     # candidates by (distance, stable id pair) BEFORE applying the cap, so the
@@ -483,7 +489,7 @@ def classify_node_boundary_status(
 
 @dataclass(frozen=True)
 class SameSurfaceRegionDiagnostic:
-    """Connected-region diagnostic over ``same_surface`` edges ONLY (worklog 114 §11).
+    """Connected-region diagnostic over ``same_surface`` edges ONLY (worklog 114 짠11).
 
     This is explicitly a ROBUSTNESS/EVALUATION diagnostic, not a boundary
     graph or production chart segmentation. Crease edges are never used to

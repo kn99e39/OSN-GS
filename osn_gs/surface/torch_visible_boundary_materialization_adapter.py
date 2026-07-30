@@ -55,10 +55,13 @@ def materialize_visible_boundary_component(component: OrderedBoundaryComponent, 
         import torch
         observed = torch.cat((boundary_points, interior_points), dim=0)
         surface, _ = fit_torch_visible_surface_lsq(observed, resolution_u=6, resolution_v=6, degree_u=2, degree_v=2)
-        sampled = surface.evaluate(torch.tensor([[0.5, 0.5]], dtype=observed.dtype, device=observed.device))
+        grid = torch.linspace(0.0, 1.0, 9, dtype=observed.dtype, device=observed.device)
+        sample_u, sample_v = torch.meshgrid(grid, grid, indexing="ij")
+        sampled = surface.evaluate(torch.stack((sample_u.reshape(-1), sample_v.reshape(-1)), dim=1))
         if not torch.isfinite(sampled).all():
             return VisibleBoundaryMaterializationResult(adapter, None, "validation_failed", None, None, ("non_finite_evaluate",))
-        residual = float(torch.cdist(interior_points, sampled.reshape(1, 3)).min(dim=1).values.mean())
-        return VisibleBoundaryMaterializationResult(adapter, surface, "materialized", None, residual, ())
+        boundary_residual = float(torch.cdist(boundary_points, sampled).min(dim=1).values.mean())
+        interior_residual = float(torch.cdist(interior_points, sampled).min(dim=1).values.mean())
+        return VisibleBoundaryMaterializationResult(adapter, surface, "materialized", boundary_residual, interior_residual, ())
     except Exception as exc:
         return VisibleBoundaryMaterializationResult(adapter, None, "fit_failed", None, None, (type(exc).__name__,))

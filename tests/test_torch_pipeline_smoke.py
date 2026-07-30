@@ -18,12 +18,13 @@ except ImportError:  # pragma: no cover
 
 @unittest.skipUnless(torch is not None, "PyTorch is required for the torch pipeline smoke test")
 class TorchPipelineSmokeTest(unittest.TestCase):
-    def _synthetic_points(self, count: int = 400):
+    def _synthetic_points(self, count: int = 81):
         torch.manual_seed(0)
-        xy = torch.rand(count, 2) * 2 - 1
-        z = 0.2 * torch.sin(xy[:, 0] * 2)
-        points = torch.cat([xy, z.unsqueeze(1)], dim=1)
-        colors = torch.rand(count, 3)
+        axis = torch.linspace(-0.48, 0.48, 9)
+        points = torch.stack(
+            [torch.tensor([x, y, 0.04 * (x * x + y * y)]) for x in axis for y in axis]
+        )
+        colors = torch.rand(len(points), 3)
         return points, colors
 
     def test_pipeline_initialize_builds_surface_and_gaussians(self):
@@ -31,15 +32,16 @@ class TorchPipelineSmokeTest(unittest.TestCase):
 
         points, colors = self._synthetic_points()
         pipeline = TorchOSNGSPipeline(
-            TorchPipelineConfig(voxel_grid_resolution=6, base_curve_count=4, visible_surface_resolution_u=6, visible_surface_resolution_v=3),
+            TorchPipelineConfig(),
             device="cpu",
         )
         state = pipeline.initialize(points, colors)
 
         self.assertEqual(len(state.model), points.shape[0])
-        self.assertIsNotNone(state.voxel_regions)
-        self.assertGreater(int(state.voxel_regions.region_centers.shape[0]), 0)
-
+        self.assertEqual(
+            state.visible_surface_construction.construction_state, "constructed"
+        )
+        self.assertTrue(bool((state.model.cluster_ids >= 0).all()))
         uv = torch.tensor([[0.0, 0.0], [0.5, 0.5], [1.0, 1.0]])
         surface_points = state.surface.evaluate(uv)
         self.assertEqual(tuple(surface_points.shape), (3, 3))
@@ -72,7 +74,7 @@ class TorchPipelineSmokeTest(unittest.TestCase):
         )
 
         trainer = TorchOSNGSTrainer(
-            pipeline_config=TorchPipelineConfig(voxel_grid_resolution=6, base_curve_count=4),
+            pipeline_config=TorchPipelineConfig(),
             training_config=TorchTrainingConfig(
                 iterations=1,
                 progress_log_interval=0,

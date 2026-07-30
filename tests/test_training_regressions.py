@@ -25,34 +25,32 @@ from osn_gs.utils.torch_checkpoint import load_torch_checkpoint, save_torch_chec
 class TrainingRegressionTest(unittest.TestCase):
     def _state(self, count: int = 48):
         torch.manual_seed(7)
-        points = torch.rand(count, 3)
-        colors = torch.rand(count, 3)
+        axis = torch.linspace(-0.48, 0.48, 9)
+        points = torch.stack([torch.tensor([x, y, 0.0]) for x in axis for y in axis])
+        colors = torch.rand(len(points), 3)
         pipeline = TorchOSNGSPipeline(
-            TorchPipelineConfig(
-                voxel_grid_resolution=4,
-                visible_surface_resolution_u=4,
-                visible_surface_resolution_v=3,
-            ),
+            TorchPipelineConfig(canonical_covariance_knn=8),
             device="cpu",
         )
-        return pipeline, pipeline.initialize(points, colors)
+        state = pipeline.initialize(points, colors)
+        if count < len(points):
+            keep = torch.arange(len(points)) < count
+            state.model.prune(keep)
+        return pipeline, state
 
-    def test_surface_rebuild_compatibility_path_preserves_bootstrap_topology(self):
-        pipeline, state = self._state()
+    def test_surface_rebuild_uses_canonical_pipeline_and_preserves_model(self):
+        pipeline, state = self._state(count=81)
         model_identity = id(state.model)
-        voxel_identity = id(state.voxel_regions)
-        patch_identities = [id(patch) for patch in state.surface_patches]
+        patch_identity = id(state.surface_patches[0])
         opacity = state.model._opacity.detach().clone()
         scaling = state.model._scaling.detach().clone()
-        bindings = state.model.cluster_ids.detach().clone()
         pipeline.rebuild_surface_from_certain(state)
         self.assertEqual(id(state.model), model_identity)
-        self.assertEqual(id(state.voxel_regions), voxel_identity)
-        self.assertEqual([id(patch) for patch in state.surface_patches], patch_identities)
+        self.assertNotEqual(id(state.surface_patches[0]), patch_identity)
+        self.assertEqual(state.visible_surface_construction.construction_state, "constructed")
         self.assertTrue(torch.equal(state.model._opacity, opacity))
         self.assertTrue(torch.equal(state.model._scaling, scaling))
-        self.assertTrue(torch.equal(state.model.cluster_ids, bindings))
-
+        self.assertEqual(state.surface_topology_version, 1)
     def test_surface_loss_patch_minibatch_is_finite_and_trainable(self):
         _, state = self._state()
         trainer = TorchOSNGSTrainer.__new__(TorchOSNGSTrainer)
@@ -68,55 +66,37 @@ class TrainingRegressionTest(unittest.TestCase):
         self.assertIsNotNone(selected.grad)
         self.assertTrue(torch.isfinite(selected.grad).all())
 
-    def test_surface_quality_checks_accumulate_without_global_rebuild(self):
-        pipeline, state = self._state()
-        voxel_identity = id(state.voxel_regions)
-        patch_identities = [id(patch) for patch in state.surface_patches]
-        report = pipeline.maintain_surface_from_certain(
-            state,
-            residual_ratio_threshold=0.0,
-            residual_patience=3,
-            local_min_gaussians=10_000,
-        )
+    def test_surface_maintenance_is_full_canonical_reconstruction(self):
+        pipeline, state = self._state(count=81)
+        report = pipeline.maintain_surface_from_certain(state)
+        self.assertTrue(report["topology_changed"])
+        self.assertEqual(report["construction_state"], "constructed")
         self.assertGreater(report["checked"], 0)
-        self.assertFalse(report["topology_changed"])
-        self.assertEqual(id(state.voxel_regions), voxel_identity)
-        self.assertEqual([id(patch) for patch in state.surface_patches], patch_identities)
-        self.assertTrue(any(value == 1 for value in state.surface_bad_checks.values()))
-
-    def test_local_surface_correction_splits_only_the_failed_patch(self):
-        axis = torch.linspace(0.0, 0.15, steps=4)
-        left = torch.stack(
-            [
-                torch.tensor([x, y, 0.0])
-                for x in axis
-                for y in axis
-            ]
+        self.assertEqual(state.surface_bad_checks, {})
+    def test_legacy_constructor_selector_is_removed(self):
+        with self.assertRaises(TypeError):
+            TorchPipelineConfig(nurbs_constructor_mode="legacy")
+        with self.assertRaises(TypeError):
+            TorchPipelineConfig(nurbs_constructor_mode="voxel_patch_stage1")
+    def test_bounded_canonical_construction_propagates_membership_and_uv(self):
+        axis = torch.linspace(-0.48, 0.48, 21)
+        points = torch.stack(
+            [torch.tensor([x, y, 0.0]) for x in axis for y in axis]
         )
-        right = left + torch.tensor([0.8, 0.8, 0.0])
-        points = torch.cat((left, right), dim=0)
-        colors = torch.full_like(points, 0.5)
         pipeline = TorchOSNGSPipeline(
-            TorchPipelineConfig(
-                voxel_grid_resolution=4,
-                adaptive_voxel_density=False,
-                visible_surface_resolution_u=4,
-                visible_surface_resolution_v=3,
-            ),
+            TorchPipelineConfig(canonical_construction_max_points=81),
             device="cpu",
         )
-        state = pipeline.initialize(points, colors)
-        state.model.cluster_ids.zero_()
-        bootstrap_identity = id(state.voxel_regions)
-        first_patch_identity = id(state.surface_patches[0])
-        before = len(state.surface_patches)
-        added = pipeline._split_failed_patch(state, patch_id=0, min_component=4)
-        self.assertGreater(added, 0)
-        self.assertGreater(len(state.surface_patches), before)
-        self.assertEqual(id(state.voxel_regions), bootstrap_identity)
-        self.assertEqual(id(state.surface_patches[0]), first_patch_identity)
-        self.assertGreater(int(state.model.cluster_ids.max()), 0)
-
+        state = pipeline.initialize(points, torch.full_like(points, 0.5))
+        self.assertEqual(
+            state.visible_surface_construction.diagnostic_summary[
+                "input_gaussian_count"
+            ],
+            81,
+        )
+        self.assertTrue(bool((state.model.cluster_ids >= 0).all()))
+        self.assertTrue(bool(torch.isfinite(state.model.surface_uv).all()))
+        self.assertEqual(tuple(state.model.surface_uv.shape), (len(points), 2))
     def test_surface_optimizer_sync_preserves_existing_adam_rows(self):
         _, state = self._state(count=24)
         trainer = TorchOSNGSTrainer.__new__(TorchOSNGSTrainer)
@@ -159,17 +139,24 @@ class TrainingRegressionTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             trainer._position_lr_extent(12.31, 4.92)
 
-    def test_graphdeco_covariance_uses_three_neighbor_mean(self):
-        points = torch.tensor([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [3.0, 0.0, 0.0], [10.0, 0.0, 0.0]])
-        common = dict(covariance_knn_chunk_size=2, covariance_max_scale_ratio=10.0)
-        one = TorchOSNGSPipeline(TorchPipelineConfig(covariance_init="knn", **common), device="cpu")
-        graphdeco = TorchOSNGSPipeline(TorchPipelineConfig(covariance_init="graphdeco_knn", **common), device="cpu")
-        one_scales = one._initial_covariance_scales(points)[:, 0]
-        graphdeco_scales = graphdeco._initial_covariance_scales(points)[:, 0]
-        self.assertAlmostEqual(float(one_scales[0]), 1.0, places=6)
-        self.assertAlmostEqual(float(graphdeco_scales[0]), (110.0 / 3.0) ** 0.5, places=6)
-        self.assertGreater(float(graphdeco_scales[0]), float(one_scales[0]))
-
+    def test_canonical_spacing_uses_three_neighbor_mean(self):
+        points = torch.tensor(
+            [
+                [0.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0],
+                [3.0, 0.0, 0.0],
+                [10.0, 0.0, 0.0],
+            ]
+        )
+        pipeline = TorchOSNGSPipeline(
+            TorchPipelineConfig(
+                covariance_knn_chunk_size=2,
+                covariance_max_scale_ratio=10.0,
+            ),
+            device="cpu",
+        )
+        mean_dist2 = pipeline._graphdeco_neighbor_mean_dist2(points)
+        self.assertAlmostEqual(float(mean_dist2[0]), 110.0 / 3.0, places=5)
     def test_adc_gradient_source_tracks_screen_space_and_fallback(self):
         _, state = self._state(count=4)
         model = state.model
@@ -357,20 +344,9 @@ class TrainingRegressionTest(unittest.TestCase):
         self.assertNotEqual(first, second)
         self.assertEqual(first, replay_first)
 
-    def test_maintenance_patch_budget_rotates(self):
-        _, state = self._state()
-        trainer = TorchOSNGSTrainer.__new__(TorchOSNGSTrainer)
-        trainer.training_config = TorchTrainingConfig(
-            surface_rebuild_interval=1000,
-            surface_maintenance_patch_budget=3,
-        )
-        state.iteration = 1000
-        first = trainer._maintenance_patch_ids(state)
-        state.iteration = 2000
-        second = trainer._maintenance_patch_ids(state)
-        self.assertEqual(first, (0, 1, 2))
-        self.assertEqual(second, (3, 4, 5))
-
+    def test_retired_maintenance_budget_config_is_rejected(self):
+        with self.assertRaises(TypeError):
+            TorchTrainingConfig(surface_maintenance_patch_budget=3)
     def test_stream_snapshot_deduplicates_same_iteration(self):
         _, state = self._state(count=4)
         trainer = TorchOSNGSTrainer.__new__(TorchOSNGSTrainer)
@@ -421,6 +397,27 @@ class TrainingRegressionTest(unittest.TestCase):
         self.assertEqual(restored, 123)
         self.assertTrue(torch.equal(state.model._features_dc, expected))
 
+    def test_stream_payload_includes_renderer_diagnostic_arrays(self):
+        _, state = self._state(count=4)
+        state.iteration = 9
+        state.model.is_uncertain[1] = True
+        state.model.surface_uv[0] = torch.tensor([0.25, 0.75])
+        state.model.cluster_ids[0] = 3
+        state.model.surface_owner_kind[0] = 1
+        state.model.surface_owner_id[0] = 3
+        trainer = TorchOSNGSTrainer.__new__(TorchOSNGSTrainer)
+        trainer.torch = torch
+        trainer.training_config = TorchTrainingConfig(stream_max_gaussians=0)
+        payload = trainer._stream_payload(state)
+        self.assertEqual(payload["ids"].shape[0], 4)
+        self.assertEqual(payload["uncertain"].tolist(), [0, 1, 0, 0])
+        self.assertEqual(payload["confidences"].shape[0], 4)
+        self.assertEqual(payload["surfaceUvs"].shape, (8,))
+        self.assertEqual(payload["surfaceUvs"].tolist()[:2], [0.25, 0.75])
+        self.assertEqual(payload["clusterIds"].tolist()[0], 3)
+        self.assertEqual(payload["surfaceOwnerKinds"].tolist()[0], 1)
+        self.assertEqual(payload["surfaceOwnerIds"].tolist()[0], 3)
+
     def test_vectorized_ply_preserves_renderer_header(self):
         _, state = self._state(count=4)
         with tempfile.TemporaryDirectory() as folder:
@@ -429,6 +426,10 @@ class TrainingRegressionTest(unittest.TestCase):
             lines = path.read_text(encoding="utf-8").splitlines()
         self.assertIn("property float scale_0", lines)
         self.assertIn("property float rot_3", lines)
+        self.assertIn("property int uncertain", lines)
+        self.assertIn("property float confidence", lines)
+        self.assertIn("property long surface_owner_id", lines)
+        self.assertIn("property long stable_gaussian_id", lines)
         self.assertEqual(sum(line.startswith("element vertex 4") for line in lines), 1)
 
 

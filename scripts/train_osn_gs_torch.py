@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 """OSN-GS Torch training CLI."""
 
@@ -17,9 +17,7 @@ from osn_gs.eval.held_out_metrics import (
 )
 from osn_gs.gaussian.torch_density_control import TorchDensityControlConfig
 from osn_gs.interop.colab_args import (
-    add_stage1_constructor_arguments,
     add_surface_fit_arguments,
-    stage1_constructor_config_kwargs,
     surface_fit_config_kwargs,
 )
 from osn_gs.render.diff_gaussian_loader import validate_diff_gaussian_build_environment
@@ -64,44 +62,13 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("scene", "calibration"),
         help="Position-LR scale: robust point-cloud scene extent (default) or Graphdeco camera calibration extent for A/B.",
     )
-    parser.add_argument("--base_curve_count", type=int, default=8)
-    parser.add_argument("--visible_surface_resolution_u", type=int, default=8)
-    parser.add_argument("--visible_surface_resolution_v", type=int, default=4)
-    parser.add_argument("--visible_surface_resolution_scale", type=float, default=4.0)
-    parser.add_argument("--max_surface_control_points", type=int, default=65536)
-    parser.add_argument("--covariance_init", type=str, default="knn", choices=("knn", "graphdeco_knn", "constant"))
+    parser.add_argument("--canonical_covariance_knn", type=int, default=8)
+    parser.add_argument("--canonical_construction_max_points", type=int, default=2048)
     parser.add_argument("--covariance_knn_chunk_size", type=int, default=0)
     parser.add_argument("--covariance_min_scale", type=float, default=1e-4)
     parser.add_argument("--covariance_max_scale_ratio", type=float, default=0.05)
     parser.add_argument("--covariance_scale_multiplier", type=float, default=1.0)
-    parser.add_argument(
-        "--visible_surface_fit_device",
-        type=str,
-        default="cpu",
-        choices=("cpu", "cuda", "auto"),
-        help="Workspace device for visible NURBS fitting. cpu lowers VRAM use; cuda can be faster.",
-    )
-    parser.add_argument(
-        "--visible_surface_fit_chunk_size",
-        type=int,
-        default=0,
-        help="NURBS grid samples per fitting chunk. 0 auto-selects once from available VRAM at startup.",
-    )
     add_surface_fit_arguments(parser)
-    add_stage1_constructor_arguments(parser)
-    parser.add_argument("--disable_voxel_surface_regions", action="store_true", help="Bypass pre-NURBS voxel surface-region placement.")
-    parser.add_argument("--voxel_grid_resolution", type=int, default=16, help="Coarse voxel grid resolution per axis before NURBS fitting.")
-    parser.add_argument("--disable_adaptive_voxel_density", action="store_true", help="Keep all occupied voxel cells at the coarse resolution.")
-    parser.add_argument("--voxel_max_subdivision_depth", type=int, default=1, help="Density-driven voxel subdivision depth.")
-    parser.add_argument("--voxel_density_quantile", type=float, default=0.75, help="Occupied-cell density quantile selected for subdivision.")
-    parser.add_argument("--voxel_density_covariance_weight_cap", type=float, default=10.0, help="Maximum inverse-covariance contribution to voxel density.")
-    parser.add_argument("--voxel_normal_knn", type=int, default=16, help="Neighbor count for local PCA normal estimation.")
-    parser.add_argument("--voxel_boundary_angle_degrees", type=float, default=35.0, help="Normal-angle change used to mark voxel boundaries.")
-    parser.add_argument("--voxel_min_points_per_region", type=int, default=1, help="Minimum Gaussians required to keep a voxel region.")
-    parser.add_argument("--voxel_normal_chunk_size", type=int, default=4096, help="Regions processed per batched SVD/cdist chunk during voxel normal estimation.")
-    parser.add_argument("--uncertain_samples_u", type=int, default=16)
-    parser.add_argument("--uncertain_samples_v", type=int, default=3)
-    parser.add_argument("--max_uncertain_gaussians", type=int, default=0, help="Cap the number of uncertain Gaussians.")
     parser.add_argument("--densify_from_iter", type=int, default=500)
     # Defaults reproduce the notebook's VRAM-safe recipe (original 3DGS ADC schedule)
     # so this CLI matches train.py / colab_train_3dgs.ipynb. Pass 0 to disable ADC.
@@ -126,12 +93,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Inspect persistent NURBS patch quality every N iterations; this does not globally rebuild voxels.",
     )
     parser.add_argument("--surface_loss_patch_budget", type=int, default=16, help="NURBS patches evaluated per iteration. 0 evaluates all patches.")
-    parser.add_argument("--surface_maintenance_patch_budget", type=int, default=16, help="NURBS patches inspected per maintenance pass. 0 checks all patches.")
-    parser.add_argument("--surface_residual_ratio_threshold", type=float, default=0.03)
-    parser.add_argument("--surface_residual_patience", type=int, default=3)
-    parser.add_argument("--surface_local_min_gaussians", type=int, default=64)
-    parser.add_argument("--surface_local_min_component", type=int, default=16)
-    parser.add_argument("--disable_local_surface_correction", action="store_true")
     parser.add_argument("--density_control_interval", type=int, default=500)
     parser.add_argument("--save_interval", type=int, default=1000)
     parser.add_argument("--progress_log_interval", type=int, default=100, help="Print training progress every N iterations. 0 disables periodic progress logs.")
@@ -151,7 +112,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--low_vram",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="Conservative preset for 16GB-class GPUs (on by default): keep images on CPU, halve train resolution, and cap uncertain Gaussians. Pass --no-low_vram for a full-resolution run.",
+        help="Conservative preset for 16GB-class GPUs (on by default): keep images on CPU and halve train resolution. Pass --no-low_vram for a full-resolution run.",
     )
     return parser
 
@@ -172,15 +133,6 @@ def main() -> None:
             flush=True,
         )
     train_resolution_scale = max(1, int(args.train_resolution_scale))
-    uncertain_samples_u = args.uncertain_samples_u
-    uncertain_samples_v = args.uncertain_samples_v
-    max_uncertain_gaussians = max(0, int(args.max_uncertain_gaussians))
-    if args.low_vram:
-        train_resolution_scale = max(train_resolution_scale, 2)
-        uncertain_samples_u = min(uncertain_samples_u, 8)
-        uncertain_samples_v = min(uncertain_samples_v, 2)
-        if max_uncertain_gaussians == 0:
-            max_uncertain_gaussians = 128
     if args.eval and train_resolution_scale > 1:
         print(
             f"OSN-GS --eval: ignoring train_resolution_scale={train_resolution_scale} "
@@ -211,44 +163,24 @@ def main() -> None:
     )
 
     pipeline_config = TorchPipelineConfig(
-        base_curve_count=args.base_curve_count,
-        visible_surface_resolution_u=args.visible_surface_resolution_u,
-        visible_surface_resolution_v=args.visible_surface_resolution_v,
-        visible_surface_resolution_scale=args.visible_surface_resolution_scale,
-        max_surface_control_points=max(4, int(args.max_surface_control_points)),
-        covariance_init=args.covariance_init,
-        covariance_knn_chunk_size=args.covariance_knn_chunk_size,
-        covariance_min_scale=args.covariance_min_scale,
-        covariance_max_scale_ratio=args.covariance_max_scale_ratio,
-        covariance_scale_multiplier=args.covariance_scale_multiplier,
-        visible_surface_fit_device=args.visible_surface_fit_device,
-        visible_surface_fit_chunk_size=args.visible_surface_fit_chunk_size,
-        use_voxel_surface_regions=not args.disable_voxel_surface_regions,
-        voxel_grid_resolution=args.voxel_grid_resolution,
-        adaptive_voxel_density=not args.disable_adaptive_voxel_density,
-        voxel_max_subdivision_depth=max(0, int(args.voxel_max_subdivision_depth)),
-        voxel_density_quantile=min(1.0, max(0.0, float(args.voxel_density_quantile))),
-        voxel_density_covariance_weight_cap=max(0.1, float(args.voxel_density_covariance_weight_cap)),
-        voxel_normal_knn=args.voxel_normal_knn,
-        voxel_boundary_angle_degrees=args.voxel_boundary_angle_degrees,
-        voxel_min_points_per_region=args.voxel_min_points_per_region,
-        voxel_normal_chunk_size=args.voxel_normal_chunk_size,
-        uncertain_samples_u=uncertain_samples_u,
-        uncertain_samples_v=uncertain_samples_v,
-        max_uncertain_gaussians=max_uncertain_gaussians,
+        canonical_covariance_knn=max(3, int(args.canonical_covariance_knn)),
+        canonical_construction_max_points=max(
+            16, int(args.canonical_construction_max_points)
+        ),
+        covariance_knn_chunk_size=max(0, int(args.covariance_knn_chunk_size)),
+        covariance_min_scale=max(0.0, float(args.covariance_min_scale)),
+        covariance_max_scale_ratio=max(
+            0.0, float(args.covariance_max_scale_ratio)
+        ),
+        covariance_scale_multiplier=max(
+            0.0, float(args.covariance_scale_multiplier)
+        ),
         **surface_fit_config_kwargs(args),
-        **stage1_constructor_config_kwargs(args),
     )
     training_config = TorchTrainingConfig(
         iterations=args.iterations,
         surface_rebuild_interval=max(0, int(args.surface_update_interval)),
         surface_loss_patch_budget=max(0, int(args.surface_loss_patch_budget)),
-        surface_maintenance_patch_budget=max(0, int(args.surface_maintenance_patch_budget)),
-        surface_residual_ratio_threshold=max(0.0, float(args.surface_residual_ratio_threshold)),
-        surface_residual_patience=max(1, int(args.surface_residual_patience)),
-        surface_local_min_gaussians=max(4, int(args.surface_local_min_gaussians)),
-        surface_local_min_component=max(4, int(args.surface_local_min_component)),
-        enable_local_surface_correction=not args.disable_local_surface_correction,
         density_control_interval=args.density_control_interval,
         save_interval=args.save_interval,
         save_iterations=(),

@@ -119,6 +119,15 @@ class ContextualConsistencyConfig:
     local_support_close_ratio: float = 1.0
     local_support_far_ratio: float = 10.0
     rejected_max_scale_consistency: float = 0.2
+    # --- full-observed-neighborhood evidence policy (worklog 129) ---
+    # Support sufficiency for the full-cloud-evidence path is driven by an
+    # absolute assigned-Gaussian COUNT rather than a representative-only
+    # normalized distance, since the whole point of full-neighborhood
+    # evidence is that representative spacing is no longer a proxy for real
+    # local density.
+    full_evidence_min_support_count: int = 6
+    full_evidence_saturating_support_count: int = 24
+    full_evidence_max_rejected_mass: float = 0.6
 
 
 @dataclass(frozen=True)
@@ -342,8 +351,17 @@ def evaluate_contextual_consistency(
     tangent_major_scale = frame.tangent_major_scale
     neighbor_tangent_major_scale = tangent_major_scale[neighbor_indices]
 
-    is_rejected = torch.tensor([c == "intrinsic_rejected" for c in intrinsic.intrinsic_class])
-    is_reliable = torch.tensor([c == "intrinsic_reliable" for c in intrinsic.intrinsic_class])
+    # ``neighbor_indices`` lives on the same device as ``positions``. Keep
+    # these policy masks there so CUDA canonical reconstruction does not
+    # attempt to index a CPU tensor with CUDA indices.
+    is_rejected = torch.tensor(
+        [c == "intrinsic_rejected" for c in intrinsic.intrinsic_class],
+        device=positions.device,
+    )
+    is_reliable = torch.tensor(
+        [c == "intrinsic_reliable" for c in intrinsic.intrinsic_class],
+        device=positions.device,
+    )
     neighbor_rejected = is_rejected[neighbor_indices]
     neighbor_reliable = is_reliable[neighbor_indices]
     valid_neighbor_mask = ~neighbor_rejected
@@ -455,13 +473,19 @@ def evaluate_contextual_consistency(
     )
 
 
-def evaluate_structural_reliability(
-    positions: Any,
-    frame: GaussianCovarianceFrame,
+def combine_reliability(
+    intrinsic: IntrinsicReliabilityResult,
+    contextual: ContextualConsistencyResult,
     *,
-    config: StructuralReliabilityConfig | None = None,
+    config: StructuralReliabilityConfig,
 ) -> StructuralReliabilityResult:
-    """Canonical entry point: intrinsic + contextual, projected to the OLD 3-tier class.
+    """Project (intrinsic, contextual) onto the OLD 3-tier class.
+
+    Shared by :func:`evaluate_structural_reliability` (representative-only
+    contextual evidence) and
+    :func:`evaluate_structural_reliability_from_full_evidence` (full-observed-
+    cloud contextual evidence, worklog 129) -- the projection rule itself does
+    not depend on WHERE the contextual evidence came from.
 
     Projection rule (worklog 114 §2):
 
@@ -477,10 +501,6 @@ def evaluate_structural_reliability(
       should read ``.intrinsic``/``.contextual`` directly instead of relying
       on this compatibility field.
     """
-    config = config or StructuralReliabilityConfig()
-    intrinsic = evaluate_intrinsic_reliability(frame, config=config.intrinsic)
-    contextual = evaluate_contextual_consistency(positions, frame, intrinsic, config=config.contextual)
-
     count = len(intrinsic.intrinsic_class)
     reliability_class = []
     reasons: list[tuple[str, ...]] = []
@@ -505,3 +525,143 @@ def evaluate_structural_reliability(
         reasons=tuple(reasons),
         config=config,
     )
+
+
+def evaluate_structural_reliability(
+    positions: Any,
+    frame: GaussianCovarianceFrame,
+    *,
+    config: StructuralReliabilityConfig | None = None,
+) -> StructuralReliabilityResult:
+    """Canonical entry point: intrinsic + contextual, projected to the OLD 3-tier class.
+
+    Contextual evidence here comes from the representative-only k-nearest-
+    neighbor search (see :func:`evaluate_contextual_consistency`). For a
+    bounded representative set drawn from a much denser full observed cloud,
+    prefer :func:`evaluate_structural_reliability_from_full_evidence` instead
+    (worklog 129) -- representative-only neighbor search under-counts real
+    local density and can never see support that full-cloud aggregation
+    would.
+    """
+    config = config or StructuralReliabilityConfig()
+    intrinsic = evaluate_intrinsic_reliability(frame, config=config.intrinsic)
+    contextual = evaluate_contextual_consistency(positions, frame, intrinsic, config=config.contextual)
+    return combine_reliability(intrinsic, contextual, config=config)
+
+
+def evaluate_contextual_consistency_from_full_evidence(
+    evidence: "FullNeighborhoodEvidence",
+    *,
+    config: ContextualConsistencyConfig | None = None,
+) -> ContextualConsistencyResult:
+    """Contextual consistency driven by full-observed-cloud aggregate evidence.
+
+    Worklog 129: replaces the representative-only 8-nearest-neighbor search
+    with statistics aggregated over every full-cloud Gaussian assigned to a
+    representative's Voronoi cell (see
+    ``torch_full_neighborhood_evidence.compute_full_neighborhood_evidence``).
+    Support sufficiency is judged by an absolute assigned-Gaussian count
+    (``full_evidence_min_support_count``/``full_evidence_saturating_support_count``)
+    rather than representative-only normalized spacing, since representative
+    spacing is no longer a valid density proxy once representatives are
+    capped far below the true Gaussian count.
+
+    Produces the SAME :class:`ContextualConsistencyResult` contract as the
+    representative-only path so downstream code (``combine_reliability``,
+    region formation, etc.) is unchanged.
+    """
+    torch = require_torch()
+    config = config or ContextualConsistencyConfig()
+    count = int(evidence.support_count.shape[0])
+
+    non_rejected_support = evidence.support_count.to(evidence.opacity_sum.dtype) * (
+        1.0 - evidence.rejected_neighbor_mass
+    )
+    support_span = max(
+        config.full_evidence_saturating_support_count - config.full_evidence_min_support_count, 1
+    )
+    neighborhood_support_sufficiency = torch.clamp(
+        (non_rejected_support - config.full_evidence_min_support_count) / support_span, min=0.0, max=1.0
+    )
+    # No-support representatives contribute no consensus signal; treat a
+    # zero-support cell as fully disagreeing/ambiguous rather than as
+    # spuriously "aligned" (an empty mean would otherwise read as 0, which
+    # already happens to be the right answer for normal_consensus, but is
+    # made explicit here for tangent residual / eigenvalue-ratio std, which
+    # can be exactly 0 with zero support and must not be read as "perfectly
+    # consistent").
+    has_support = evidence.support_count > 0
+
+    contextual_class = []
+    reasons: list[tuple[str, ...]] = []
+    for index in range(count):
+        row_reasons: list[str] = []
+        if not bool(has_support[index]) or int(evidence.support_count[index]) < config.insufficient_min_valid_neighbor_count:
+            row_reasons.append("insufficient_full_neighborhood_support")
+            contextual_class.append(CONTEXTUAL_INSUFFICIENT)
+            reasons.append(tuple(row_reasons))
+            continue
+        if float(evidence.rejected_neighbor_mass[index]) > config.full_evidence_max_rejected_mass:
+            row_reasons.append("rejected_neighbor_dominant")
+        consistent = (
+            float(evidence.normal_consensus[index]) >= config.consistent_min_neighbor_normal_agreement
+            and float(evidence.tangent_residual_mean[index]) <= config.consistent_max_mutual_tangent_residual
+            and float(neighborhood_support_sufficiency[index]) >= config.consistent_min_support_sufficiency
+            and float(evidence.competing_mode_mass[index]) <= config.consistent_max_multi_surface_ambiguity
+            and not row_reasons
+        )
+        if consistent:
+            contextual_class.append(CONTEXTUAL_CONSISTENT)
+        else:
+            if float(evidence.normal_consensus[index]) < config.consistent_min_neighbor_normal_agreement:
+                row_reasons.append("neighbor_normal_disagreement")
+            if float(evidence.tangent_residual_mean[index]) > config.consistent_max_mutual_tangent_residual:
+                row_reasons.append("mutual_tangent_residual_above_threshold")
+            if float(neighborhood_support_sufficiency[index]) < config.consistent_min_support_sufficiency:
+                row_reasons.append("insufficient_neighborhood_support")
+            if float(evidence.competing_mode_mass[index]) > config.consistent_max_multi_surface_ambiguity:
+                row_reasons.append("multi_surface_neighborhood_ambiguity")
+            contextual_class.append(CONTEXTUAL_MIXED)
+        reasons.append(tuple(row_reasons))
+
+    scale_consistency = torch.exp(
+        -torch.clamp(evidence.eigenvalue_ratio_std / evidence.eigenvalue_ratio_mean.clamp_min(1e-6), max=10.0)
+    )
+    local_curvature_agreement = 1.0 / (1.0 + evidence.tangent_residual_std)
+
+    return ContextualConsistencyResult(
+        contextual_class=tuple(contextual_class),
+        neighbor_normal_agreement=evidence.normal_consensus.detach(),
+        mutual_tangent_residual=evidence.tangent_residual_mean.detach(),
+        local_curvature_agreement=local_curvature_agreement.detach(),
+        neighborhood_support_sufficiency=neighborhood_support_sufficiency.detach(),
+        multi_surface_neighborhood_ambiguity=evidence.competing_mode_mass.detach(),
+        density_variation_sensitivity=(
+            evidence.spacing_std / evidence.mean_spacing.clamp_min(1e-12)
+        ).detach(),
+        scale_consistency=scale_consistency.detach(),
+        valid_neighbor_count=non_rejected_support.round().long().detach(),
+        neighbor_spacing=evidence.mean_spacing.detach(),
+        reasons=tuple(reasons),
+        config=config,
+    )
+
+
+def evaluate_structural_reliability_from_full_evidence(
+    frame: GaussianCovarianceFrame,
+    evidence: "FullNeighborhoodEvidence",
+    *,
+    config: StructuralReliabilityConfig | None = None,
+) -> StructuralReliabilityResult:
+    """Canonical full-observed-cloud entry point (worklog 129).
+
+    Intrinsic evidence is unchanged (representative's own learned covariance,
+    no neighbor dependency -- already the production primary-evidence source
+    for the ADC-post-commit path). Contextual evidence comes from
+    :func:`evaluate_contextual_consistency_from_full_evidence` instead of the
+    representative-only k-nearest-neighbor search.
+    """
+    config = config or StructuralReliabilityConfig()
+    intrinsic = evaluate_intrinsic_reliability(frame, config=config.intrinsic)
+    contextual = evaluate_contextual_consistency_from_full_evidence(evidence, config=config.contextual)
+    return combine_reliability(intrinsic, contextual, config=config)

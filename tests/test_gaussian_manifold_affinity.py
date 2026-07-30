@@ -37,28 +37,34 @@ def _cross_label_states(scene, graph):
 
 
 class GaussianManifoldAffinityTest(unittest.TestCase):
-    def test_same_plane_neighbors_are_same_surface(self):
-        scene, _, _, graph = _graph_for("plane")
+    def test_same_box_face_neighbors_are_same_surface(self):
+        scene, _, _, graph = _graph_for("box_face")
         states = {edge.state for edge in graph.edges}
         self.assertIn(EDGE_SAME_SURFACE, states)
         self.assertTrue(all(edge.state in (EDGE_SAME_SURFACE, EDGE_PROXIMITY_ONLY) for edge in graph.edges))
 
-    def test_perpendicular_wall_floor_contact_is_a_crease(self):
-        scene, _, _, graph = _graph_for("two_perpendicular_surfaces")
+    def test_box_adjacent_faces_meet_at_a_crease(self):
+        # A real box has 12 edges where two faces meet at 90 degrees -- every
+        # cross-face pair must show a crease, never same_surface.
+        scene, _, _, graph = _graph_for("box")
         cross_states = _cross_label_states(scene, graph)
         self.assertIn(EDGE_CREASE, cross_states)
         self.assertNotIn(EDGE_SAME_SURFACE, cross_states)
 
-    def test_close_parallel_sheets_are_not_connected_as_same_surface(self):
-        scene, _, _, graph = _graph_for("close_parallel_sheets")
+    def test_thin_slab_top_and_bottom_are_not_connected_as_same_surface(self):
+        scene, _, _, graph = _graph_for("thin_slab")
         cross_states = _cross_label_states(scene, graph)
         self.assertNotIn(EDGE_SAME_SURFACE, cross_states)
-        # Aligned normals but a real tangent-plane offset -> recognized as
-        # parallel-but-separate, not silently dropped or force-merged.
+        # Aligned normals (orientation-insensitive) but a real tangent-plane
+        # offset -> recognized as parallel-but-separate, not silently dropped
+        # or force-merged.
         self.assertIn(EDGE_PARALLEL_SEPARATE, cross_states)
 
-    def test_smooth_curved_sheet_local_neighbors_can_be_same_surface(self):
-        _, _, _, graph = _graph_for("smooth_curved_sheet")
+    def test_sphere_local_neighbors_can_be_same_surface(self):
+        # A sphere is curved everywhere; adjacent normals differ gradually
+        # and should still connect (no premature fragmentation from curvature
+        # alone on a genuinely closed volumetric manifold).
+        _, _, _, graph = _graph_for("sphere")
         states = {edge.state for edge in graph.edges}
         self.assertIn(EDGE_SAME_SURFACE, states)
 
@@ -83,7 +89,7 @@ class GaussianManifoldAffinityTest(unittest.TestCase):
         # Borderline normal alignment (neither same_surface nor a clean crease)
         # combined with a non-reliable endpoint must stay "ambiguous", never
         # forced into a confident state.
-        scene = make_gaussian_reliability_scene("isotropic_blob")
+        scene = make_gaussian_reliability_scene("box_isotropic_contamination")
         frame = extract_covariance_frame(scene.covariances)
         reliability = evaluate_structural_reliability(scene.positions, frame)
         graph = build_manifold_affinity_graph(scene.positions, frame, reliability)
@@ -93,7 +99,7 @@ class GaussianManifoldAffinityTest(unittest.TestCase):
         self.assertTrue(all(edge.state in (EDGE_REJECTED, EDGE_AMBIGUOUS) for edge in touching_isotropic))
 
     def test_pure_euclidean_proximity_alone_does_not_create_an_edge_state(self):
-        scene, _, _, graph = _graph_for("isolated_floater")
+        scene, _, _, graph = _graph_for("box_isolated_floater")
         floater_index = scene.group_labels.index("floater")
         floater_edges = [e for e in graph.edges if e.source == floater_index or e.target == floater_index]
         self.assertTrue(floater_edges)
@@ -101,51 +107,54 @@ class GaussianManifoldAffinityTest(unittest.TestCase):
 
 
 class GaussianSceneGraphTest(unittest.TestCase):
-    def test_connected_wall_and_floor_split_into_separate_surface_regions(self):
-        scene, _, _, graph = _graph_for("two_perpendicular_surfaces")
+    def test_box_faces_split_into_separate_surface_regions(self):
+        # A real box has 6 faces; every face's same_surface neighborhood must
+        # stay within that same face, never bridging to an adjacent face.
+        scene, _, _, graph = _graph_for("box")
         same_surface = graph.same_surface_neighbors(scene.positions.shape[0])
-        floor_indices = {i for i, label in enumerate(scene.group_labels) if label == "floor"}
-        wall_indices = {i for i, label in enumerate(scene.group_labels) if label == "wall"}
-        for index in floor_indices:
-            self.assertTrue(same_surface[index] <= floor_indices, (index, same_surface[index]))
-        for index in wall_indices:
-            self.assertTrue(same_surface[index] <= wall_indices, (index, same_surface[index]))
+        labels = scene.group_labels
+        face_names = sorted(set(labels))
+        for face_name in face_names:
+            face_indices = {i for i, label in enumerate(labels) if label == face_name}
+            for index in face_indices:
+                self.assertTrue(same_surface[index] <= face_indices, (face_name, index, same_surface[index]))
 
     def test_oversized_gaussian_does_not_bridge_two_surfaces(self):
-        scene, _, _, graph = _graph_for("oversized_bridge")
+        scene, _, _, graph = _graph_for("box_with_bridge")
         same_surface = graph.same_surface_neighbors(scene.positions.shape[0])
         bridge_index = scene.group_labels.index("bridge")
         self.assertEqual(same_surface[bridge_index], set())
-        floor_indices = {i for i, label in enumerate(scene.group_labels) if label == "floor"}
-        wall_indices = {i for i, label in enumerate(scene.group_labels) if label == "wall"}
-        for index in floor_indices:
-            self.assertTrue(same_surface[index].isdisjoint(wall_indices))
+        labels = scene.group_labels
+        face_pz_indices = {i for i, label in enumerate(labels) if label == "face_pz"}
+        face_px_indices = {i for i, label in enumerate(labels) if label == "face_px"}
+        for index in face_pz_indices:
+            self.assertTrue(same_surface[index].isdisjoint(face_px_indices))
 
     def test_unreliable_gaussian_removal_does_not_needlessly_fragment_a_reliable_region(self):
-        scene, _, _, graph = _graph_for("isolated_floater")
+        scene, _, _, graph = _graph_for("box_isolated_floater")
         same_surface = graph.same_surface_neighbors(scene.positions.shape[0])
-        plane_indices = [i for i, label in enumerate(scene.group_labels) if label == "plane"]
-        # BFS connectivity check within the plane's own same_surface subgraph.
-        visited = {plane_indices[0]}
-        frontier = [plane_indices[0]]
+        face_indices = [i for i, label in enumerate(scene.group_labels) if label == "face"]
+        # BFS connectivity check within the face's own same_surface subgraph.
+        visited = {face_indices[0]}
+        frontier = [face_indices[0]]
         while frontier:
             current = frontier.pop()
             for neighbor in same_surface[current]:
                 if neighbor not in visited:
                     visited.add(neighbor)
                     frontier.append(neighbor)
-        self.assertEqual(visited, set(plane_indices))
+        self.assertEqual(visited, set(face_indices))
 
     def test_output_ordering_and_ids_are_deterministic(self):
-        scene, frame, reliability, graph_first = _graph_for("two_perpendicular_surfaces")
+        scene, frame, reliability, graph_first = _graph_for("box")
         graph_second = build_manifold_affinity_graph(scene.positions, frame, reliability)
         self.assertEqual([e.payload() for e in graph_first.edges], [e.payload() for e in graph_second.edges])
 
     def test_node_boundary_status_is_experimental_diagnostic_only(self):
-        scene, _, reliability, graph = _graph_for("plane")
+        scene, _, reliability, graph = _graph_for("box_face")
         statuses = classify_node_boundary_status(scene.positions.shape[0], graph, reliability)
         self.assertEqual(len(statuses), scene.positions.shape[0])
-        # Interior of a clean flat plane should mostly self-report as continuing interior.
+        # Interior of a clean flat box face should mostly self-report as continuing interior.
         self.assertGreater(sum(1 for s in statuses if s == "interior_continuation"), scene.positions.shape[0] // 2)
 
 

@@ -234,23 +234,13 @@ class LeastSquaresFitTest(unittest.TestCase):
         self.assertTrue(torch.isfinite(surface.control_grid).all())
         self.assertTrue(torch.isfinite(surface.evaluate(uv)).all())
 
-    def test_pipeline_config_controls_degrees_and_mode(self):
-        points = _sine_sheet(count=300, seed=6)
-        pipeline = TorchOSNGSPipeline(
-            TorchPipelineConfig(
-                voxel_grid_resolution=4,
-                visible_surface_resolution_u=6,
-                visible_surface_resolution_v=4,
-                surface_degree_u=3,
-                surface_degree_v=2,
-            ),
-            device="cpu",
-        )
-        state = pipeline.initialize(points, torch.rand(points.shape[0], 3))
-        for patch in state.surface_patches:
-            self.assertEqual(patch.degree_u, 3)
-            self.assertEqual(patch.degree_v, 2)
-
+    def test_pipeline_rejects_retired_fit_config(self):
+        with self.assertRaises(TypeError):
+            TorchPipelineConfig(surface_fit_mode="idw")
+        with self.assertRaises(TypeError):
+            TorchPipelineConfig(visible_surface_resolution_u=6)
+        with self.assertRaises(TypeError):
+            TorchPipelineConfig(voxel_grid_resolution=4)
 
 class CoupledPatchGraphFitTest(unittest.TestCase):
     def _patches(self):
@@ -356,42 +346,26 @@ class CoupledWedgeRingFitTest(unittest.TestCase):
 
 
 class MaintenanceUVRefreshTest(unittest.TestCase):
-    def _state(self, count: int = 64):
+    def _state(self, count: int = 81):
         torch.manual_seed(13)
-        xy = torch.rand(count, 2)
-        z = 0.2 * torch.sin(xy[:, 0] * 4.0)
-        points = torch.cat([xy, z.unsqueeze(1)], dim=1)
-        colors = torch.rand(count, 3)
-        pipeline = TorchOSNGSPipeline(
-            TorchPipelineConfig(
-                voxel_grid_resolution=4,
-                visible_surface_resolution_u=5,
-                visible_surface_resolution_v=4,
-            ),
-            device="cpu",
+        axis = torch.linspace(-0.48, 0.48, 9)
+        points = torch.stack(
+            [torch.tensor([x, y, 0.03 * (x * x + y * y)]) for x in axis for y in axis]
         )
+        colors = torch.rand(len(points), 3)
+        pipeline = TorchOSNGSPipeline(TorchPipelineConfig(), device="cpu")
         return pipeline, pipeline.initialize(points, colors)
-
-    def test_refresh_updates_bindings_and_tightens_residual(self):
+    def test_canonical_maintenance_rebuilds_and_refreshes_uv(self):
         pipeline, state = self._state()
         torch.manual_seed(17)
         state.model.surface_uv.copy_(torch.rand_like(state.model.surface_uv))
         scrambled_uv = state.model.surface_uv.detach().clone()
+        before_topology = state.surface_topology_version
 
-        stale = pipeline.maintain_surface_from_certain(
-            state, residual_patience=1000, refresh_uv=False, enable_local_correction=False
-        )
-        self.assertTrue(torch.equal(state.model.surface_uv, scrambled_uv))
+        report = pipeline.maintain_surface_from_certain(state)
 
-        refreshed = pipeline.maintain_surface_from_certain(
-            state, residual_patience=1000, refresh_uv=True, enable_local_correction=False
-        )
-        self.assertGreater(refreshed["uv_refreshed"], 0)
+        self.assertTrue(report["topology_changed"])
+        self.assertGreater(report["uv_refreshed"], 0)
         self.assertFalse(torch.equal(state.model.surface_uv, scrambled_uv))
-        self.assertLessEqual(
-            refreshed["max_residual_ratio"], stale["max_residual_ratio"] + 1e-9
-        )
-
-
-if __name__ == "__main__":
-    unittest.main()
+        self.assertEqual(state.surface_topology_version, before_topology + 1)
+        self.assertEqual(report["construction_state"], "constructed")

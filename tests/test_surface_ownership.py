@@ -44,20 +44,15 @@ from osn_gs.gaussian.torch_surface_ownership import (
 from osn_gs.losses.torch_losses import nurbs_surface_loss
 
 
-def _state(count: int = 48, seed: int = 7):
+def _state(count: int = 81, seed: int = 7):
     torch.manual_seed(seed)
-    points = torch.rand(count, 3)
-    colors = torch.rand(count, 3)
-    pipeline = TorchOSNGSPipeline(
-        TorchPipelineConfig(
-            voxel_grid_resolution=4,
-            visible_surface_resolution_u=4,
-            visible_surface_resolution_v=3,
-        ),
-        device="cpu",
+    axis = torch.linspace(-0.48, 0.48, 9)
+    points = torch.stack(
+        [torch.tensor([x, y, 0.0]) for x in axis for y in axis]
     )
+    colors = torch.rand(len(points), 3)
+    pipeline = TorchOSNGSPipeline(TorchPipelineConfig(), device="cpu")
     return pipeline, pipeline.initialize(points, colors)
-
 
 def _append_occluded_chart_gaussian(model, *, source_chart_id: str = "chart-x", count: int = 2, patch_id_for_uv: int = 0):
     """Directly append `count` occluded-chart-owned uncertain Gaussians via the
@@ -180,9 +175,8 @@ class BehavioralIsolationTest(unittest.TestCase):
         model = state.model
         uv_before = model.surface_uv[~model.is_uncertain].clone()
         _append_occluded_chart_gaussian(model, patch_id_for_uv=0)
-        pipeline.maintain_surface_from_certain(
-            state, residual_ratio_threshold=0.0, residual_patience=3, local_min_gaussians=10_000,
-        )
+        pipeline.maintain_surface_from_certain(state)
+
         certain_mask = ~model.is_uncertain
         # Certain rows are the original ones (occluded rows are appended after
         # and are uncertain), so this slice is exactly the pre-existing set.
@@ -191,21 +185,6 @@ class BehavioralIsolationTest(unittest.TestCase):
         # The occluded-chart-owned rows must still carry their real ownership.
         owned_kind = model.surface_owner_kind[model.is_uncertain]
         self.assertTrue(bool((owned_kind == SURFACE_OWNER_OCCLUDED_CHART).all()))
-
-    def test_split_failed_patch_excludes_occluded_chart_owner(self):
-        pipeline, state = _state()
-        model = state.model
-        owner_id = _append_occluded_chart_gaussian(model, patch_id_for_uv=0, count=3)
-        owner_ids_before = model.surface_owner_id[model.is_uncertain].clone()
-        added = pipeline._split_failed_patch(state, 0, min_component=2)
-        # Whether or not a split actually occurs depends on the certain-only
-        # voxel re-clustering; the invariant under test is narrower and holds
-        # regardless: the uncertain rows' ownership must never be touched.
-        still_uncertain = model.is_uncertain[-owner_ids_before.shape[0] :]
-        self.assertTrue(bool(still_uncertain.all()))
-        owner_ids_after = model.surface_owner_id[model.is_uncertain]
-        torch.testing.assert_close(owner_ids_before, owner_ids_after[: owner_ids_before.shape[0]])
-        self.assertIsInstance(added, int)
 
     def test_nurbs_surface_loss_excludes_occluded_chart_owner(self):
         pipeline, state = _state()
@@ -319,79 +298,9 @@ class OneWayDependencyInvariantTest(unittest.TestCase):
         model = state.model
         owner_id = _append_occluded_chart_gaussian(model, source_chart_id="chart-z", patch_id_for_uv=0)
         pipeline._assign_uv_support_masks(model, state.surface_patches)
-        pipeline.maintain_surface_from_certain(state, residual_ratio_threshold=0.0, local_min_gaussians=10_000)
+        pipeline.maintain_surface_from_certain(state)
         occluded_mask = model.surface_owner_kind == SURFACE_OWNER_OCCLUDED_CHART
         self.assertTrue(bool((model.surface_owner_id[occluded_mask] == owner_id).all()))
-
-
-def _split_ready_state():
-    """Two spatially separated clusters, all forced under patch_id=0, so
-    `_split_failed_patch(state, 0, ...)` is guaranteed to actually reassign a
-    component to a NEW patch id (mirrors
-    tests/test_training_regressions.py's own split fixture)."""
-
-    axis = torch.linspace(0.0, 0.15, steps=4)
-    left = torch.stack([torch.tensor([x, y, 0.0]) for x in axis for y in axis])
-    right = left + torch.tensor([0.8, 0.8, 0.0])
-    points = torch.cat((left, right), dim=0)
-    colors = torch.full_like(points, 0.5)
-    pipeline = TorchOSNGSPipeline(
-        TorchPipelineConfig(
-            voxel_grid_resolution=4, adaptive_voxel_density=False,
-            visible_surface_resolution_u=4, visible_surface_resolution_v=3,
-        ),
-        device="cpu",
-    )
-    state = pipeline.initialize(points, colors)
-    state.model.cluster_ids.zero_()
-    state.model.surface_owner_id.zero_()  # keep the sync invariant true for this fixture's forced state
-    return pipeline, state
-
-
-class PatchReassignmentTest(unittest.TestCase):
-    """Section 2: visible ownership synchronization invariant on real reassignment."""
-
-    def test_reassignment_updates_cluster_id_and_owner_id_together(self):
-        pipeline, state = _split_ready_state()
-        model = state.model
-        added = pipeline._split_failed_patch(state, patch_id=0, min_component=4)
-        self.assertGreater(added, 0)
-        new_patch_id = len(state.surface_patches) - 1
-        reassigned = model.cluster_ids == new_patch_id
-        self.assertTrue(bool(reassigned.any()))
-        torch.testing.assert_close(model.surface_owner_id[reassigned], model.cluster_ids[reassigned])
-
-    def test_reassigned_rows_stay_visible_patch_kind(self):
-        pipeline, state = _split_ready_state()
-        model = state.model
-        pipeline._split_failed_patch(state, patch_id=0, min_component=4)
-        self.assertTrue(bool((model.surface_owner_kind == SURFACE_OWNER_VISIBLE_PATCH).all()))
-
-    def test_uncertain_owner_unaffected_by_reassignment(self):
-        pipeline, state = _split_ready_state()
-        model = state.model
-        owner_id = _append_occluded_chart_gaussian(model, source_chart_id="chart-mixed", patch_id_for_uv=0, count=2)
-        before = model.surface_owner_id[model.is_uncertain].clone()
-        pipeline._split_failed_patch(state, patch_id=0, min_component=4)
-        after = model.surface_owner_id[model.is_uncertain]
-        torch.testing.assert_close(before, after)
-        self.assertTrue(bool((model.surface_owner_kind[model.is_uncertain] == SURFACE_OWNER_OCCLUDED_CHART).all()))
-        self.assertTrue(bool((after == owner_id).all()))
-
-    def test_validator_passes_before_and_after_reassignment(self):
-        pipeline, state = _split_ready_state()
-        model = state.model
-        self.assertEqual(validate_surface_ownership_consistency(model), ())
-        pipeline._split_failed_patch(state, patch_id=0, min_component=4)
-        self.assertEqual(validate_surface_ownership_consistency(model), ())
-
-    def test_reassignment_is_deterministic_across_repeated_calls(self):
-        pipeline1, state1 = _split_ready_state()
-        pipeline2, state2 = _split_ready_state()
-        pipeline1._split_failed_patch(state1, patch_id=0, min_component=4)
-        pipeline2._split_failed_patch(state2, patch_id=0, min_component=4)
-        torch.testing.assert_close(state1.model.cluster_ids, state2.model.cluster_ids)
-        torch.testing.assert_close(state1.model.surface_owner_id, state2.model.surface_owner_id)
 
 
 class WriteSiteRegressionTest(unittest.TestCase):
@@ -449,7 +358,7 @@ class WriteSiteRegressionTest(unittest.TestCase):
 
 class UnassignedOwnershipTest(unittest.TestCase):
     """Ownership Foundation Gate final-contract round: canonical UNASSIGNED
-    semantics for negative ``cluster_ids`` (the sentinel `_initialize_stage1`
+    semantics for negative ``cluster_ids`` (the canonical unassigned sentinel
     already leaves on Gaussians in inactive/skipped voxel leaves)."""
 
     def test_negative_cluster_id_initializes_to_unassigned(self):
@@ -532,7 +441,7 @@ class UnassignedOwnershipTest(unittest.TestCase):
         self.assertFalse(bool(gated_patch_zero[0]))
 
     def test_negative_cluster_row_never_matches_any_real_patch_id(self):
-        # `maintain_surface_from_certain`/`_split_failed_patch`/
+        # `maintain_surface_from_certain` and
         # `nurbs_surface_loss` all gate membership on `cluster_ids ==
         # patch_id`; -1 structurally never equals any real (>=0) patch id, so
         # a genuinely UNASSIGNED row is excluded from all three without
@@ -547,9 +456,8 @@ class UnassignedOwnershipTest(unittest.TestCase):
         state.iteration = 1
         loss = nurbs_surface_loss(state, weight=0.01, max_patches=0)
         self.assertTrue(bool(torch.isfinite(loss)))
-        pipeline.maintain_surface_from_certain(
-            state, residual_ratio_threshold=0.0, residual_patience=3, local_min_gaussians=10_000,
-        )
+        pipeline.maintain_surface_from_certain(state)
+
         self.assertEqual(int(model.cluster_ids[0]), -1)
         self.assertEqual(validate_surface_ownership_consistency(model), ())
 

@@ -72,6 +72,9 @@ class TorchGaussianModel:
         # docstring for why `cluster_ids` is compatibility-only).
         self.surface_owner_kind = torch.empty((0,), dtype=torch.long, device=device)
         self.surface_owner_id = torch.empty((0,), dtype=torch.long, device=device)
+        # Stable identity survives ADC row reordering and checkpoint restore.
+        self.stable_gaussian_ids = torch.empty((0,), dtype=torch.long, device=device)
+        self.next_stable_gaussian_id: int = 0
         self.optimizer: Any | None = None
         self.spatial_lr_scale: float = 1.0
         self.xyz_gradient_accum = torch.empty((0, 1), dtype=torch.float32, device=device)
@@ -178,6 +181,7 @@ class TorchGaussianModel:
         confidence: Any | None = None,
         surface_owner_kind: Any | None = None,
         surface_owner_id: Any | None = None,
+        stable_gaussian_ids: Any | None = None,
     ) -> None:
         """Initialize Gaussian parameter tensors from raw values.
 
@@ -253,6 +257,10 @@ class TorchGaussianModel:
         else:
             surface_owner_kind = torch.as_tensor(surface_owner_kind, dtype=torch.long, device=self.device).reshape(count)
             surface_owner_id = torch.as_tensor(surface_owner_id, dtype=torch.long, device=self.device).reshape(count)
+        if stable_gaussian_ids is None:
+            stable_gaussian_ids = torch.arange(count, dtype=torch.long, device=self.device)
+        else:
+            stable_gaussian_ids = torch.as_tensor(stable_gaussian_ids, dtype=torch.long, device=self.device).reshape(count)
 
         # Default confidence: certain=1, uncertain=0.25.
         if confidence is None:
@@ -279,7 +287,17 @@ class TorchGaussianModel:
         self.cluster_ids = cluster_ids
         self.surface_owner_kind = surface_owner_kind
         self.surface_owner_id = surface_owner_id
+        self.stable_gaussian_ids = stable_gaussian_ids
+        self.next_stable_gaussian_id = int(stable_gaussian_ids.max().item()) + 1 if count else 0
         self._reset_density_stats(count)
+
+    def allocate_stable_gaussian_ids(self, count: int) -> Any:
+        """Reserve globally unique process-local Gaussian identities."""
+
+        count = max(0, int(count))
+        start = int(self.next_stable_gaussian_id)
+        self.next_stable_gaussian_id = start + count
+        return self.torch.arange(start, start + count, dtype=self.torch.long, device=self.device)
 
     def _reset_density_stats(self, count: int | None = None) -> None:
         """Reset ADC accumulators after shape-changing Gaussian edits."""
@@ -311,6 +329,7 @@ class TorchGaussianModel:
         preserve_parameter_gradients: bool = True,
         surface_owner_kind: Any | None = None,
         surface_owner_id: Any | None = None,
+        stable_gaussian_ids: Any | None = None,
     ) -> None:
         """Replace Gaussian tensors while preserving Adam rows when requested.
 
@@ -371,6 +390,14 @@ class TorchGaussianModel:
         else:
             self.surface_owner_kind = torch.as_tensor(surface_owner_kind, dtype=torch.long, device=self.device).reshape(count)
             self.surface_owner_id = torch.as_tensor(surface_owner_id, dtype=torch.long, device=self.device).reshape(count)
+        if stable_gaussian_ids is None:
+            if int(self.stable_gaussian_ids.numel()) == count:
+                stable_gaussian_ids = self.stable_gaussian_ids
+            else:
+                stable_gaussian_ids = torch.arange(count, dtype=torch.long, device=self.device)
+        self.stable_gaussian_ids = torch.as_tensor(stable_gaussian_ids, dtype=torch.long, device=self.device).reshape(count)
+        if count:
+            self.next_stable_gaussian_id = max(self.next_stable_gaussian_id, int(self.stable_gaussian_ids.max().item()) + 1)
         self._preserve_optimizer_state(old_params, keep_indices, old_count)
         if preserve_parameter_gradients:
             self._preserve_parameter_gradients(old_gradients, keep_indices, old_count)
@@ -464,6 +491,9 @@ class TorchGaussianModel:
         if cluster_ids is None:
             cluster_ids = torch.full((count,), -1, dtype=torch.long, device=self.device)
         keep_indices = torch.arange(len(self), dtype=torch.long, device=self.device)
+        stable_gaussian_ids = torch.cat(
+            [self.stable_gaussian_ids, self.allocate_stable_gaussian_ids(count)], dim=0
+        )
         self.replace_tensors(
             xyz=torch.cat([self._xyz.detach(), xyz.detach()], dim=0),
             features_dc=torch.cat([self._features_dc.detach(), torch.as_tensor(features_dc, dtype=self.torch.float32, device=self.device).reshape(count, 1, 3).detach()], dim=0),
@@ -475,6 +505,7 @@ class TorchGaussianModel:
             uncertain_mask=torch.cat([self.is_uncertain, torch.as_tensor(uncertain_mask, dtype=torch.bool, device=self.device).reshape(count)], dim=0),
             surface_uv=torch.cat([self.surface_uv, torch.as_tensor(surface_uv, dtype=self.torch.float32, device=self.device).reshape(count, 2)], dim=0),
             cluster_ids=torch.cat([self.cluster_ids, torch.as_tensor(cluster_ids, dtype=torch.long, device=self.device).reshape(count)], dim=0),
+            stable_gaussian_ids=stable_gaussian_ids,
             optimizer_keep_indices=keep_indices,
         )
 
@@ -523,6 +554,7 @@ class TorchGaussianModel:
             "cluster_ids": torch.as_tensor(cluster_ids, dtype=torch.long, device=self.device).reshape(count),
             "surface_owner_kind": torch.as_tensor(surface_owner_kind, dtype=torch.long, device=self.device).reshape(count),
             "surface_owner_id": torch.as_tensor(surface_owner_id, dtype=torch.long, device=self.device).reshape(count),
+            "stable_gaussian_ids": self.allocate_stable_gaussian_ids(count),
         }
         if not all(torch.isfinite(value).all() for key, value in incoming.items() if key != "uncertain_mask"):
             raise ValueError("model_only_append_nonfinite_tensor")
@@ -539,13 +571,14 @@ class TorchGaussianModel:
             "cluster_ids": torch.cat([self.cluster_ids, incoming["cluster_ids"]], dim=0),
             "surface_owner_kind": torch.cat([self.surface_owner_kind, incoming["surface_owner_kind"]], dim=0),
             "surface_owner_id": torch.cat([self.surface_owner_id, incoming["surface_owner_id"]], dim=0),
+            "stable_gaussian_ids": torch.cat([self.stable_gaussian_ids, incoming["stable_gaussian_ids"]], dim=0),
         }
         self.replace_tensors(**combined, preserve_parameter_gradients=False)
 
     _STATE_TENSOR_NAMES = (
         "_xyz", "_features_dc", "_features_rest", "_opacity", "_scaling", "_rotation", "_confidence",
         "is_uncertain", "surface_uv", "cluster_ids", "surface_owner_kind", "surface_owner_id",
-        "xyz_gradient_accum", "denom", "max_radii2D",
+        "stable_gaussian_ids", "xyz_gradient_accum", "denom", "max_radii2D",
     )
     _STATE_PARAMETER_NAMES = frozenset(
         {"_xyz", "_features_dc", "_features_rest", "_opacity", "_scaling", "_rotation", "_confidence"}
@@ -559,7 +592,9 @@ class TorchGaussianModel:
         model-only append path, which requires ``self.optimizer is None``.
         """
 
-        return {name: getattr(self, name).detach().clone() for name in self._STATE_TENSOR_NAMES}
+        snapshot = {name: getattr(self, name).detach().clone() for name in self._STATE_TENSOR_NAMES}
+        snapshot["next_stable_gaussian_id"] = int(self.next_stable_gaussian_id)
+        return snapshot
 
     def restore_state(self, snapshot: dict[str, Any]) -> None:
         """Undo any partial mutation by restoring tensors from `snapshot_state`."""
@@ -570,6 +605,10 @@ class TorchGaussianModel:
             if name in self._STATE_PARAMETER_NAMES:
                 value = torch.nn.Parameter(value.requires_grad_(True))
             setattr(self, name, value)
+        self.next_stable_gaussian_id = int(snapshot.get(
+            "next_stable_gaussian_id",
+            int(self.stable_gaussian_ids.max().item()) + 1 if self.stable_gaussian_ids.numel() else 0,
+        ))
 
     def training_setup(self, groups: GaussianParameterGroups) -> None:
         """Build the Adam optimizer with a per-parameter-group learning rate."""
@@ -673,6 +712,7 @@ class TorchGaussianModel:
             cluster_ids=self.cluster_ids[keep_mask],
             surface_owner_kind=self.surface_owner_kind[keep_mask],
             surface_owner_id=self.surface_owner_id[keep_mask],
+            stable_gaussian_ids=self.stable_gaussian_ids[keep_mask],
             optimizer_keep_indices=keep_indices,
         )
 
@@ -692,6 +732,11 @@ class TorchGaussianModel:
                 self.get_rotation.detach().cpu().numpy(),
                 self.is_uncertain.detach().cpu().numpy().astype(np.int32),
                 self.get_confidence.detach().cpu().numpy(),
+                self.surface_uv.detach().cpu().numpy(),
+                self.cluster_ids.detach().cpu().numpy(),
+                self.surface_owner_kind.detach().cpu().numpy(),
+                self.surface_owner_id.detach().cpu().numpy(),
+                self.stable_gaussian_ids.detach().cpu().numpy(),
             ]
         )
         header = (
@@ -702,7 +747,10 @@ class TorchGaussianModel:
             "property float opacity\n"
             "property float scale_0\nproperty float scale_1\nproperty float scale_2\n"
             "property float rot_0\nproperty float rot_1\nproperty float rot_2\nproperty float rot_3\n"
-            "property int uncertain\nproperty float confidence\nend_header"
+            "property int uncertain\nproperty float confidence\n"
+            "property float surface_u\nproperty float surface_v\n"
+            "property long cluster_id\nproperty long surface_owner_kind\n"
+            "property long surface_owner_id\nproperty long stable_gaussian_id\nend_header"
         )
-        formats = ["%.9g"] * 14 + ["%d", "%.9g"]
+        formats = ["%.9g"] * 14 + ["%d", "%.9g", "%.9g", "%.9g", "%d", "%d", "%d", "%d"]
         np.savetxt(path, columns, fmt=formats, header=header, comments="", encoding="utf-8")

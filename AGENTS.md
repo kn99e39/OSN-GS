@@ -51,6 +51,7 @@ Do not spend time retrying those commands inside the restricted sandbox. Treat t
 
 - Use `python -B` or import-check scripts when `py_compile` fails because it
   cannot write `__pycache__`.
+- Repository-wide `pytest` runs commonly exceed 120 seconds. Start full-suite runs with a 600-second (`600000` ms) timeout on the first attempt; do not spend a failed 120-second run rediscovering this known limit.
 - Useful checks:
 
 ```powershell
@@ -96,6 +97,11 @@ Do not spend time retrying those commands inside the restricted sandbox. Treat t
 - Per the vendoring rule above: `gaussian-splatting/` itself is never
   imported or modified at runtime -- only these two ported functions, living
   under OSN-GS's own tree.
+
+## WebRenderer Commit Policy
+
+- `WebRenderer/` is an independent nested Git repository. Commit renderer-only changes there promptly after scoped verification; do not mix them into the parent OSN-GS repository commit.
+- Producer-side changes such as `save_ply` or trainer WebSocket payloads remain parent-repository changes and are committed separately.
 
 ## Communication
 

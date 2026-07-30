@@ -95,7 +95,7 @@ def nurbs_surface_loss(
     """
 
     torch = require_torch()
-    patches = state.surface_patches or [state.surface]
+    patches = list(state.surface_patches)
     patch_count = len(patches)
     if patch_count == 0:
         return torch.zeros((), dtype=torch.float32, device=state.model.device)
@@ -163,7 +163,7 @@ def uncertain_anchor_loss(state: TorchPipelineState, weight: float = 0.01) -> An
     """uncertain Gaussian이 자신이 샘플링된 surface anchor에서 멀어지는 것을 억제한다."""
 
     torch = require_torch()
-    if not state.model.is_uncertain.any():
+    if not state.model.is_uncertain.any() or state.surface is None:
         return torch.zeros((), dtype=torch.float32, device=state.model.device)
 
     # uncertain Gaussian만 surface uv anchor를 갖는다.
