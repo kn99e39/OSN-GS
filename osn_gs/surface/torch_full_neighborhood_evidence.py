@@ -46,7 +46,7 @@ from osn_gs.utils.torch_ops import require_torch
 class FullNeighborhoodEvidenceConfig:
     """Configurable policy, not a confirmed canonical threshold set."""
 
-    chunk_size: int = 4096
+    chunk_size: int = 16384
     # Alignment below this is counted as "competing" (conflicting-orientation)
     # evidence rather than same-surface support.
     competing_mode_alignment_threshold: float = 0.5
@@ -98,7 +98,7 @@ def assign_nearest_representative(
     full_positions: Any,
     representative_positions: Any,
     *,
-    chunk_size: int = 4096,
+    chunk_size: int = 16384,
 ) -> tuple[Any, Any]:
     """Return ``(nearest_index, distance)`` of the closest representative per full Gaussian.
 

@@ -45,3 +45,7 @@
 
 - `WebRenderer`는 PLY와 training stream 양쪽에서 certain/uncertain reliability, confidence, canonical surface ownership, NURBS patch ID를 시각화한다.
 - field 없는 기존 Graphdeco PLY는 계속 로드되며 diagnostic mode에서는 중립 회색으로 나타난다. 상세 계약과 검증 한계는 [Worklog 128](worklogs/128_webrenderer_gaussian_diagnostics.md)을 따른다.
+
+## 2026-07-30 Canonical reconstruction GPU synchronization optimization
+
+- Full-cloud intrinsic reliability의 per-Gaussian CUDA scalar synchronization을 vectorized GPU mask와 bulk metadata transfer로 교체했다. 동일 real CUDA event는 38.146s에서 5.675s로 약 6.7x 단축됐다. stage profile, GPU power/temperature 해석, 검증 및 남은 greedy mode-selection 병목은 [Worklog 131](worklogs/131_canonical_reconstruction_gpu_synchronization_optimization.md)을 따른다.

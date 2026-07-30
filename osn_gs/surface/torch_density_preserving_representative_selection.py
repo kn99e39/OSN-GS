@@ -281,31 +281,42 @@ def select_density_preserving_representatives(
         weight = 0.5 * (support / support.max().clamp_min(1e-9)) + 0.5 * (opacity_mass / opacity_mass.max().clamp_min(1e-9))
         stable_key = [str(stable_ids[c["representative_index"]]) for c in candidates]
 
+        # The prior implementation issued one tiny ``cdist(1, C)`` call per
+        # FPS iteration and brought every tie candidate back to Python.  For
+        # bounded real-scene candidate sets, one CxC CUDA matrix is modest in
+        # memory and removes thousands of small kernel launches.  An exact
+        # vector-norm fallback protects unusually large candidate sets.
+        pairwise_bytes = total_candidates * total_candidates * positions_tensor.element_size()
+        pairwise_distance = torch.cdist(positions_tensor, positions_tensor) if pairwise_bytes <= 256 * 1024 * 1024 else None
+
         def distances_from(local_index: int) -> Any:
-            # Computed on demand (never a full C x C matrix) -- candidate
-            # counts on a real ADC-trained scene can reach several thousand,
-            # and a materialized pairwise matrix would blow up GPU memory.
-            return torch.cdist(positions_tensor[local_index : local_index + 1], positions_tensor).reshape(-1)
+            if pairwise_distance is not None:
+                return pairwise_distance[local_index]
+            return torch.linalg.vector_norm(positions_tensor - positions_tensor[local_index], dim=1)
 
         # Deterministic seed: highest (support, opacity_mass), tie-broken by
-        # ascending stable ID -- never depends on input array order.
-        seed_order = sorted(
-            range(total_candidates),
-            key=lambda i: (-support[i].item(), -opacity_mass[i].item(), stable_key[i]),
-        )
-        seed = seed_order[0]
+        # ascending stable ID. Only selected indices cross to Python.
+        stable_rank = torch.empty((total_candidates,), dtype=torch.long, device=points.device)
+        for rank, index in enumerate(sorted(range(total_candidates), key=lambda i: stable_key[i])):
+            stable_rank[index] = rank
+        support_best = support.max()
+        seed_pool = torch.nonzero(support == support_best, as_tuple=False).reshape(-1)
+        opacity_best = opacity_mass[seed_pool].max()
+        seed_candidates = seed_pool[opacity_mass[seed_pool] == opacity_best]
+        seed = int(seed_candidates[stable_rank[seed_candidates].argmin()].item())
         selected_local = [seed]
-        min_distance = distances_from(seed)
-        min_distance[seed] = -1.0  # never reselect
+        selected_mask = torch.zeros((total_candidates,), dtype=torch.bool, device=points.device)
+        selected_mask[seed] = True
+        min_distance = distances_from(seed).masked_fill(selected_mask, -1.0)
         for _ in range(budget - 1):
             score = min_distance.clamp_min(0.0) * weight
-            score[torch.tensor(selected_local, device=points.device)] = -1.0
-            best_score = float(score.max())
-            tied = torch.nonzero(score >= best_score - 1e-9, as_tuple=False).reshape(-1).tolist()
-            next_pick = min(tied, key=lambda i: stable_key[i])
+            score = score.masked_fill(selected_mask, -1.0)
+            best_score = score.max()
+            tied = torch.nonzero(score >= best_score - 1e-9, as_tuple=False).reshape(-1)
+            next_pick = int(tied[stable_rank[tied].argmin()].item())
             selected_local.append(next_pick)
-            min_distance = torch.minimum(min_distance, distances_from(next_pick))
-            min_distance[next_pick] = -1.0
+            selected_mask[next_pick] = True
+            min_distance = torch.minimum(min_distance, distances_from(next_pick)).masked_fill(selected_mask, -1.0)
         selected = [candidates[i] for i in sorted(selected_local)]
 
     representative_indices = sorted(c["representative_index"] for c in selected)

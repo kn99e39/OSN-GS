@@ -288,28 +288,49 @@ def evaluate_intrinsic_reliability(
         finite_scale = finite_scale & (frame.equivalent_tangent_scale >= low) & (frame.equivalent_tangent_scale <= high)
     scale_validity = finite_scale.float()
 
-    intrinsic_class = []
+    # Keep the decision policy exactly as before, but evaluate it as tensor
+    # masks.  The old per-row Python ``if`` read CUDA scalars 138k+ times on
+    # real ADC snapshots, forcing one host synchronization per Gaussian.
+    # Metadata still uses the same Python tuple contract, constructed after a
+    # single bulk transfer instead of scalar-by-scalar transfers.
+    conditioning_bad = conditioning_score < 1.0
+    scale_bad = (~conditioning_bad) & (scale_validity < 1.0)
+    isotropic_bad = (~conditioning_bad) & (~scale_bad) & (
+        isotropic_likelihood >= config.rejected_min_isotropic_likelihood
+    )
+    rejected = conditioning_bad | scale_bad | isotropic_bad
+    reliable = (~rejected) & (planar_likelihood >= config.reliable_min_planar_likelihood)
+    ambiguous = ~(rejected | reliable)
+
+    conditioning_bad_cpu = conditioning_bad.detach().cpu().tolist()
+    scale_bad_cpu = scale_bad.detach().cpu().tolist()
+    isotropic_bad_cpu = isotropic_bad.detach().cpu().tolist()
+    planar_low_cpu = (planar_likelihood < config.reliable_min_planar_likelihood).detach().cpu().tolist()
+    needle_high_cpu = (needle_likelihood >= config.reliable_min_planar_likelihood).detach().cpu().tolist()
+    rejected_cpu = rejected.detach().cpu().tolist()
+    reliable_cpu = reliable.detach().cpu().tolist()
+    intrinsic_class: list[str] = []
     reasons: list[tuple[str, ...]] = []
     for index in range(count):
-        row_reasons: list[str] = []
-        if conditioning_score[index] < 1.0:
-            row_reasons.append("degenerate_or_nonfinite_covariance")
+        if rejected_cpu[index]:
             intrinsic_class.append(INTRINSIC_REJECTED)
-        elif scale_validity[index] < 1.0:
-            row_reasons.append("scale_outside_expected_range_or_nonfinite")
-            intrinsic_class.append(INTRINSIC_REJECTED)
-        elif isotropic_likelihood[index] >= config.rejected_min_isotropic_likelihood:
-            row_reasons.append("isotropic_no_normal_evidence")
-            intrinsic_class.append(INTRINSIC_REJECTED)
-        elif planar_likelihood[index] >= config.reliable_min_planar_likelihood:
+            if conditioning_bad_cpu[index]:
+                reasons.append(("degenerate_or_nonfinite_covariance",))
+            elif scale_bad_cpu[index]:
+                reasons.append(("scale_outside_expected_range_or_nonfinite",))
+            else:
+                reasons.append(("isotropic_no_normal_evidence",))
+        elif reliable_cpu[index]:
             intrinsic_class.append(INTRINSIC_RELIABLE)
+            reasons.append(())
         else:
-            if planar_likelihood[index] < config.reliable_min_planar_likelihood:
-                row_reasons.append("insufficient_planar_likelihood")
-            if needle_likelihood[index] >= config.reliable_min_planar_likelihood:
-                row_reasons.append("needle_like_ambiguous_normal_direction")
             intrinsic_class.append(INTRINSIC_AMBIGUOUS)
-        reasons.append(tuple(row_reasons))
+            row_reasons: list[str] = []
+            if planar_low_cpu[index]:
+                row_reasons.append("insufficient_planar_likelihood")
+            if needle_high_cpu[index]:
+                row_reasons.append("needle_like_ambiguous_normal_direction")
+            reasons.append(tuple(row_reasons))
 
     return IntrinsicReliabilityResult(
         intrinsic_class=tuple(intrinsic_class),
