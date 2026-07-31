@@ -234,6 +234,11 @@ def select_density_preserving_representatives(
     stable_id_keys = [str(item) for item in stable_ids]
 
     candidates: list[dict[str, Any]] = []
+    # Keep the existing per-mode Torch arithmetic intact, but defer extracting
+    # nearest-member distances until every mode has been evaluated. This avoids
+    # one host synchronization per source Gaussian while preserving the exact
+    # CPU min/tie-break policy below.
+    pending_candidates: list[tuple[int, int, list[int], float, torch.Tensor, torch.Tensor]] = []
     modes_per_cell: list[int] = []
     for cell_index in range(len(cell_starts) - 1):
         start, end = cell_starts[cell_index], cell_starts[cell_index + 1]
@@ -252,22 +257,33 @@ def select_density_preserving_representatives(
             else:
                 centroid = points[member_tensor].mean(dim=0)
             distances_to_centroid = torch.linalg.norm(points[member_tensor] - centroid, dim=-1)
+            pending_candidates.append(
+                (cell_id, mode_id, member_indices, opacity_sum, centroid, distances_to_centroid)
+            )
+
+    if pending_candidates:
+        all_distances = torch.cat([entry[5] for entry in pending_candidates]).detach().cpu().tolist()
+        distance_offset = 0
+        for cell_id, mode_id, member_indices, opacity_sum, centroid, _distances_to_centroid in pending_candidates:
+            member_count = len(member_indices)
             # Deterministic tie-break: nearest-to-centroid member, ties broken
-            # by ascending stable ID.
+            # by ascending stable ID. The values are exactly the same tensor
+            # values that were formerly extracted one-by-one above.
             order_key = [
-                (float(distances_to_centroid[i]), str(stable_ids[member_indices[i]]))
-                for i in range(len(member_indices))
+                (all_distances[distance_offset + i], str(stable_ids[member_indices[i]]))
+                for i in range(member_count)
             ]
-            best_local = min(range(len(member_indices)), key=lambda i: order_key[i])
+            best_local = min(range(member_count), key=lambda i: order_key[i])
             representative_index = member_indices[best_local]
             candidates.append({
                 "cell_id": cell_id,
                 "mode_id": mode_id,
                 "representative_index": representative_index,
-                "source_count": len(member_indices),
+                "source_count": member_count,
                 "source_opacity_mass": opacity_sum,
                 "centroid": centroid,
             })
+            distance_offset += member_count
 
     total_candidates = len(candidates)
     if total_candidates <= budget:

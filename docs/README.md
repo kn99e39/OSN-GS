@@ -49,3 +49,8 @@
 ## 2026-07-30 Canonical reconstruction GPU synchronization optimization
 
 - Full-cloud intrinsic reliability의 per-Gaussian CUDA scalar synchronization을 vectorized GPU mask와 bulk metadata transfer로 교체했다. 동일 real CUDA event는 38.146s에서 5.675s로 약 6.7x 단축됐다. stage profile, GPU power/temperature 해석, 검증 및 남은 greedy mode-selection 병목은 [Worklog 131](worklogs/131_canonical_reconstruction_gpu_synchronization_optimization.md)을 따른다.
+- Mode-aware selection의 mode별 medoid 거리 138,766건을 하나의 bulk GPU→CPU transfer로 바꾸되 Torch aggregate와 CPU tie-break를 보존했다. v3 exact replay에서 candidate 및 FPS 선택 순서가 같고 median은 4.278s에서 2.324s로 단축됐다. 실패한 vectorized/NumPy 대안과 native splitter의 착수 기준은 [Worklog 132](worklogs/132_mode_aware_selection_phase2_exact_optimization.md)을 따른다.
+
+## 2026-07-30 Native exact splitter gate
+
+- C++ CPU native splitter prototype은 2.533ms까지 단축됐지만 v3 replay에서 첫 mode assignment가 달라 production에 채택하지 않았다. 현재 Python exact backend를 유지하며, 원인과 재시도 조건은 [Worklog 133](worklogs/133_native_exact_cell_splitter_gate.md)을 따른다.
