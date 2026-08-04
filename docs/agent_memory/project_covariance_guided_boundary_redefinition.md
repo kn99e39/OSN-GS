@@ -1,14 +1,14 @@
 ---
 name: project-covariance-guided-boundary-redefinition
-description: "OSN-GS canonical architecture update (2026-07-29): boundary is no longer connected-component/KDE-raster outline but where covariance-guided same-surface Gaussian adjacency breaks; foundation (worklog 113) + robustness hardening (worklog 115) layered ABOVE [[project_boundary_first_isolated_topology_rebuild]]'s existing Boundary-first support/control/NURBS construction, which is kept, not replaced"
+description: "OSN-GS canonical architecture update (2026-07-29): boundary is no longer connected-component/KDE-raster outline but where covariance-guided same-surface Gaussian adjacency breaks; foundation (worklog 113, now docs/worklogs/7_gaussian_covariance_structural_reliability_foundation.md) + robustness hardening (worklog 115, now docs/worklogs/9_gaussian_reliability_affinity_robustness_hardening.md) layered ABOVE [[project_boundary_first_isolated_topology_rebuild]]'s existing Boundary-first support/control/NURBS construction, which is kept, not replaced"
 metadata: 
   node_type: memory
   type: project
-  modified: 2026-07-29T05:31:17.544Z
+  modified: 2026-07-31T06:34:34.725Z
   originSessionId: b04ebd79-3166-417b-94ae-ea59069d1297
 ---
 
-**What this is.** A user-directed canonical redefinition of what "boundary" means for the isolated Boundary-first NURBS work, layered ON TOP of (not replacing) [[project_boundary_first_isolated_topology_rebuild]]'s existing support/control/NURBS construction contract (worklogs 110/112: review geometry semantics, support-crossing gate, star-shape anchor correspondence — all kept unchanged). The thing being redesigned is the UPSTREAM boundary-evidence-extraction step that currently feeds that contract.
+**What this is.** A user-directed canonical redefinition of what "boundary" means for the isolated Boundary-first NURBS work, layered ON TOP of (not replacing) [[project_boundary_first_isolated_topology_rebuild]]'s existing support/control/NURBS construction contract (worklogs 110/112, now `docs/worklogs/4_...`/`6_...` after the 2026-07-31 renumbering: review geometry semantics, support-crossing gate, star-shape anchor correspondence — all kept unchanged). The thing being redesigned is the UPSTREAM boundary-evidence-extraction step that currently feeds that contract.
 
 **Why this exists.** In a complex scene, distance-based connectivity can make every Gaussian look like one giant connected component. So boundary must NOT be defined as: the outline of the whole Gaussian distribution, a Euclidean connected component's outline, a single-PCA-UV KDE-mask contour, a bounding box, or a voxel component's outline. Canonical definition instead: **boundary is where Gaussian adjacency that could continue as the same surface manifold breaks, per observation + geometry + covariance evidence.**
 
@@ -26,7 +26,7 @@ Observed Gaussians -> covariance eigenframe extraction -> structural reliability
 
 **Standing constraints (same isolated-path discipline as the parent thread):** never touch default dispatcher, trainer, production pipeline, uncertain-Gaussian proposal/append, ownership, checkpoint, renderer production behavior, or existing Phase C-G. No renderer/trainer dependency in the new modules — everything computable from raw `(N,3)` position + `(N,3,3)` covariance tensors alone. No automatic Gate approval.
 
-**Worklog numbering note:** user asked for "Worklog 111" for this round, but that number was already claimed by an unrelated concurrent Codex session's file (`111_nurbs_construction_synthetic_3d_gaussian_dataset.md`), and 112 was already used by the parent thread's prior round — landed on **Worklog 113** (checked `ls docs/worklogs/` immediately before finalizing, per the standing lesson from the prior 111-collision). Per explicit instruction, worklog 110 was NOT touched/appended this round — all new content lives only in 113.
+**Worklog numbering note:** user asked for "Worklog 111" for this round, but that number was already claimed by an unrelated concurrent Codex session's file (`111_nurbs_construction_synthetic_3d_gaussian_dataset.md`, now `docs/worklogs/5_nurbs_construction_synthetic_3d_gaussian_dataset.md`), and 112 was already used by the parent thread's prior round — landed on **Worklog 113** (now `docs/worklogs/7_gaussian_covariance_structural_reliability_foundation.md` after the 2026-07-31 renumbering; checked `ls docs/worklogs/` immediately before finalizing, per the standing lesson from the prior 111-collision). Per explicit instruction, worklog 110 was NOT touched/appended this round — all new content lives only in 113.
 
 **Scope actually implemented this round (first foundation only, per user's own explicit phasing — NOT full production algorithm):**
 
@@ -50,9 +50,9 @@ Observed Gaussians -> covariance eigenframe extraction -> structural reliability
 
 **Standing rule for this thread:** same as the parent thread — new worklog per completed round (not append), except explicit instruction otherwise for a specific round. Always re-check `ls docs/worklogs/` for the true current max number immediately before finalizing the filename, since concurrent sessions can and do claim numbers in between task start and task end (happened twice now: worklog 111 collision in the previous round, again considered this round before landing on 113).
 
-## Round 2 — Worklog 115, Reliability/Affinity Robustness Hardening (2026-07-29)
+## Round 2 — Worklog 115 (now `docs/worklogs/9_gaussian_reliability_affinity_robustness_hardening.md`), Reliability/Affinity Robustness Hardening (2026-07-29)
 
-User asked for "Worklog 114" but a concurrent Codex session had already claimed it (`114_trimmed_component_jacobian_test_health.md` — that session also independently fixed the repo's 2 pre-existing `test_trimmed_component_fitter.py` failures, not this thread). Landed on **115**.
+User asked for "Worklog 114" but a concurrent Codex session had already claimed it (`114_trimmed_component_jacobian_test_health.md`, now `docs/worklogs/8_trimmed_component_jacobian_test_health.md` — that session also independently fixed the repo's 2 pre-existing `test_trimmed_component_fitter.py` failures, not this thread). Landed on **115**.
 
 **Purpose:** harden worklog 113's foundation (state contract, scale normalization, candidate graph, invariance, failure modes) so it's robust enough for complex-scene surface-region formation — explicitly NOT connecting it to the boundary extractor, existing builder, dispatcher, or trainer yet.
 

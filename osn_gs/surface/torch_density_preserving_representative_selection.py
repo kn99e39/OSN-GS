@@ -50,6 +50,25 @@ class RepresentativeSelectionConfig:
     max_modes_per_cell: int = 4
     mode_normal_alignment_min: float = 0.6
     mode_offset_max_thickness_ratio: float = 3.0
+
+    # --- worklog 49: boundary-evidence swap-in ---
+    # `_split_cell_into_modes` already separates one voxel cell's members into
+    # locally-consistent normal/offset modes; a cell with >1 mode is, by that
+    # split's own compatibility gate, evidence of a genuinely different local
+    # surface orientation sharing the cell. Global weighted-farthest-point
+    # selection under a fixed budget can still drop one of those modes purely
+    # on distance/weight competition with unrelated bulk-interior candidates
+    # -- that is real full-cloud evidence lost to budget pressure, not a
+    # measurement gap. Measured on real ADC-trained 3k/10k checkpoints: most
+    # same-cell sibling drops have near-1.0 normal alignment (just noisy
+    # near-duplicate mode splits, not a real orientation difference) --
+    # `boundary_evidence_alignment_max` is set well BELOW the 0.6 mode-split
+    # gate itself so only genuinely divergent (near-orthogonal or sharper)
+    # orientations qualify, not borderline splits. `boundary_evidence_min_source_count`
+    # excludes single/few-Gaussian noise fragments from being swapped in.
+    boundary_evidence_alignment_max: float = 0.3
+    boundary_evidence_min_source_count: int = 3
+
     schema_version: str = SCHEMA_VERSION
 
 
@@ -89,6 +108,7 @@ class SelectionDiagnostics:
     representative_source_count_min: int
     representative_source_count_max: int
     selection_mode: str  # "full_coverage" (candidates <= budget) or "weighted_farthest_point"
+    boundary_evidence_swap_in_count: int = 0  # worklog 49
 
 
 @dataclass(frozen=True)
@@ -167,6 +187,220 @@ def _split_cell_into_modes(
         best_mode["centroid"] = (best_mode["centroid"] * n + position) / (n + 1)
         best_mode["members"].append(idx)
     return [mode["members"] for mode in modes]
+
+
+def _boundary_evidence_swap_in(
+    candidates: list[dict[str, Any]],
+    selected_local: set[int],
+    positions_tensor: Any,
+    normals_np: "np.ndarray",
+    stable_ids: Sequence[Any],
+    *,
+    config: RepresentativeSelectionConfig,
+) -> tuple[set[int], int]:
+    """Worklog 49: deterministically restore same-cell sibling modes that the
+    weighted-FPS budget competition dropped despite genuinely diverging in
+    orientation from the sibling mode that WAS selected -- real full-cloud
+    evidence lost purely to budget pressure, not a measurement gap (see the
+    ``RepresentativeSelectionConfig`` docstring above). Never changes the
+    total selected count: each swap-in evicts exactly one currently-selected
+    representative, chosen from the SIBLING mode's own local neighbourhood
+    (same orientation as whatever already won this cell) as the most
+    redundant one there -- never from the swap-in's own neighbourhood or an
+    unrelated area, and never a representative this repair itself depends on
+    as a sibling.
+    """
+    torch = require_torch()
+    by_cell: dict[int, list[int]] = {}
+    for local_index, candidate in enumerate(candidates):
+        by_cell.setdefault(candidate["cell_id"], []).append(local_index)
+
+    swap_in_candidates: list[dict[str, int]] = []
+    protected: set[int] = set()
+    for indices in by_cell.values():
+        if len(indices) < 2:
+            continue
+        selected_here = [i for i in indices if i in selected_local]
+        dropped_here = [i for i in indices if i not in selected_local]
+        if not selected_here or not dropped_here:
+            continue
+        for dropped_index in dropped_here:
+            dropped_normal = normals_np[candidates[dropped_index]["representative_index"]]
+            sibling_index = max(
+                selected_here,
+                key=lambda i: float(abs(np.dot(dropped_normal, normals_np[candidates[i]["representative_index"]]))),
+            )
+            best_alignment = float(abs(np.dot(
+                dropped_normal, normals_np[candidates[sibling_index]["representative_index"]],
+            )))
+            if (
+                best_alignment > config.boundary_evidence_alignment_max
+                or candidates[dropped_index]["source_count"] < config.boundary_evidence_min_source_count
+            ):
+                continue
+            swap_in_candidates.append({"dropped": dropped_index, "sibling": sibling_index})
+            protected.update(selected_here)
+
+    if not swap_in_candidates:
+        return selected_local, 0
+
+    # Deterministic order: ascending stable ID of the candidate's own
+    # representative Gaussian -- never depends on dict/set iteration order.
+    swap_in_candidates.sort(key=lambda item: str(stable_ids[candidates[item["dropped"]]["representative_index"]]))
+    seen_dropped: set[int] = set()
+    deduplicated = []
+    for item in swap_in_candidates:
+        if item["dropped"] in seen_dropped:
+            continue
+        seen_dropped.add(item["dropped"])
+        deduplicated.append(item)
+    swap_in_candidates = deduplicated
+
+    # A real edge spans many voxel cells, each independently proposing its
+    # own swap-in -- accepting all of them clusters evictions along one
+    # short stretch of one face and disconnects it from the rest of that
+    # face's own representatives (measured on the box fixture: region_count
+    # 6 -> 8, one face split into two graph components). One representative
+    # per roughly one representative-spacing's worth of edge is already
+    # enough to mark the edge as boundary evidence; accepted swap-ins are
+    # therefore greedily kept mutually farther apart than the ORIGINAL
+    # selection's own median nearest-neighbor spacing -- a property of the
+    # selection itself, not a new scene-tuned constant.
+    original_positions = positions_tensor[sorted(selected_local)]
+    if original_positions.shape[0] >= 2:
+        original_pairwise = torch.cdist(original_positions, original_positions)
+        original_pairwise.fill_diagonal_(float("inf"))
+        spacing_values = original_pairwise.min(dim=1).values
+        median_spacing = float(spacing_values.median())
+    else:
+        median_spacing = 0.0
+    accepted_positions: list[Any] = []
+    spaced_out_candidates = []
+    for item in swap_in_candidates:
+        position = positions_tensor[item["dropped"]]
+        if accepted_positions:
+            nearest = min(float(torch.linalg.vector_norm(position - other)) for other in accepted_positions)
+            if nearest < median_spacing * 3.0:
+                continue
+        accepted_positions.append(position)
+        spaced_out_candidates.append(item)
+    swap_in_candidates = spaced_out_candidates
+
+    # Eviction targets the SIBLING's own orientation, not the swap-in's: the
+    # sibling is whichever mode already won this cell's budget competition,
+    # and the box fixture proved that evicting near the swap-in's OWN
+    # position (which sits ON the edge, equally close to both orientations)
+    # can remove the very representatives connecting the swap-in to its
+    # correct face, isolating it and its edge-siblings into a spurious
+    # micro-region. The candidate is drawn from the SIBLING's own orientation
+    # pool (representatives currently selected that still align with the
+    # SIBLING's normal), never the swap-in's own neighbourhood or an
+    # unrelated face.
+    #
+    # Redundancy (a close nearest neighbor) alone is not a safe eviction
+    # criterion either: a representative can be close to one neighbor yet
+    # still be the sole connector between two halves of its face's coverage
+    # (measured on the box fixture -- naive redundancy-only eviction
+    # disconnected a face into two graph components, region_count 6 -> 7/8/9
+    # depending on density). Each candidate is therefore only evicted if it
+    # is NOT an articulation point of the pool's own proximity graph (an
+    # explicit connectivity check, not a distance proxy) -- removing it must
+    # never increase the pool's own component count.
+    updated = set(selected_local)
+    swap_count = 0
+    for item in swap_in_candidates:
+        swap_in_index, sibling_index = item["dropped"], item["sibling"]
+        if swap_in_index in updated:
+            continue
+        sibling_normal = normals_np[candidates[sibling_index]["representative_index"]]
+        pool = sorted(
+            i for i in updated
+            if i not in protected
+            and float(abs(np.dot(
+                sibling_normal, normals_np[candidates[i]["representative_index"]],
+            ))) >= config.mode_normal_alignment_min
+        )
+        if len(pool) < 15:
+            # Below this the sibling orientation's own local coverage is too
+            # thin for a proxy-graph safety check to be trustworthy -- the
+            # box fixture proved a generous-radius proxy can still miss real
+            # fragmentation the stricter downstream affinity/region-formation
+            # graph produces. A well-populated pool is required before this
+            # repair touches it at all; a thin one is left untouched rather
+            # than risking it.
+            continue
+        pool_positions = positions_tensor[pool]
+        pool_pairwise = torch.cdist(pool_positions, pool_positions)
+        pool_pairwise.fill_diagonal_(float("inf"))
+        pool_nearest_distance = pool_pairwise.min(dim=1).values
+        # The pool's OWN median nearest-neighbor spacing (same-orientation
+        # subset, not the mixed-orientation `median_spacing` above) sets the
+        # proximity-graph edge radius -- generous enough (2.5x) to match the
+        # connectivity a bounded-kNN affinity graph would itself find, so an
+        # articulation point here reliably predicts a real disconnection.
+        pool_median_spacing = float(pool_nearest_distance.median())
+        edge_radius = pool_median_spacing * 4.0
+        adjacency: dict[int, list[int]] = {local: [] for local in range(len(pool))}
+        for a in range(len(pool)):
+            for b in range(a + 1, len(pool)):
+                if float(pool_pairwise[a, b]) <= edge_radius:
+                    adjacency[a].append(b)
+                    adjacency[b].append(a)
+
+        def _component_count(exclude: int | None) -> int:
+            remaining = [n for n in range(len(pool)) if n != exclude]
+            remaining_set = set(remaining)
+            visited: set[int] = set()
+            components = 0
+            for start in remaining:
+                if start in visited:
+                    continue
+                components += 1
+                stack = [start]
+                visited.add(start)
+                while stack:
+                    node = stack.pop()
+                    for neighbor in adjacency[node]:
+                        if neighbor != exclude and neighbor in remaining_set and neighbor not in visited:
+                            visited.add(neighbor)
+                            stack.append(neighbor)
+            return components
+
+        # Compare against the pool's OWN existing component count, not
+        # "reaches every other node" -- a same-orientation pool spanning a
+        # real (non-toy) surface is not always a single connected component
+        # to begin with (bounded-kNN sparsity, real noise), and requiring
+        # full reachability made every candidate look unsafe, silencing the
+        # repair everywhere including real checkpoints. Only an eviction that
+        # would INCREASE the component count (a genuine articulation point)
+        # is rejected.
+        original_component_count = _component_count(exclude=None)
+        redundancy_order = sorted(
+            range(len(pool)),
+            key=lambda local: (float(pool_nearest_distance[local]), str(stable_ids[candidates[pool[local]]["representative_index"]])),
+        )
+        # Component-count non-increase alone still under-protects a node that
+        # remains "connected" only through a single thin remaining path (the
+        # proxy graph's generous radius can call that safe while the real,
+        # stricter downstream affinity graph would not) -- measured on the
+        # box fixture, a lingering fragmentation case survived the component
+        # check alone. Requiring degree >= 4 in the proxy graph additionally
+        # restricts eviction to nodes that are well embedded in a genuinely
+        # dense cluster, not merely non-critical for bare reachability.
+        min_safe_degree = 4
+        evict_index = None
+        for local in redundancy_order:
+            if len(adjacency[local]) < min_safe_degree:
+                continue
+            if _component_count(exclude=local) <= original_component_count:
+                evict_index = pool[local]
+                break
+        if evict_index is None:
+            continue
+        updated.discard(evict_index)
+        updated.add(swap_in_index)
+        swap_count += 1
+    return updated, swap_count
 
 
 def select_density_preserving_representatives(
@@ -286,6 +520,7 @@ def select_density_preserving_representatives(
             distance_offset += member_count
 
     total_candidates = len(candidates)
+    boundary_evidence_swap_in_count = 0
     if total_candidates <= budget:
         selected = candidates
         selection_mode = "full_coverage"
@@ -333,7 +568,10 @@ def select_density_preserving_representatives(
             selected_local.append(next_pick)
             selected_mask[next_pick] = True
             min_distance = torch.minimum(min_distance, distances_from(next_pick)).masked_fill(selected_mask, -1.0)
-        selected = [candidates[i] for i in sorted(selected_local)]
+        selected_local_set, boundary_evidence_swap_in_count = _boundary_evidence_swap_in(
+            candidates, set(selected_local), positions_tensor, normals_np, stable_ids, config=config,
+        )
+        selected = [candidates[i] for i in sorted(selected_local_set)]
 
     representative_indices = sorted(c["representative_index"] for c in selected)
     by_index = {c["representative_index"]: c for c in selected}
@@ -363,6 +601,7 @@ def select_density_preserving_representatives(
         representative_source_count_min=min(source_counts, default=0),
         representative_source_count_max=max(source_counts, default=0),
         selection_mode=selection_mode,
+        boundary_evidence_swap_in_count=boundary_evidence_swap_in_count,
     )
     index_tensor = torch.tensor(representative_indices, dtype=torch.long, device=points.device)
     cell_id_tensor = torch.tensor([by_index[idx]["cell_id"] for idx in representative_indices], dtype=torch.long, device=points.device)

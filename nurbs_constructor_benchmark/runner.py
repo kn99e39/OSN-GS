@@ -464,6 +464,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--noise-std", type=float, default=0.0)
     parser.add_argument(
+        "-surf", "--surf",
+        action="store_true",
+        help="Use the idealized surface-aligned covariance variant (uniformly flat, tangent-plane-aligned, no anisotropy-ratio noise) instead of the default baseline-noisy covariance -- see scenes._surface_aligned_covariance.",
+    )
+    parser.add_argument(
         "--constructor",
         choices=("canonical", "boundary_first"),
         default="canonical",
@@ -532,9 +537,12 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("--device cuda was requested but CUDA is unavailable.")
     names = list(SCENE_NAMES) if "all" in args.scenes else args.scenes
     export_dir = None if args.skip_renderer_export else args.output / "NURBS_output"
+    covariance_mode = "surface_aligned" if args.surf else "baseline_noisy"
     if args.constructor == "boundary_first":
         results = [
-            evaluate_scene_boundary_first(make_scene(name, args.points, args.seed, args.noise_std), args, export_dir)
+            evaluate_scene_boundary_first(
+                make_scene(name, args.points, args.seed, args.noise_std, covariance_mode), args, export_dir
+            )
             for name in names
         ]
     else:
@@ -552,7 +560,9 @@ def main(argv: list[str] | None = None) -> int:
             ),
         )
         results = [
-            evaluate_scene(make_scene(name, args.points, args.seed, args.noise_std), config, args.device, export_dir)
+            evaluate_scene(
+                make_scene(name, args.points, args.seed, args.noise_std, covariance_mode), config, args.device, export_dir
+            )
             for name in names
         ]
     failures = [

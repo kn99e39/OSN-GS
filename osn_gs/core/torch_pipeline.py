@@ -50,6 +50,29 @@ from osn_gs.surface.torch_visible_surface_construction import (
 from osn_gs.utils.torch_ops import require_torch
 
 
+def _representative_knn_spacing(positions: Any, k: int = 8) -> Any:
+    """Worklog 33: REPRESENTATIVE GRAPH SCALE, G1. Each representative's own
+    median distance to its ``k`` nearest OTHER representatives -- a pure
+    function of ``positions``, provably (and verified) exactly rigid-
+    rotation/translation/uniform-scale invariant when the representative set
+    itself is held fixed. Bounded-k, O(M^2) in the representative count only
+    (never the full cloud) -- the same complexity class as the existing
+    manifold-affinity kNN candidate search this replaces the scale for.
+    """
+    torch = require_torch()
+    count = int(positions.shape[0])
+    if count == 0:
+        return positions.new_empty((0,))
+    if count == 1:
+        # No representative-to-representative spacing exists. Return the finite floor.
+        return torch.full((1,), 1e-9, dtype=positions.dtype, device=positions.device)
+    k = min(k, count - 1)
+    distances = torch.cdist(positions, positions)
+    distances.fill_diagonal_(float("inf"))
+    knn_distances, _ = torch.topk(distances, k=k, largest=False, dim=1)
+    return knn_distances.median(dim=1).values.clamp_min(1e-9)
+
+
 def _slice_covariance_frame(frame: GaussianCovarianceFrame, indices: Any) -> GaussianCovarianceFrame:
     """Index every field of a batched :class:`GaussianCovarianceFrame` (incl. the plain str tuple)."""
     idx_list = indices.detach().cpu().tolist()
@@ -120,6 +143,11 @@ class TorchPipelineState:
     occlusion_curves: TorchCurveSet
     surface: TorchNURBSSurface | None
     surface_patches: list[TorchNURBSSurface]
+    # Construction-time `SurfaceRegionCandidate.region_confidence`, one entry
+    # per `surface_patches` index (NOT the per-Gaussian uncertain-Gaussian
+    # `model.get_uncertain_confidence` -- see docs/agent_memory on the
+    # uncertain_confidence rename for why these are kept separate).
+    surface_patch_confidence: tuple[float, ...] = field(default_factory=tuple)
     visible_surface_construction: VisibleSurfaceConstructionResult | None = None
     visible_nurbs_state: str = "materialized"
     visible_nurbs_coverage_semantics: str = "reliable_core_only"
@@ -142,6 +170,24 @@ class TorchOSNGSPipeline:
     def __init__(self, config: TorchPipelineConfig, device: str = "cuda") -> None:
         self.config = config
         self.device = device
+
+    @staticmethod
+    def _patch_confidence_from_regions(
+        patch_count: int,
+        region_to_patch: dict[Any, int],
+        region_by_id: dict[Any, Any],
+    ) -> tuple[float, ...]:
+        """Per-patch `SurfaceRegionCandidate.region_confidence`, aligned with
+        the `surface_patches`/`patch_id` index space `region_to_patch` maps
+        into. This is construction-time evidence confidence, unrelated to
+        `model.get_uncertain_confidence`."""
+
+        confidence = [0.0] * patch_count
+        for region_id, patch_id in region_to_patch.items():
+            region = region_by_id.get(region_id)
+            if region is not None:
+                confidence[patch_id] = float(region.region_confidence)
+        return tuple(confidence)
 
     def initialize(
         self,
@@ -221,7 +267,7 @@ class TorchOSNGSPipeline:
             uncertain_mask=torch.zeros((count,), dtype=torch.bool, device=points.device),
             surface_uv=torch.zeros((count, 2), dtype=torch.float32, device=points.device),
             cluster_ids=torch.full((count,), -1, dtype=torch.long, device=points.device),
-            confidence=torch.ones((count, 1), dtype=torch.float32, device=points.device),
+            uncertain_confidence=torch.ones((count, 1), dtype=torch.float32, device=points.device),
         )
         empty_curves = self._empty_occlusion_curves(points)
         return TorchPipelineState(
@@ -320,6 +366,9 @@ class TorchOSNGSPipeline:
                 device=points.device,
             )
             cluster_ids[indices] = patch_id
+        patch_confidence = self._patch_confidence_from_regions(
+            len(surface_patches), region_to_patch, region_by_id
+        )
 
         cluster_ids = self._propagate_canonical_patch_ids(
             points, construction_indices, cluster_ids
@@ -347,7 +396,7 @@ class TorchOSNGSPipeline:
             uncertain_mask=torch.zeros((count,), dtype=torch.bool, device=points.device),
             surface_uv=surface_uv,
             cluster_ids=cluster_ids,
-            confidence=torch.ones((count, 1), dtype=torch.float32, device=points.device),
+            uncertain_confidence=torch.ones((count, 1), dtype=torch.float32, device=points.device),
         )
         self._assign_uv_support_masks(model, surface_patches)
         empty_curves = self._empty_occlusion_curves(points)
@@ -365,6 +414,7 @@ class TorchOSNGSPipeline:
             occlusion_curves=self._empty_occlusion_curves(points),
             surface=surface_patches[0],
             surface_patches=surface_patches,
+            surface_patch_confidence=patch_confidence,
             visible_surface_construction=construction,
             visible_nurbs_state="materialized",
             visible_nurbs_coverage_semantics="reliable_core_only",
@@ -438,9 +488,60 @@ class TorchOSNGSPipeline:
         precomputed_assignment = (
             assign_nearest_representative(points, rep_points) if downsampled else None
         )
+        # Worklog 32: LOCAL EVIDENCE SCALE -- a per-representative estimate of
+        # the true local full-cloud point spacing, DISTINCT from a single
+        # representative Gaussian's own tangent_major_scale (worklog 31 found
+        # the latter is ~8x too small on real long-horizon-trained data,
+        # collapsing the local-radius bound and tangent-residual denominator
+        # alike). Derived from the SAME voxel cell geometry and per-
+        # representative ``source_count`` selection already computed --
+        # cbrt(cell_volume / source_count) approximates the typical spacing
+        # between full-cloud members inside that representative's own
+        # selection-time cell, without any new O(N) or O(N^2) pass and
+        # without depending on tangent_major_scale at all.
+        local_evidence_scale = None
+        if downsampled:
+            budget = max(16, int(self.config.canonical_construction_max_points))
+            resolution = max(2, int(math.ceil(budget ** 0.5)))
+            # Rotation/translation/uniform-scale-invariant characteristic
+            # scene length: 2 * sqrt(trace(cov(points)) / 3), an isotropic
+            # RMS-radius-like measure. An axis-aligned bounding-box span
+            # (what the voxel grid itself uses for CANDIDATE GROUPING, which
+            # is fine to be rotation-sensitive per its own documented
+            # invariance carve-out) is NOT safe to reuse here, because this
+            # scale feeds a RELIABILITY decision -- using it directly broke
+            # `region_count` rigid-rotation invariance (caught by existing
+            # tests). trace(R cov R^T) == trace(cov) for any orthogonal R,
+            # so this stays invariant under rotation while still scaling
+            # linearly with uniform scale and ignoring translation.
+            centered = points - points.mean(dim=0, keepdim=True)
+            variance_trace = (centered.square().sum(dim=0) / max(int(points.shape[0]), 1)).sum().clamp_min(1e-12)
+            characteristic_length = 2.0 * torch.sqrt(variance_trace / 3.0)
+            cell_volume = float((characteristic_length / resolution).clamp_min(1e-9) ** 3)
+            source_counts = torch.tensor(
+                [rep.source_count for rep in selection.representatives],
+                dtype=points.dtype, device=points.device,
+            )
+            local_evidence_scale = (cell_volume / source_counts.clamp_min(1)).pow(1.0 / 3.0)
+        # Worklog 33: REPRESENTATIVE GRAPH SCALE, G1 -- this representative's
+        # own median distance to its k nearest OTHER representatives. Purely
+        # a function of ``rep_points`` (Euclidean distances), so it is
+        # EXACTLY rigid-rotation/translation/uniform-scale invariant when the
+        # representative SET is held fixed -- verified directly (worklog 33
+        # frozen-representative test, zero relation mismatches on real
+        # 3k/5k/10k checkpoints). Worklog 32's three earlier graph-scale
+        # attempts were rejected only because the END-TO-END test they were
+        # checked against also re-runs representative SELECTION (an
+        # already-documented, separately-accepted non-invariance of the
+        # axis-aligned voxel grid) -- this conflated selection perturbation
+        # with estimator correctness. Real 3k snapshot: replaces
+        # `tangent_major_scale`-based same_surface edge count of 11 with
+        # 2125 (frozen test, same representative set).
+        representative_graph_scale = _representative_knn_spacing(rep_points)
         evidence = compute_full_neighborhood_evidence(
             points, frame_full, opacity, intrinsic_full, rep_points, rep_frame, rep_stable_ids,
             precomputed_assignment=precomputed_assignment,
+            local_evidence_scale=local_evidence_scale,
         )
         if not downsampled:
             # No downsampling occurred: the representative set IS the full
@@ -456,6 +557,7 @@ class TorchOSNGSPipeline:
             reliability = evaluate_structural_reliability(rep_points, rep_frame)
             construction = construct_visible_nurbs_from_gaussians(
                 rep_points, covariance=rep_covariance, stable_ids=rep_stable_ids, reliability=reliability,
+                candidate_scale=representative_graph_scale, residual_scale=representative_graph_scale,
             )
         else:
             reliability = evaluate_structural_reliability_from_full_evidence(rep_frame, evidence)
@@ -472,6 +574,7 @@ class TorchOSNGSPipeline:
             construction = construct_visible_nurbs_from_gaussians(
                 rep_points, covariance=rep_covariance, stable_ids=rep_stable_ids, reliability=reliability,
                 continuation_input=continuation_input,
+                candidate_scale=representative_graph_scale, residual_scale=representative_graph_scale,
             )
         return CanonicalConstructionWithEvidence(
             construction=construction,
@@ -827,6 +930,10 @@ class TorchOSNGSPipeline:
                     "uv_invalid_count": uv_invalid,
                 })
 
+                patch_confidence = self._patch_confidence_from_regions(
+                    len(patches), region_to_patch, region_by_id
+                )
+
                 # Atomic Python-level commit: all fallible construction,
                 # propagation, projection, and support-mask work is complete.
                 model.cluster_ids = candidate_cluster
@@ -834,6 +941,7 @@ class TorchOSNGSPipeline:
                 model.surface_owner_kind = candidate_kind
                 model.surface_owner_id = candidate_owner_id
                 state.surface_patches = patches
+                state.surface_patch_confidence = patch_confidence
                 state.surface = patches[0]
                 state.visible_surface_construction = construction
                 state.surface_optimizer = None
@@ -886,6 +994,7 @@ class TorchOSNGSPipeline:
         model.surface_owner_id[clear_mask] = UNASSIGNED_OWNER_ID
         state.surface = None
         state.surface_patches = []
+        state.surface_patch_confidence = ()
         state.surface_optimizer = None
         state.visible_surface_construction = construction
         state.surface_patch_residuals = {}
@@ -1031,6 +1140,9 @@ class TorchOSNGSPipeline:
                 chunk_size=int(self.config.surface_projection_chunk_size),
             )
         state.surface_patches = patches
+        state.surface_patch_confidence = self._patch_confidence_from_regions(
+            len(patches), region_to_patch, region_by_id
+        )
         state.surface = patches[0]
         state.visible_surface_construction = construction
         state.surface_patch_residuals = {}

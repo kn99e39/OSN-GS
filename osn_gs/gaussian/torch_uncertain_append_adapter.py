@@ -114,7 +114,7 @@ class UncertainAppendInitialization:
     features_dc: Any
     features_rest: Any
     opacity_logits: Any
-    confidence_logits: Any
+    uncertain_confidence_logits: Any
 
 
 @dataclass(frozen=True)
@@ -181,7 +181,7 @@ def _initialization_digest(initialization: UncertainAppendInitialization) -> str
     already used by ``torch_observation_evidence._tensor_digest``)."""
 
     pieces: list[bytes] = []
-    for name in ("features_dc", "features_rest", "opacity_logits", "confidence_logits"):
+    for name in ("features_dc", "features_rest", "opacity_logits", "uncertain_confidence_logits"):
         value = torch.as_tensor(getattr(initialization, name)).detach().cpu().contiguous()
         header = f"{name}|{tuple(value.shape)}|{value.dtype}".encode("utf-8")
         pieces.append(header + value.numpy().tobytes())
@@ -196,7 +196,7 @@ class _ConvertedAppend:
     opacity: Any
     scaling: Any
     rotation: Any
-    confidence: Any
+    uncertain_confidence: Any
     uv: Any
     cluster_ids: Any
     uncertain_mask: Any
@@ -323,7 +323,7 @@ class UncertainGaussianAppendAdapter:
         features_dc = _slice(initialization.features_dc)
         features_rest = _slice(initialization.features_rest)
         opacity = _slice(initialization.opacity_logits)
-        confidence = _slice(initialization.confidence_logits)
+        uncertain_confidence = _slice(initialization.uncertain_confidence_logits)
         cluster_id = _project_cluster_id(batch.metadata["source_patch_ids"])
         cluster_ids = torch.full((count,), cluster_id, dtype=tm.long, device=device)
         uncertain_mask = torch.ones((count,), dtype=torch.bool, device=device)
@@ -345,7 +345,7 @@ class UncertainGaussianAppendAdapter:
 
         return _ConvertedAppend(
             xyz=xyz, features_dc=features_dc, features_rest=features_rest, opacity=opacity,
-            scaling=scaling, rotation=rotation, confidence=confidence,
+            scaling=scaling, rotation=rotation, uncertain_confidence=uncertain_confidence,
             uv=uv, cluster_ids=cluster_ids, uncertain_mask=uncertain_mask,
             sample_ids=sample_ids, cluster_id=cluster_id,
             surface_owner_kind=surface_owner_kind, surface_owner_id=surface_owner_id,
@@ -446,7 +446,7 @@ class UncertainGaussianAppendAdapter:
         try:
             model.append_gaussians_model_only(
                 converted.xyz, converted.features_dc, converted.features_rest, converted.opacity,
-                converted.scaling, converted.rotation, converted.confidence,
+                converted.scaling, converted.rotation, converted.uncertain_confidence,
                 converted.uncertain_mask, converted.uv, converted.cluster_ids,
                 converted.surface_owner_kind, converted.surface_owner_id,
             )

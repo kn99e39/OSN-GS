@@ -5,12 +5,13 @@ metadata:
   node_type: memory
   type: reference
   originSessionId: 9f58b1e8-0abf-4c0b-a3b4-3b8396c6006c
+  modified: 2026-07-31T06:37:18.621Z
 ---
 
 Read in this order at the start of a session that needs project context:
 
 1. `docs/architecture.md` — what OSN-GS is and the intended one-way data flow (visible Gaussians → NURBS → infer occluded surface → generate Gaussians there). Corrected 2026-07-15; see [[project-osn-gs-direction]].
-2. `docs/worklogs/19_nurbs_direction_correction.md` — **read before any older worklog.** States the direction rule (visible Gaussians are never moved by the NURBS) and explicitly takes precedence over worklogs 01–18, which were written under the opposite "NURBS is the source of truth" premise and are intentionally left uncorrected as historical records.
+2. `docs/worklogs/19_nurbs_direction_correction.md` — **read before any older worklog** (verify this file still exists before relying on it: as of 2026-07-31 it does NOT — `docs/worklogs/` went through at least two rounds of pruning/renumbering since this note was written, and the number `19` is now reused for an unrelated file, `19_volumetric_gaussian_reliability_scene_dataset.md` — see [[project_volumetric_gaussian_scene_dataset]]. The direction-correction content itself is recoverable only via `git log -- docs/worklogs/` history, not by filename lookup. The RULE it stated — visible Gaussians are never moved by the NURBS — is still current per [[project_osn_gs_direction]]; it's only the specific worklog file/number reference that's stale). States the direction rule (visible Gaussians are never moved by the NURBS) and explicitly takes precedence over worklogs 01–18, which were written under the opposite "NURBS is the source of truth" premise and are intentionally left uncorrected as historical records.
 3. `TODO.md` — the current work queue. Its own rule (line 1): delete an item once its goal is confirmed. Remaining items are secondary quality-gap candidates plus a NURBS-construction stabilization roadmap.
 4. `docs/README.md` — the primary multi-agent handoff/worklog log. The dated sections at the top are the recent change history (skim the newest ones).
 5. `nurbs_constructor_benchmark/README.md` — the eval tool. Scores the generated NURBS against ground truth on three separate concerns (fitting accuracy / surface support / patch topology) and emits a GT NURBS for renderer overlay. Use it to measure any constructor change before/after.

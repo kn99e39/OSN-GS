@@ -396,6 +396,7 @@ class TrainingRegressionTest(unittest.TestCase):
             restored = load_torch_checkpoint(path, state, groups, 1e-4)
         self.assertEqual(restored, 123)
         self.assertTrue(torch.equal(state.model._features_dc, expected))
+        self.assertEqual(len(state.surface_patch_confidence), len(state.surface_patches))
 
     def test_stream_payload_includes_renderer_diagnostic_arrays(self):
         _, state = self._state(count=4)
@@ -411,25 +412,38 @@ class TrainingRegressionTest(unittest.TestCase):
         payload = trainer._stream_payload(state)
         self.assertEqual(payload["ids"].shape[0], 4)
         self.assertEqual(payload["uncertain"].tolist(), [0, 1, 0, 0])
-        self.assertEqual(payload["confidences"].shape[0], 4)
+        self.assertEqual(payload["uncertainConfidences"].shape[0], 4)
         self.assertEqual(payload["surfaceUvs"].shape, (8,))
         self.assertEqual(payload["surfaceUvs"].tolist()[:2], [0.25, 0.75])
         self.assertEqual(payload["clusterIds"].tolist()[0], 3)
         self.assertEqual(payload["surfaceOwnerKinds"].tolist()[0], 1)
         self.assertEqual(payload["surfaceOwnerIds"].tolist()[0], 3)
+        # cluster_ids[0]=3 is out of range for this scene's materialized
+        # patch count, so its construction-time surfaceConfidences lookup
+        # must fall back to the -1.0 "no assigned patch" sentinel.
+        self.assertEqual(payload["surfaceConfidences"].shape[0], 4)
+        self.assertEqual(payload["surfaceConfidences"].tolist()[0], -1.0)
+
+    def test_surface_patch_confidence_matches_region_confidence(self):
+        _, state = self._state(count=81)
+        self.assertEqual(len(state.surface_patch_confidence), len(state.surface_patches))
+        for confidence in state.surface_patch_confidence:
+            self.assertGreaterEqual(confidence, 0.0)
+            self.assertLessEqual(confidence, 1.0)
 
     def test_vectorized_ply_preserves_renderer_header(self):
         _, state = self._state(count=4)
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "point_cloud.ply"
-            state.model.save_ply(path)
+            state.model.save_ply(path, surface_patch_confidence=state.surface_patch_confidence)
             lines = path.read_text(encoding="utf-8").splitlines()
         self.assertIn("property float scale_0", lines)
         self.assertIn("property float rot_3", lines)
         self.assertIn("property int uncertain", lines)
-        self.assertIn("property float confidence", lines)
+        self.assertIn("property float uncertain_confidence", lines)
         self.assertIn("property long surface_owner_id", lines)
         self.assertIn("property long stable_gaussian_id", lines)
+        self.assertIn("property float surface_confidence", lines)
         self.assertEqual(sum(line.startswith("element vertex 4") for line in lines), 1)
 
 

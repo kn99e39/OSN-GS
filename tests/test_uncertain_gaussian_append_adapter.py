@@ -63,7 +63,7 @@ def model_snapshot(model):
         x.detach().clone()
         for x in (
             model._xyz, model._features_dc, model._features_rest, model._opacity, model._scaling,
-            model._rotation, model._confidence, model.is_uncertain, model.surface_uv, model.cluster_ids,
+            model._rotation, model._uncertain_confidence, model.is_uncertain, model.surface_uv, model.cluster_ids,
             model.surface_owner_kind, model.surface_owner_id,
         )
     )
@@ -308,7 +308,7 @@ class AppendAdapterAppearanceOpacityTest(unittest.TestCase):
         torch.testing.assert_close(model._features_dc, init.features_dc[valid])
         torch.testing.assert_close(model._features_rest, init.features_rest[valid])
         torch.testing.assert_close(model._opacity, init.opacity_logits[valid])
-        torch.testing.assert_close(model._confidence, init.confidence_logits[valid])
+        torch.testing.assert_close(model._uncertain_confidence, init.uncertain_confidence_logits[valid])
 
     def test_no_hidden_default_appearance_or_opacity(self):
         # Distinct non-zero/non-default values must survive unchanged --

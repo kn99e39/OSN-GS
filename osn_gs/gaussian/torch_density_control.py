@@ -237,8 +237,8 @@ def apply_uncertain_density_control(
 
     if len(model) == 0 or not model.is_uncertain.any():
         return TorchDensityControlReport()
-    confidence = model.get_confidence[:, 0].detach()
-    prune_mask = model.is_uncertain & (confidence < config.prune_uncertain_confidence_threshold)
+    uncertain_confidence = model.get_uncertain_confidence[:, 0].detach()
+    prune_mask = model.is_uncertain & (uncertain_confidence < config.prune_uncertain_confidence_threshold)
     pruned = _prune_mask(model, prune_mask)
     return TorchDensityControlReport(uncertain_pruned=pruned)
 
@@ -254,7 +254,7 @@ def _shape_transaction_candidates(model: TorchGaussianModel, clone_idx, split_id
         "opacity": model._opacity.detach(),
         "scaling": model._scaling.detach(),
         "rotation": model._rotation.detach(),
-        "confidence": model._confidence.detach(),
+        "uncertain_confidence": model._uncertain_confidence.detach(),
         "is_uncertain": model.is_uncertain,
         "surface_uv": model.surface_uv,
         "cluster_ids": model.cluster_ids,
@@ -292,7 +292,7 @@ def _shape_transaction_candidates(model: TorchGaussianModel, clone_idx, split_id
             "opacity": raw["opacity"][split_idx].repeat_interleave(samples, dim=0),
             "scaling": torch.log(torch.clamp(repeated_scale / (0.8 * samples), min=1e-6)),
             "rotation": raw["rotation"][split_idx].repeat_interleave(samples, dim=0),
-            "confidence": raw["confidence"][split_idx].repeat_interleave(samples, dim=0),
+            "uncertain_confidence": raw["uncertain_confidence"][split_idx].repeat_interleave(samples, dim=0),
             "is_uncertain": raw["is_uncertain"][split_idx].repeat_interleave(samples, dim=0),
             "surface_uv": raw["surface_uv"][split_idx].repeat_interleave(samples, dim=0),
             "cluster_ids": raw["cluster_ids"][split_idx].repeat_interleave(samples, dim=0),
@@ -331,7 +331,7 @@ def _commit_shape_transaction(
         opacity=selected["opacity"],
         scaling=selected["scaling"],
         rotation=selected["rotation"],
-        confidence=selected["confidence"],
+        uncertain_confidence=selected["uncertain_confidence"],
         uncertain_mask=selected["is_uncertain"],
         surface_uv=selected["surface_uv"],
         cluster_ids=selected["cluster_ids"],

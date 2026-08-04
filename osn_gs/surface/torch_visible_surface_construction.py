@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 """Canonical experimental Gaussian-to-visible-NURBS construction path.
 
@@ -12,6 +12,7 @@ from typing import Any, Sequence
 
 from osn_gs.surface.torch_canonical_region_tangent_frame import construct_canonical_region_tangent_frames
 from osn_gs.surface.torch_boundary_support_termination import extract_support_termination_candidates, normalize_continuation_candidates
+from osn_gs.surface.torch_termination_neighborhood_scale import resolve_termination_neighborhood_scale
 from osn_gs.surface.torch_full_cloud_continuation_shell import ContinuationShellInput, build_continuation_shells_from_input
 from osn_gs.surface.torch_gaussian_covariance_frame import GaussianCovarianceFrame, extract_covariance_frame
 from osn_gs.surface.torch_gaussian_manifold_affinity import ManifoldAffinityConfig, ManifoldAffinityGraph, build_manifold_affinity_graph
@@ -102,6 +103,8 @@ def construct_visible_nurbs_from_gaussians(
     config: VisibleSurfaceConstructionConfig | None = None,
     reliability: StructuralReliabilityResult | None = None,
     continuation_input: ContinuationShellInput | None = None,
+    candidate_scale: Any | None = None,
+    residual_scale: Any | None = None,
 ) -> VisibleSurfaceConstructionResult:
     """Run the one experimental path from Gaussian evidence to NURBS.
 
@@ -127,6 +130,11 @@ def construct_visible_nurbs_from_gaussians(
     full-cloud support-gap query per node instead of the representative-only
     8-sector histogram -- see ``torch_full_cloud_continuation_shell.py``. Also
     not exposed as a CLI selector.
+
+    ``candidate_scale``/``residual_scale`` are a third, independent optional
+    override pair (worklog 33): passed straight through to
+    :func:`build_manifold_affinity_graph`. ``None`` preserves the prior
+    ``frame.tangent_major_scale``-based behavior exactly.
     """
     import torch
     from osn_gs.surface.torch_gaussian_covariance_frame import covariance_from_scale_rotation
@@ -145,7 +153,10 @@ def construct_visible_nurbs_from_gaussians(
     frame = extract_covariance_frame(covariance)
     if reliability is None:
         reliability = evaluate_structural_reliability(positions, frame, config=config.reliability)
-    graph = build_manifold_affinity_graph(positions, frame, reliability, config=config.affinity, ids=ids)
+    graph = build_manifold_affinity_graph(
+        positions, frame, reliability, config=config.affinity, ids=ids,
+        candidate_scale=candidate_scale, residual_scale=residual_scale,
+    )
     regions = form_surface_regions(positions, frame, reliability, graph, config=config.regions, ids=ids)
     accepted = tuple(sorted(
         (edge for region in regions.regions for edge in region.internal_accepted_edge_ids),
@@ -160,7 +171,21 @@ def construct_visible_nurbs_from_gaussians(
         if continuation_input is not None
         else None
     )
-    termination_halfedges = extract_support_termination_candidates(positions, oriented_normals, frame.equivalent_tangent_scale, regions, ids=ids, sectors=config.support_termination_sectors, canonical_frames=canonical_frames, continuation=continuation)
+    # Worklog 41 (task section 13, Case C): the local-support radius here must
+    # be measured in the same scale that governs which accepted edges can
+    # exist in the first place -- the resolved representative graph scale
+    # (worklog 33's candidate_scale, defaulting to frame.tangent_major_scale
+    # exactly as build_manifold_affinity_graph resolves it), not the raw
+    # per-Gaussian footprint (frame.equivalent_tangent_scale). On real
+    # checkpoints representative spacing is far larger than an individual
+    # Gaussian's own footprint (measured median ratio ~7x on a 3k snapshot),
+    # so the footprint-scaled radius excluded almost every genuine accepted
+    # neighbour and starved the gate of local support before it ever reached
+    # the angular-histogram logic. Multiplier (4.0) is unchanged.
+    resolved_candidate_scale = resolve_termination_neighborhood_scale(
+        candidate_scale=candidate_scale, tangent_major_scale=frame.tangent_major_scale,
+    )
+    termination_halfedges = extract_support_termination_candidates(positions, oriented_normals, resolved_candidate_scale, regions, ids=ids, sectors=config.support_termination_sectors, canonical_frames=canonical_frames, continuation=continuation, affinity_graph=graph)
     termination_halfedges = normalize_continuation_candidates(termination_halfedges)
     # Relation-derived candidates stay diagnostic-only: they must never close a loop.
     halfedges = tuple(sorted(termination_halfedges, key=lambda item: item.half_edge_id))
@@ -192,6 +217,14 @@ def construct_visible_nurbs_from_gaussians(
     crease_candidates = sum(item.boundary_reason == "crease_discontinuity" for item in halfedges)
     parallel_conflict_candidates = sum(item.boundary_reason == "parallel_sheet_conflict" for item in halfedges)
     ambiguous_candidates = sum(item.boundary_reason == "ambiguous_continuation" for item in halfedges)
+    # Worklog 41 (task section 6): a candidate reclassified because the
+    # surface demonstrably CONTINUES into a neighbouring region is not a
+    # reliability problem, so it gets its own typed count instead of being
+    # folded into `reliability_frontier` (which means "support exists but is
+    # too ambiguous to trust"). Keeps candidate accounting exact.
+    smooth_cross_region_candidates = sum(
+        item.boundary_reason == "smooth_cross_region_continuation" for item in halfedges
+    )
     closed_components = sum(item.ordering_state == "ordered_closed_loop" for item in components)
     open_components = sum(item.ordering_state == "ordered_open_chain" for item in components)
     branching_components = sum(item.ordering_state == "branching_boundary_graph" for item in components)
@@ -210,11 +243,30 @@ def construct_visible_nurbs_from_gaussians(
     else:
         boundary_failure_stage = "not_failed"
 
+    # Reliability-stage classification (worklog 135) -- distinguishes WHY the
+    # final reliable_count is low without collapsing every upstream cause
+    # into the single downstream `no_admissible_region` construction_state.
+    # Additive-only: does not change `_state()`/`construction_state`.
+    final_reliable_count = sum(item == "reliable_structural_evidence" for item in reliability.reliability_class)
+    intrinsic_reliable_count = sum(item == "intrinsic_reliable" for item in reliability.intrinsic.intrinsic_class)
+    if intrinsic_reliable_count == 0:
+        reliability_failure_stage = "intrinsic_reliability_collapse"
+    elif final_reliable_count == 0:
+        reliability_failure_stage = "contextual_reliability_collapse"
+    elif final_reliable_count < intrinsic_reliable_count:
+        reliability_failure_stage = "partial_contextual_reliability_collapse"
+    else:
+        reliability_failure_stage = "not_failed"
+
     summary = {
         "input_gaussian_count": count,
-        "reliable_count": sum(item == "reliable_structural_evidence" for item in reliability.reliability_class),
+        "reliable_count": final_reliable_count,
         "ambiguous_count": sum(item == "ambiguous_structural_evidence" for item in reliability.reliability_class),
         "rejected_count": sum(item == "rejected_structural_evidence" for item in reliability.reliability_class),
+        "intrinsic_reliable_count": intrinsic_reliable_count,
+        "intrinsic_ambiguous_count": sum(item == "intrinsic_ambiguous" for item in reliability.intrinsic.intrinsic_class),
+        "intrinsic_rejected_count": sum(item == "intrinsic_rejected" for item in reliability.intrinsic.intrinsic_class),
+        "reliability_failure_stage": reliability_failure_stage,
         "region_count": len(regions.regions), "boundary_component_count": len(components),
         "admissible_component_count": sum(item.ordering_state == "ordered_closed_loop" and item.role_candidate == "outer_boundary_candidate" and not item.branch_node_ids for item in components),
         "materialization_attempt_count": len(attempts), "materialized_surface_count": len(materialized),
@@ -224,6 +276,7 @@ def construct_visible_nurbs_from_gaussians(
         "boundary_candidate_count": len(halfedges),
         "boundary_genuine_termination_candidate_count": genuine_candidates,
         "boundary_reliability_frontier_candidate_count": reliability_frontier_candidates,
+        "boundary_smooth_cross_region_candidate_count": smooth_cross_region_candidates,
         "boundary_sampling_gap_candidate_count": sampling_gap_candidates,
         "boundary_crease_candidate_count": crease_candidates,
         "boundary_parallel_conflict_candidate_count": parallel_conflict_candidates,
@@ -235,4 +288,6 @@ def construct_visible_nurbs_from_gaussians(
         "boundary_component_isolated_count": isolated_components,
     }
     return VisibleSurfaceConstructionResult(frame, reliability, graph, regions, accepted, phase_alias, halfedges, compatibility, components, components, attempts, materialized, review, summary, config.schema_version, "reliable_core_only", _state(attempts, components, regions))
+
+
 

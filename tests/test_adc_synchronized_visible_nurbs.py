@@ -70,7 +70,7 @@ def test_post_adc_transaction_is_detached_rng_neutral_and_observed_only():
     state.model.is_uncertain[-1] = True
     trainable_before = {
         name: getattr(state.model, name).detach().clone()
-        for name in ("_xyz", "_features_dc", "_features_rest", "_opacity", "_scaling", "_rotation", "_confidence")
+        for name in ("_xyz", "_features_dc", "_features_rest", "_opacity", "_scaling", "_rotation", "_uncertain_confidence")
     }
     rng_before = torch.random.get_rng_state().clone()
     event = pipeline.reconstruct_visible_after_adc(
@@ -216,7 +216,7 @@ def test_multi_adc_schedule_records_events_and_keeps_gaussian_control_equal():
         root = Path(tmp)
         baseline = _train("disabled", root / "baseline")
         experiment = _train("adc_post_commit", root / "experiment")
-        for name in ("_xyz", "_features_dc", "_features_rest", "_opacity", "_scaling", "_rotation", "_confidence"):
+        for name in ("_xyz", "_features_dc", "_features_rest", "_opacity", "_scaling", "_rotation", "_uncertain_confidence"):
             assert torch.equal(
                 getattr(baseline.state.model, name),
                 getattr(experiment.state.model, name),

@@ -31,7 +31,7 @@ def save_torch_checkpoint(path: str | Path, state: TorchPipelineState, extra: di
             "opacity": model._opacity.detach().cpu(),
             "scaling": model._scaling.detach().cpu(),
             "rotation": model._rotation.detach().cpu(),
-            "confidence": model._confidence.detach().cpu(),
+            "uncertain_confidence": model._uncertain_confidence.detach().cpu(),
             "is_uncertain": model.is_uncertain.detach().cpu(),
             "surface_uv": model.surface_uv.detach().cpu(),
             "cluster_ids": model.cluster_ids.detach().cpu(),
@@ -57,6 +57,7 @@ def save_torch_checkpoint(path: str | Path, state: TorchPipelineState, extra: di
             }
             for patch in state.surface_patches
         ],
+        "surface_patch_confidence": list(state.surface_patch_confidence),
         "surface_optimizer": state.surface_optimizer.state_dict() if state.surface_optimizer is not None else None,
         "surface_maintenance": {
             "patch_residuals": dict(state.surface_patch_residuals),
@@ -92,7 +93,7 @@ def load_torch_checkpoint(
     state.model.replace_tensors(
         xyz=raw["xyz"], features_dc=raw["features_dc"], features_rest=raw["features_rest"],
         opacity=raw["opacity"], scaling=raw["scaling"], rotation=raw["rotation"],
-        confidence=raw["confidence"], uncertain_mask=raw["is_uncertain"],
+        uncertain_confidence=raw["uncertain_confidence"], uncertain_mask=raw["is_uncertain"],
         surface_uv=raw["surface_uv"], cluster_ids=raw["cluster_ids"],
         surface_owner_kind=raw.get("surface_owner_kind"),
         surface_owner_id=raw.get("surface_owner_id"),
@@ -121,6 +122,7 @@ def load_torch_checkpoint(
             uv_support_mask=None if saved_mask is None else saved_mask.to(state.model.device),
         ))
     state.surface_patches = patches
+    state.surface_patch_confidence = tuple(payload.get("surface_patch_confidence", ()))
     state.surface = patches[0] if patches else None
     parameters = [tensor for patch in patches for tensor in (patch.control_grid, patch.weights)]
     state.surface_optimizer = (

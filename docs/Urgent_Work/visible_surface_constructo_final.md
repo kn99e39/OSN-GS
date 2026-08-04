@@ -179,7 +179,7 @@ Depth discontinuity와 일치하는지
 
 5. Hard Sector Quantization에서 Continuous Circular Gap으로의 전환
 
-현재 support-termination detection은 transported tangent frame에서 주변 continuation direction을 sector로 양자화하는 방식에 기반한다. Worklog 122와 123에서는 canonical tangent frame, angular-margin sharing, cyclic missing-run normalization을 도입해 rotation, scale, input-order, covariance sign ambiguity를 보완했다.
+현재 support-termination detection은 transported tangent frame에서 주변 continuation direction을 sector로 양자화하는 방식에 기반한다. Worklog 16와 123에서는 canonical tangent frame, angular-margin sharing, cyclic missing-run normalization을 도입해 rotation, scale, input-order, covariance sign ambiguity를 보완했다.
 
 그러나 sector discretization 자체는 여전히 다음 요소에 민감할 수 있다.
 

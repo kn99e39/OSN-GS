@@ -1,0 +1,21 @@
+---
+name: multi-scale-local-termination-persistence
+description: "Worklog 50 — a single 4x-radius continuation-shell query was letting distant same-surface support paper over well-supported close-range gaps into false no_gap; fixed with a scale-persistence certificate, but it wasn't the closed-loop bottleneck either"
+metadata: 
+  node_type: memory
+  type: project
+  originSessionId: c91e18fb-6002-40ed-b911-d218589c420a
+  modified: 2026-08-03T11:50:38.415Z
+---
+
+Worklog 50 (docs/worklogs/50_multi_scale_local_termination_persistence.md) audited whether `build_continuation_shells()`'s single fixed radius (`max(6x tangent_major_scale, 4x representative_mean_spacing)`, effectively "4x candidate_scale") lets same-surface support from beyond a genuine close-range gap suppress it into `no_gap`.
+
+**Method:** reran production `build_continuation_shells_from_input` at `radius_spacing_multiplier` ∈ {1,2,3,4} via new `scripts/devtools/trace_multi_scale_termination_persistence.py`. Scene-wide the termination↓/no_gap↑ trend as radius grows is monotonic and present everywhere (208→154 termination on 3k, expected — bigger radius sees more), so raw aggregates alone don't prove a defect. The decisive control was 5k's actually-closed regions (130/141, region IDs shifted from 133/143 after worklog 49's swap-in) — **zero** of their nodes ever showed `no_gap` at any scale 1x-4x. In contrast, 3k had 8 and 10k had 6 major-region nodes with a well-supported (23-267 same-mode Gaussians), clear (26-74°) gap at 1x-3x that ONLY closed into `no_gap` at production 4x.
+
+**Fix:** `osn_gs/surface/torch_full_cloud_continuation_shell.py` — new `persistence_check_radius_ratio=0.5` config field. Recomputes the same-mode angular gap using only the subset of already-filtered `same_mode_local` members within HALF the production radius (no new query, no new geometry). If that smaller view still shows a real gap (≥ threshold) with sufficient support (≥ `min_same_mode_support_for_termination`, guards against sparsity-at-small-radius false positives) while the full radius says `no_gap`, the verdict fails closed to `STATE_AMBIGUOUS` instead of `no_gap`. Deliberately did NOT add a persistence requirement to `observed_support_termination` approval itself — that's a separate, riskier gate not empirically motivated by this audit, and risked breaking 5k's already-working oscillating-but-terminating nodes.
+
+**Result:** real 3k/5k/10k — `no_gap` → `ambiguous_continuation` reclassified exactly 76/36/39 nodes, but `observed_support_termination`, physical candidate count, AND closed/materialized (0/0, 2/2, 0/0) stayed **completely unchanged** on all three. Negative-control fixtures (Box 6/Cylinder 2/Sphere 0/Thin-slab 3 at cap 64) byte-identical before/after — synthetic uniform-density fixtures never trip this gate. Full pytest 720 passed / 1 skipped unchanged.
+
+**Conclusion:** the single-radius over-reach defect was real and is now fixed (a genuine `no_gap` misclassification → correctly typed `ambiguous`), but — like [[project_representative_selection_boundary_evidence_recovery]] (worklog 49) and [[project_candidate_local_smooth_continuation_repair]] (worklog 48) before it — fixing it does not move the closed-loop needle at all, because `ambiguous` never produces a physical candidate. This is now the THIRD consecutive worklog (48/49/50) to find and fix a real, narrowly-scoped defect in the continuation/candidate pipeline with zero effect on real-checkpoint closed-loop counts, reinforcing that the remaining bottleneck genuinely is observed-termination-evidence *density* on large region perimeters, not a pipeline transfer/classification defect. 5k's two closed loops succeed simply because their regions are small (4 candidates each), not because they lack any of the defects fixed in 48/49/50.
+
+**How to apply:** if a future round is tempted to add a symmetric persistence requirement to `observed_support_termination` approval (the "overlapping gap must persist to approve termination" half of worklog 50's original ask), that was explicitly deferred as unvalidated and risk — audit it against 5k's oscillating nodes (state sequence flips between scales before landing on termination at 4x) before implementing, or it may break the one currently-working case.

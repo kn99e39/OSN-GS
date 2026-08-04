@@ -8,6 +8,11 @@ import threading
 from typing import Any
 
 
+# Full Gaussian snapshots can take longer than the websockets default 20 s to
+# serialize, relay, and parse. Keep the connection alive through that burst.
+KEEPALIVE_TIMEOUT_SECONDS = 120
+
+
 class TrainingStreamServer:
     """Accept trainer snapshots and broadcast them to renderer clients."""
 
@@ -37,7 +42,13 @@ class TrainingStreamServer:
     def serve_forever(self) -> None:
         from websockets.sync.server import serve
 
-        with serve(self._handle_client, self.host, self.port, max_size=None) as server:
+        with serve(
+            self._handle_client,
+            self.host,
+            self.port,
+            max_size=None,
+            ping_timeout=KEEPALIVE_TIMEOUT_SECONDS,
+        ) as server:
             self._server = server
             self._ready.set()
             print(f"[WS] stream server listening on ws://{self.host}:{self.port}", flush=True)

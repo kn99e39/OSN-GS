@@ -185,6 +185,43 @@ def _baseline_like_surface_covariance(
     scales = torch.stack((tangent_major, tangent_minor, normal), dim=1).to(dtype=points.dtype, device=points.device)
     return scales, _tangent_frame_quaternion(normals)
 
+
+_SURFACE_ALIGNED_RATIO = 12.0  # near p75 (10.09) of the baseline anisotropy stats above.
+
+
+def _surface_aligned_covariance(
+    points: torch.Tensor, normals: torch.Tensor
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Idealized, uniformly flat tangent-plane-aligned covariance.
+
+    Same tangent-frame rotation as ``_baseline_like_surface_covariance``
+    (local z axis exactly the analytic surface normal), but with the
+    per-point anisotropy-ratio and tangent-size log-normal noise removed:
+    every Gaussian gets the same fixed flatness ratio, deterministically
+    scaled only by local spacing. Every Gaussian's normal-direction extent
+    is therefore a uniformly strong, noise-free signal of the true surface
+    normal -- the opposite end of a benchmark axis from the noisy,
+    baseline-realistic variant above.
+    """
+    distances = torch.cdist(points, points)
+    distances.fill_diagonal_(float("inf"))
+    spacing = distances.min(dim=1).values.clamp_min(1e-4)
+    tangent_major = spacing.clamp_min(2e-4)
+    tangent_minor = tangent_major
+    normal = (tangent_major / _SURFACE_ALIGNED_RATIO).clamp_min(5e-5)
+    scales = torch.stack((tangent_major, tangent_minor, normal), dim=1).to(dtype=points.dtype, device=points.device)
+    return scales, _tangent_frame_quaternion(normals)
+
+
+def _make_covariance(
+    covariance_mode: str, points: torch.Tensor, normals: torch.Tensor, generator: torch.Generator
+) -> tuple[torch.Tensor, torch.Tensor]:
+    if covariance_mode == "surface_aligned":
+        return _surface_aligned_covariance(points, normals)
+    if covariance_mode == "baseline_noisy":
+        return _baseline_like_surface_covariance(points, normals, generator)
+    raise ValueError(f"Unknown covariance_mode: {covariance_mode}")
+
 # --- Analytic height fields z = f(x, y) over the [-1, 1]^2 xy domain. ---
 
 def _plane_height(xy: torch.Tensor) -> torch.Tensor:
@@ -311,18 +348,26 @@ def _annulus_density_gradient_xy(
     return torch.stack([r * torch.cos(theta), r * torch.sin(theta)], dim=1)
 
 
-def make_scene(name: str, count: int, seed: int = 0, noise_std: float = 0.0) -> SyntheticGaussianScene:
-    """Create one named synthetic scene (see ``SCENE_NAMES``)."""
+def make_scene(
+    name: str, count: int, seed: int = 0, noise_std: float = 0.0, covariance_mode: str = "baseline_noisy"
+) -> SyntheticGaussianScene:
+    """Create one named synthetic scene (see ``SCENE_NAMES``).
+
+    ``covariance_mode`` selects between ``"baseline_noisy"`` (default: mimics
+    real baseline 3DGS anisotropy-ratio statistics, log-normal noise on top of
+    tangent-frame alignment) and ``"surface_aligned"`` (idealized, uniformly
+    flat tangent-aligned disks, no ratio noise -- see ``_surface_aligned_covariance``).
+    """
 
     if name not in ALL_SCENE_NAMES:
         raise ValueError(f"Unknown synthetic scene: {name}")
     count = max(4, int(count))
     if name == "box":
-        scene = _make_box_scene(count, seed)
+        scene = _make_box_scene(count, seed, covariance_mode=covariance_mode)
     elif name == "cylinder":
-        scene = _make_cylinder_scene(count, seed)
+        scene = _make_cylinder_scene(count, seed, covariance_mode=covariance_mode)
     elif name == "sphere":
-        scene = _make_sphere_scene(count, seed)
+        scene = _make_sphere_scene(count, seed, covariance_mode=covariance_mode)
     else:
         scene = None
     if scene is not None:
@@ -414,7 +459,7 @@ def make_scene(name: str, count: int, seed: int = 0, noise_std: float = 0.0) -> 
     if noise_std > 0.0:
         points = points + torch.randn(points.shape, generator=generator) * float(noise_std)
     _, normals = oracle(points)
-    covariance_scales, covariance_rotations = _baseline_like_surface_covariance(points, normals, generator)
+    covariance_scales, covariance_rotations = _make_covariance(covariance_mode, points, normals, generator)
     return SyntheticGaussianScene(
         name=name,
         points=points,
@@ -554,7 +599,9 @@ def _grid_uv(count: int, generator: torch.Generator, jitter: float = 0.02, aspec
     return uv.clamp(-1.0, 1.0)
 
 
-def _make_box_scene(count: int, seed: int, half_extent: tuple[float, float, float] = (1.0, 1.0, 0.7)) -> SyntheticGaussianScene:
+def _make_box_scene(
+    count: int, seed: int, half_extent: tuple[float, float, float] = (1.0, 1.0, 0.7), covariance_mode: str = "baseline_noisy"
+) -> SyntheticGaussianScene:
     generator = torch.Generator().manual_seed(seed)
     faces = _box_faces(half_extent)
     per_face = max(1, count // len(faces))
@@ -568,7 +615,7 @@ def _make_box_scene(count: int, seed: int, half_extent: tuple[float, float, floa
     normals = torch.nn.functional.normalize(torch.cat(normals, dim=0), dim=1)
     x, y = points[:, 0], points[:, 1]
     colors = _colors(x.clamp(-1, 1), y.clamp(-1, 1))
-    covariance_scales, covariance_rotations = _baseline_like_surface_covariance(points, normals, generator)
+    covariance_scales, covariance_rotations = _make_covariance(covariance_mode, points, normals, generator)
     return SyntheticGaussianScene(
         name="box",
         points=points,
@@ -657,7 +704,9 @@ def _cylinder_faces(radius: float, half_height: float) -> tuple[GroundTruthFace,
     return (side, _cap(1.0, "top_cap", 1), _cap(-1.0, "bottom_cap", 2))
 
 
-def _make_cylinder_scene(count: int, seed: int, radius: float = 0.7, half_height: float = 1.0) -> SyntheticGaussianScene:
+def _make_cylinder_scene(
+    count: int, seed: int, radius: float = 0.7, half_height: float = 1.0, covariance_mode: str = "baseline_noisy"
+) -> SyntheticGaussianScene:
     generator = torch.Generator().manual_seed(seed)
     faces = _cylinder_faces(radius, half_height)
     per_face = max(1, count // len(faces))
@@ -680,7 +729,7 @@ def _make_cylinder_scene(count: int, seed: int, radius: float = 0.7, half_height
     normals = torch.nn.functional.normalize(torch.cat(normals, dim=0), dim=1)
     x, y = points[:, 0], points[:, 1]
     colors = _colors(x.clamp(-1, 1), y.clamp(-1, 1))
-    covariance_scales, covariance_rotations = _baseline_like_surface_covariance(points, normals, generator)
+    covariance_scales, covariance_rotations = _make_covariance(covariance_mode, points, normals, generator)
     return SyntheticGaussianScene(
         name="cylinder",
         points=points,
@@ -737,7 +786,9 @@ def _sphere_faces(radius: float) -> tuple[GroundTruthFace, ...]:
     return (GroundTruthFace(0, "sphere", to_world, to_local, normal_fn, full_square, "square"),)
 
 
-def _make_sphere_scene(count: int, seed: int, radius: float = 0.9) -> SyntheticGaussianScene:
+def _make_sphere_scene(
+    count: int, seed: int, radius: float = 0.9, covariance_mode: str = "baseline_noisy"
+) -> SyntheticGaussianScene:
     generator = torch.Generator().manual_seed(seed)
     faces = _sphere_faces(radius)
     face = faces[0]
@@ -755,7 +806,7 @@ def _make_sphere_scene(count: int, seed: int, radius: float = 0.9) -> SyntheticG
     normals = unit.clone()
     x, y = points[:, 0], points[:, 1]
     colors = _colors(x.clamp(-1, 1), y.clamp(-1, 1))
-    covariance_scales, covariance_rotations = _baseline_like_surface_covariance(points, normals, generator)
+    covariance_scales, covariance_rotations = _make_covariance(covariance_mode, points, normals, generator)
     return SyntheticGaussianScene(
         name="sphere",
         points=points,

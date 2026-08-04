@@ -68,14 +68,14 @@ def _append_occluded_chart_gaussian(model, *, source_chart_id: str = "chart-x", 
     scaling = torch.zeros((count, 3))
     rotation = torch.zeros((count, 4))
     rotation[:, 0] = 1.0
-    confidence = torch.zeros((count, 1))
+    uncertain_confidence = torch.zeros((count, 1))
     uncertain_mask = torch.ones((count,), dtype=torch.bool)
     surface_uv = torch.rand((count, 2))
     cluster_ids = torch.full((count,), int(patch_id_for_uv), dtype=torch.long)  # compat-only, deliberately in-range
     owner_kind = torch.full((count,), SURFACE_OWNER_OCCLUDED_CHART, dtype=torch.long)
     owner_id_tensor = torch.full((count,), owner_id, dtype=torch.long)
     model.append_gaussians_model_only(
-        xyz, features_dc, features_rest, opacity, scaling, rotation, confidence,
+        xyz, features_dc, features_rest, opacity, scaling, rotation, uncertain_confidence,
         uncertain_mask, surface_uv, cluster_ids, owner_kind, owner_id_tensor,
     )
     return owner_id
@@ -390,7 +390,7 @@ class UnassignedOwnershipTest(unittest.TestCase):
             xyz=model._xyz.detach(), features_dc=model._features_dc.detach(),
             features_rest=model._features_rest.detach(), opacity=model._opacity.detach(),
             scaling=model._scaling.detach(), rotation=model._rotation.detach(),
-            confidence=model._confidence.detach(), uncertain_mask=model.is_uncertain,
+            uncertain_confidence=model._uncertain_confidence.detach(), uncertain_mask=model.is_uncertain,
             surface_uv=model.surface_uv, cluster_ids=model.cluster_ids,
         )
         expected_kind = torch.tensor(

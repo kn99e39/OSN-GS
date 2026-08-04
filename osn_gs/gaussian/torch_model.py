@@ -35,7 +35,7 @@ class GaussianParameterGroups:
     # quaternion rotation.
     rotation_lr: float = 1.0e-3
     # OSN-GS-specific uncertain confidence logit.
-    confidence_lr: float = 1.0e-3
+    uncertain_confidence_lr: float = 1.0e-3
 
 
 class TorchGaussianModel:
@@ -59,7 +59,7 @@ class TorchGaussianModel:
         self._scaling = torch.nn.Parameter(torch.empty((0, 3), dtype=torch.float32, device=device))
         self._rotation = torch.nn.Parameter(torch.empty((0, 4), dtype=torch.float32, device=device))
         self._opacity = torch.nn.Parameter(torch.empty((0, 1), dtype=torch.float32, device=device))
-        self._confidence = torch.nn.Parameter(torch.empty((0, 1), dtype=torch.float32, device=device))
+        self._uncertain_confidence = torch.nn.Parameter(torch.empty((0, 1), dtype=torch.float32, device=device))
 
         # OSN-GS metadata. Not optimizer targets, but needed by loss/policy code.
         self.is_uncertain = torch.empty((0,), dtype=torch.bool, device=device)
@@ -132,9 +132,9 @@ class TorchGaussianModel:
         return self.torch.sigmoid(self._opacity)
 
     @property
-    def get_confidence(self) -> Any:
+    def get_uncertain_confidence(self) -> Any:
         # OSN-GS-specific: structural reliability of an uncertain Gaussian.
-        return self.torch.sigmoid(self._confidence)
+        return self.torch.sigmoid(self._uncertain_confidence)
 
     @property
     def surface_patch_ids(self) -> Any:
@@ -178,7 +178,7 @@ class TorchGaussianModel:
         uncertain_mask: Any | None = None,
         surface_uv: Any | None = None,
         cluster_ids: Any | None = None,
-        confidence: Any | None = None,
+        uncertain_confidence: Any | None = None,
         surface_owner_kind: Any | None = None,
         surface_owner_id: Any | None = None,
         stable_gaussian_ids: Any | None = None,
@@ -262,15 +262,15 @@ class TorchGaussianModel:
         else:
             stable_gaussian_ids = torch.as_tensor(stable_gaussian_ids, dtype=torch.long, device=self.device).reshape(count)
 
-        # Default confidence: certain=1, uncertain=0.25.
-        if confidence is None:
-            confidence = torch.where(
+        # Default uncertain_confidence: certain=1, uncertain=0.25.
+        if uncertain_confidence is None:
+            uncertain_confidence = torch.where(
                 uncertain_mask[:, None],
                 torch.full((count, 1), 0.25, dtype=self.torch.float32, device=self.device),
                 torch.ones((count, 1), dtype=self.torch.float32, device=self.device),
             )
         else:
-            confidence = torch.as_tensor(confidence, dtype=self.torch.float32, device=self.device).reshape(count, 1)
+            uncertain_confidence = torch.as_tensor(uncertain_confidence, dtype=self.torch.float32, device=self.device).reshape(count, 1)
 
         rest_dim = (self.max_sh_degree + 1) ** 2 - 1
 
@@ -281,7 +281,7 @@ class TorchGaussianModel:
         self._scaling = torch.nn.Parameter(torch.log(torch.clamp(scales, min=1e-6)).requires_grad_(True))
         self._rotation = torch.nn.Parameter(rotations.requires_grad_(True))
         self._opacity = torch.nn.Parameter(inverse_sigmoid(opacities).requires_grad_(True))
-        self._confidence = torch.nn.Parameter(inverse_sigmoid(confidence).requires_grad_(True))
+        self._uncertain_confidence = torch.nn.Parameter(inverse_sigmoid(uncertain_confidence).requires_grad_(True))
         self.is_uncertain = uncertain_mask
         self.surface_uv = surface_uv
         self.cluster_ids = cluster_ids
@@ -321,7 +321,7 @@ class TorchGaussianModel:
         opacity: Any,
         scaling: Any,
         rotation: Any,
-        confidence: Any,
+        uncertain_confidence: Any,
         uncertain_mask: Any,
         surface_uv: Any,
         cluster_ids: Any,
@@ -371,7 +371,7 @@ class TorchGaussianModel:
         self._opacity = torch.nn.Parameter(torch.as_tensor(opacity, dtype=self.torch.float32, device=self.device).reshape(count, 1).detach().clone().requires_grad_(True))
         self._scaling = torch.nn.Parameter(torch.as_tensor(scaling, dtype=self.torch.float32, device=self.device).reshape(count, 3).detach().clone().requires_grad_(True))
         self._rotation = torch.nn.Parameter(torch.as_tensor(rotation, dtype=self.torch.float32, device=self.device).reshape(count, 4).detach().clone().requires_grad_(True))
-        self._confidence = torch.nn.Parameter(torch.as_tensor(confidence, dtype=self.torch.float32, device=self.device).reshape(count, 1).detach().clone().requires_grad_(True))
+        self._uncertain_confidence = torch.nn.Parameter(torch.as_tensor(uncertain_confidence, dtype=self.torch.float32, device=self.device).reshape(count, 1).detach().clone().requires_grad_(True))
         self.is_uncertain = torch.as_tensor(uncertain_mask, dtype=torch.bool, device=self.device).reshape(count)
         self.surface_uv = torch.as_tensor(surface_uv, dtype=self.torch.float32, device=self.device).reshape(count, 2)
         self.cluster_ids = torch.as_tensor(cluster_ids, dtype=torch.long, device=self.device).reshape(count)
@@ -429,7 +429,7 @@ class TorchGaussianModel:
             "opacity": self._opacity,
             "scaling": self._scaling,
             "rotation": self._rotation,
-            "confidence": self._confidence,
+            "uncertain_confidence": self._uncertain_confidence,
         }
 
     def _preserve_optimizer_state(self, old_params: dict[str, Any], keep_indices: Any | None, old_count: int) -> None:
@@ -470,7 +470,7 @@ class TorchGaussianModel:
         opacity: Any,
         scaling: Any,
         rotation: Any,
-        confidence: Any | None = None,
+        uncertain_confidence: Any | None = None,
         uncertain_mask: Any | None = None,
         surface_uv: Any | None = None,
         cluster_ids: Any | None = None,
@@ -482,8 +482,8 @@ class TorchGaussianModel:
         count = int(xyz.shape[0])
         if count == 0:
             return
-        if confidence is None:
-            confidence = torch.full((count, 1), 12.0, dtype=self.torch.float32, device=self.device)
+        if uncertain_confidence is None:
+            uncertain_confidence = torch.full((count, 1), 12.0, dtype=self.torch.float32, device=self.device)
         if uncertain_mask is None:
             uncertain_mask = torch.zeros((count,), dtype=torch.bool, device=self.device)
         if surface_uv is None:
@@ -501,7 +501,7 @@ class TorchGaussianModel:
             opacity=torch.cat([self._opacity.detach(), torch.as_tensor(opacity, dtype=self.torch.float32, device=self.device).reshape(count, 1).detach()], dim=0),
             scaling=torch.cat([self._scaling.detach(), torch.as_tensor(scaling, dtype=self.torch.float32, device=self.device).reshape(count, 3).detach()], dim=0),
             rotation=torch.cat([self._rotation.detach(), torch.as_tensor(rotation, dtype=self.torch.float32, device=self.device).reshape(count, 4).detach()], dim=0),
-            confidence=torch.cat([self._confidence.detach(), torch.as_tensor(confidence, dtype=self.torch.float32, device=self.device).reshape(count, 1).detach()], dim=0),
+            uncertain_confidence=torch.cat([self._uncertain_confidence.detach(), torch.as_tensor(uncertain_confidence, dtype=self.torch.float32, device=self.device).reshape(count, 1).detach()], dim=0),
             uncertain_mask=torch.cat([self.is_uncertain, torch.as_tensor(uncertain_mask, dtype=torch.bool, device=self.device).reshape(count)], dim=0),
             surface_uv=torch.cat([self.surface_uv, torch.as_tensor(surface_uv, dtype=self.torch.float32, device=self.device).reshape(count, 2)], dim=0),
             cluster_ids=torch.cat([self.cluster_ids, torch.as_tensor(cluster_ids, dtype=torch.long, device=self.device).reshape(count)], dim=0),
@@ -511,7 +511,7 @@ class TorchGaussianModel:
 
     def append_gaussians_model_only(
         self, xyz: Any, features_dc: Any, features_rest: Any, opacity: Any,
-        scaling: Any, rotation: Any, confidence: Any, uncertain_mask: Any,
+        scaling: Any, rotation: Any, uncertain_confidence: Any, uncertain_mask: Any,
         surface_uv: Any, cluster_ids: Any, surface_owner_kind: Any, surface_owner_id: Any,
     ) -> None:
         """Append pre-converted rows without optimizer-state changes.
@@ -548,7 +548,7 @@ class TorchGaussianModel:
             "opacity": torch.as_tensor(opacity, dtype=torch.float32, device=self.device).reshape(count, 1),
             "scaling": torch.as_tensor(scaling, dtype=torch.float32, device=self.device).reshape(count, 3),
             "rotation": torch.as_tensor(rotation, dtype=torch.float32, device=self.device).reshape(count, 4),
-            "confidence": torch.as_tensor(confidence, dtype=torch.float32, device=self.device).reshape(count, 1),
+            "uncertain_confidence": torch.as_tensor(uncertain_confidence, dtype=torch.float32, device=self.device).reshape(count, 1),
             "uncertain_mask": torch.as_tensor(uncertain_mask, dtype=torch.bool, device=self.device).reshape(count),
             "surface_uv": torch.as_tensor(surface_uv, dtype=torch.float32, device=self.device).reshape(count, 2),
             "cluster_ids": torch.as_tensor(cluster_ids, dtype=torch.long, device=self.device).reshape(count),
@@ -565,7 +565,7 @@ class TorchGaussianModel:
             "opacity": torch.cat([self._opacity.detach(), incoming["opacity"].detach()], dim=0),
             "scaling": torch.cat([self._scaling.detach(), incoming["scaling"].detach()], dim=0),
             "rotation": torch.cat([self._rotation.detach(), incoming["rotation"].detach()], dim=0),
-            "confidence": torch.cat([self._confidence.detach(), incoming["confidence"].detach()], dim=0),
+            "uncertain_confidence": torch.cat([self._uncertain_confidence.detach(), incoming["uncertain_confidence"].detach()], dim=0),
             "uncertain_mask": torch.cat([self.is_uncertain, incoming["uncertain_mask"]], dim=0),
             "surface_uv": torch.cat([self.surface_uv, incoming["surface_uv"]], dim=0),
             "cluster_ids": torch.cat([self.cluster_ids, incoming["cluster_ids"]], dim=0),
@@ -576,12 +576,12 @@ class TorchGaussianModel:
         self.replace_tensors(**combined, preserve_parameter_gradients=False)
 
     _STATE_TENSOR_NAMES = (
-        "_xyz", "_features_dc", "_features_rest", "_opacity", "_scaling", "_rotation", "_confidence",
+        "_xyz", "_features_dc", "_features_rest", "_opacity", "_scaling", "_rotation", "_uncertain_confidence",
         "is_uncertain", "surface_uv", "cluster_ids", "surface_owner_kind", "surface_owner_id",
         "stable_gaussian_ids", "xyz_gradient_accum", "denom", "max_radii2D",
     )
     _STATE_PARAMETER_NAMES = frozenset(
-        {"_xyz", "_features_dc", "_features_rest", "_opacity", "_scaling", "_rotation", "_confidence"}
+        {"_xyz", "_features_dc", "_features_rest", "_opacity", "_scaling", "_rotation", "_uncertain_confidence"}
     )
 
     def snapshot_state(self) -> dict[str, Any]:
@@ -621,7 +621,7 @@ class TorchGaussianModel:
             {"params": [self._opacity], "lr": groups.opacity_lr, "name": "opacity"},
             {"params": [self._scaling], "lr": groups.scaling_lr, "name": "scaling"},
             {"params": [self._rotation], "lr": groups.rotation_lr, "name": "rotation"},
-            {"params": [self._confidence], "lr": groups.confidence_lr, "name": "confidence"},
+            {"params": [self._uncertain_confidence], "lr": groups.uncertain_confidence_lr, "name": "uncertain_confidence"},
         ]
         self.optimizer = torch.optim.Adam(params, lr=0.0, eps=1e-15)
         self._parameter_groups = groups
@@ -688,8 +688,8 @@ class TorchGaussianModel:
             uncertain_mask=torch.cat([self.is_uncertain, torch.ones((count,), dtype=torch.bool, device=self.device)]),
             surface_uv=torch.cat([self.surface_uv, surface_uv], dim=0),
             cluster_ids=torch.cat([self.cluster_ids, cluster_ids], dim=0),
-            confidence=torch.cat(
-                [self.get_confidence.detach(), torch.full((count, 1), 0.25, device=self.device)], dim=0
+            uncertain_confidence=torch.cat(
+                [self.get_uncertain_confidence.detach(), torch.full((count, 1), 0.25, device=self.device)], dim=0
             ),
         )
 
@@ -706,7 +706,7 @@ class TorchGaussianModel:
             opacity=self._opacity.detach()[keep_mask],
             scaling=self._scaling.detach()[keep_mask],
             rotation=self._rotation.detach()[keep_mask],
-            confidence=self._confidence.detach()[keep_mask],
+            uncertain_confidence=self._uncertain_confidence.detach()[keep_mask],
             uncertain_mask=self.is_uncertain[keep_mask],
             surface_uv=self.surface_uv[keep_mask],
             cluster_ids=self.cluster_ids[keep_mask],
@@ -716,13 +716,27 @@ class TorchGaussianModel:
             optimizer_keep_indices=keep_indices,
         )
 
-    def save_ply(self, path: str | Path) -> None:
-        """Save renderer-compatible ASCII PLY using a vectorized writer."""
+    def save_ply(self, path: str | Path, surface_patch_confidence: Any = ()) -> None:
+        """Save renderer-compatible ASCII PLY using a vectorized writer.
+
+        ``surface_patch_confidence`` is the construction-time
+        `SurfaceRegionCandidate.region_confidence` sequence, one entry per
+        `cluster_ids` patch index (``TorchPipelineState.surface_patch_confidence``)
+        -- NOT `get_uncertain_confidence`. Rows with no assigned patch get the
+        -1.0 sentinel, matching the WebSocket stream's `surfaceConfidences`.
+        """
 
         import numpy as np
 
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
+        cluster_ids_np = self.cluster_ids.detach().cpu().numpy()
+        table = np.asarray(surface_patch_confidence, dtype=np.float32)
+        if table.size:
+            valid = (cluster_ids_np >= 0) & (cluster_ids_np < table.shape[0])
+            surface_confidence = np.where(valid, table[np.clip(cluster_ids_np, 0, table.shape[0] - 1)], -1.0)
+        else:
+            surface_confidence = np.full(cluster_ids_np.shape, -1.0, dtype=np.float32)
         columns = np.column_stack(
             [
                 self._xyz.detach().cpu().numpy(),
@@ -731,12 +745,13 @@ class TorchGaussianModel:
                 self._scaling.detach().cpu().numpy(),
                 self.get_rotation.detach().cpu().numpy(),
                 self.is_uncertain.detach().cpu().numpy().astype(np.int32),
-                self.get_confidence.detach().cpu().numpy(),
+                self.get_uncertain_confidence.detach().cpu().numpy(),
                 self.surface_uv.detach().cpu().numpy(),
-                self.cluster_ids.detach().cpu().numpy(),
+                cluster_ids_np,
                 self.surface_owner_kind.detach().cpu().numpy(),
                 self.surface_owner_id.detach().cpu().numpy(),
                 self.stable_gaussian_ids.detach().cpu().numpy(),
+                surface_confidence,
             ]
         )
         header = (
@@ -747,10 +762,11 @@ class TorchGaussianModel:
             "property float opacity\n"
             "property float scale_0\nproperty float scale_1\nproperty float scale_2\n"
             "property float rot_0\nproperty float rot_1\nproperty float rot_2\nproperty float rot_3\n"
-            "property int uncertain\nproperty float confidence\n"
+            "property int uncertain\nproperty float uncertain_confidence\n"
             "property float surface_u\nproperty float surface_v\n"
             "property long cluster_id\nproperty long surface_owner_kind\n"
-            "property long surface_owner_id\nproperty long stable_gaussian_id\nend_header"
+            "property long surface_owner_id\nproperty long stable_gaussian_id\n"
+            "property float surface_confidence\nend_header"
         )
-        formats = ["%.9g"] * 14 + ["%d", "%.9g", "%.9g", "%.9g", "%d", "%d", "%d", "%d"]
+        formats = ["%.9g"] * 14 + ["%d", "%.9g", "%.9g", "%.9g", "%d", "%d", "%d", "%d", "%.9g"]
         np.savetxt(path, columns, fmt=formats, header=header, comments="", encoding="utf-8")

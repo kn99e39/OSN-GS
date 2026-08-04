@@ -139,6 +139,72 @@ class RegionFormationConfig:
     # coin-flip. Expressed as a fraction of the same_surface thresholds.
     near_threshold_margin_ratio: float = 0.15
 
+    # --- Canonical semantics, exposed as named policy switches (worklog 37) ---
+    # Both default to True: this IS current production behavior, not an
+    # opt-in experiment. Named for what they mean, not which worklog
+    # introduced them (worklog 36 originally named these
+    # `enable_worklog34_growth_weak_bridge_exemption` /
+    # `enable_worklog35_parallel_veto_nearby_evidence_gate` -- useful for
+    # authoritative ablation, but it ties production semantics to an
+    # implementation-history number). Diagnostic/devtool code may still flip
+    # these to False for ablation replay; no production caller does.
+    #
+    # `allow_weak_bridge_only_growth_support`: a single-node GROWTH
+    # attachment (join one still-unassigned node to an EXISTING region) is
+    # a different operation from a component MERGE (fusing two
+    # already-distinct core clusters) -- a same_surface edge vetoed ONLY for
+    # being a "weak bridge" (insufficient independent cross-support to merge
+    # two SEPARATE clusters) says nothing about whether it is good enough
+    # evidence to attach one loose node to a cluster it is already part of.
+    # True (canonical): growth ignores weak-bridge-only vetoes (still
+    # respects edge-intrinsic vetoes: contradicted consensus, phase-alias,
+    # oversized-footprint-with-parallel-evidence). False: pre-existing
+    # (blanket) behavior, for ablation only.
+    allow_weak_bridge_only_growth_support: bool = True
+    # `require_nearby_parallel_evidence_for_parallel_veto`: the core-merge
+    # parallel-shortcut override must only fire when there is ACTUAL nearby
+    # parallel_separate evidence (`contradicting_parallel_neighbor_count>0`,
+    # already computed by the local consensus check), not merely because a
+    # raw, footprint-scale-normalized metric crosses a fixed threshold --
+    # that raw metric was measured to NOT discriminate same_surface from
+    # parallel_separate edges on real long-horizon-trained data. True
+    # (canonical): the nearby-evidence gate is required. False: pre-existing
+    # (metric-only) behavior, for ablation only.
+    require_nearby_parallel_evidence_for_parallel_veto: bool = True
+    # `exempt_intra_raw_component_unions_from_bridge_veto`: DIAGNOSTIC-ONLY,
+    # default False (worklog 38). Worklog 37 shipped this as True believing
+    # it separated seed existence from component merge; it is provably a
+    # tautology (raw components are the connected components OF the same
+    # edge set the veto iterates, so every core-eligible edge is exempt by
+    # construction -- measured 2092/2092 on the 3k checkpoint, bridge veto
+    # evaluated 0 edges, 47 articulation bridges unioned regardless). Kept
+    # only so that behavior can be reproduced in ablation replay.
+    exempt_intra_raw_component_unions_from_bridge_veto: bool = False
+    # `separate_seed_and_merge_phases` (worklog 38, canonical): run core
+    # seeding as an explicit TWO-phase DSU instead of a single sequential
+    # pass that conflates the two questions.
+    #   Phase 1 (seed): union ONLY over `seed_strong_edge`s -- edges whose
+    #     OWN local evidence (well-supported consensus, i.e. genuine shared
+    #     same_surface neighbor support, plus path consistency and no
+    #     edge-intrinsic veto) makes them coherent surface interior. Each
+    #     resulting component is an independently valid seed, and stays one
+    #     even if it never merges with anything.
+    #   Phase 2 (merge): collect the remaining (weak) cross-edges BETWEEN
+    #     distinct phase-1 components and evaluate them as a component PAIR
+    #     -- aggregate distinct-endpoint support, not one edge at a time --
+    #     so a genuinely well-supported multi-edge junction can merge while
+    #     a single fragile bridge cannot. Crucially, refusing a merge never
+    #     deletes either side's seed.
+    # False: single-pass legacy behavior, for ablation only.
+    separate_seed_and_merge_phases: bool = True
+    # Minimum number of DISTINCT endpoints on each side of a component pair
+    # that must carry merge-supporting cross-edges before two independently
+    # seeded components may merge. This is a COMPONENT-PAIR aggregate, a
+    # different question from `bridge_min_shared_neighbor_for_well_supported`
+    # (which stays at its canonical 2 and still governs per-EDGE local
+    # support); worklog 38 section 9 keeps the two explicitly separate.
+    merge_min_distinct_endpoint_support: int = 2
+
 
 def _pair_key(a: int, b: int) -> tuple[int, int]:
     return (a, b) if a < b else (b, a)
@@ -616,6 +682,152 @@ def _evaluate_path_consistency(
     )
 
 
+# --- Typed core edge categories (worklog 38 §4) ---
+EDGE_SEED_STRONG = "seed_strong_edge"
+EDGE_WEAK_BRIDGE = "weak_bridge_edge"
+EDGE_CONSENSUS_CONTRADICTED = "consensus_contradicted_edge"
+EDGE_PHASE_ALIAS = "phase_alias_edge"
+EDGE_OVERSIZED_FOOTPRINT = "oversized_footprint_edge"
+EDGE_MERGE_SUPPORTED = "merge_supported_edge"
+
+
+def _classify_core_edge(
+    a: int, b: int, consensus: EdgeConsensusMetrics, path_result: PathConsistencyResult | None,
+    by_pair: dict[tuple[int, int], Any], config: RegionFormationConfig,
+) -> str:
+    """Worklog 38 §4: assign one typed category per core-eligible edge.
+
+    A ``seed_strong_edge`` is an edge whose OWN local evidence is strong
+    enough to declare its two endpoints interior to one coherent surface
+    fragment -- specifically ``CONSENSUS_WELL_SUPPORTED`` (which already
+    means "at least ``core_min_shared_neighbor_support`` genuine shared
+    same_surface neighbours AND contradiction ratio under threshold", i.e.
+    real multi-edge local support, not merely "the classifier said
+    same_surface") plus path consistency and no edge-intrinsic veto.
+    Everything else that survives the intrinsic vetoes is a
+    ``weak_bridge_edge``: usable as component-to-component ADJACENCY
+    evidence, never as a seed union.
+    """
+    if consensus.consensus_state == CONSENSUS_CONTRADICTED:
+        return EDGE_CONSENSUS_CONTRADICTED
+    if path_result is not None and path_result.path_status == PATH_PHASE_ALIAS:
+        return EDGE_PHASE_ALIAS
+    direct_metrics = by_pair[(a, b)].metrics
+    if (
+        direct_metrics is not None
+        and direct_metrics.normal_direction_separation_over_thickness
+        > config.bridge_normal_separation_with_parallel_veto
+        and direct_metrics.mutual_tangent_residual
+        > config.bridge_borderline_tangent_residual_veto
+        and (
+            not config.require_nearby_parallel_evidence_for_parallel_veto
+            or consensus.contradicting_parallel_neighbor_count > 0
+        )
+    ):
+        return EDGE_OVERSIZED_FOOTPRINT
+    if consensus.consensus_state == CONSENSUS_WELL_SUPPORTED:
+        return EDGE_SEED_STRONG
+    return EDGE_WEAK_BRIDGE
+
+
+def _seed_core_components_two_phase(
+    count: int, core_eligible: list[tuple[int, int]], same_surface: list[set[int]],
+    crease: list[set[int]], parallel_separate: list[set[int]], candidate_neighbors: list[set[int]],
+    by_pair: dict[tuple[int, int], Any], reliability: StructuralReliabilityResult,
+    frame: GaussianCovarianceFrame, config: RegionFormationConfig, uf: _UnionFind,
+    consensus_by_pair: dict[tuple[int, int], EdgeConsensusMetrics],
+    bridge_by_pair: dict[tuple[int, int], BridgeVetoResult],
+    path_by_pair: dict[tuple[int, int], PathConsistencyResult],
+    boundary_conflict_edges: set[tuple[int, int]],
+):
+    """Worklog 38 §5: explicit two-phase seed/merge separation.
+
+    Phase 1 unions ONLY ``seed_strong_edge``s, so every resulting component
+    is an independently valid seed that exists on its own local evidence.
+    Phase 2 then evaluates the remaining weak cross-edges as component
+    PAIRS (aggregate distinct-endpoint support), so a well-supported
+    multi-edge junction can still merge while a single fragile bridge
+    cannot -- and, critically, a refused merge leaves BOTH components
+    seeded rather than dissolving them.
+
+    This replaces worklog 37's tautological
+    ``exempt_intra_raw_component_unions_from_bridge_veto``, which disabled
+    the bridge veto entirely (100% of core-eligible edges exempt by
+    construction) instead of separating the two questions.
+    """
+    edge_category: dict[tuple[int, int], str] = {}
+
+    # --- Phase 1: seed formation over strong edges only ---
+    for a, b in core_eligible:
+        consensus = consensus_by_pair[(a, b)]
+        path_result = None
+        if consensus.consensus_state != CONSENSUS_CONTRADICTED:
+            path_result = _evaluate_path_consistency(a, b, same_surface, frame, config)
+            path_by_pair[(a, b)] = path_result
+        category = _classify_core_edge(a, b, consensus, path_result, by_pair, config)
+        edge_category[(a, b)] = category
+        if category in (EDGE_CONSENSUS_CONTRADICTED, EDGE_PHASE_ALIAS, EDGE_OVERSIZED_FOOTPRINT):
+            boundary_conflict_edges.add((a, b))
+            continue
+        if category == EDGE_SEED_STRONG:
+            uf.union(a, b)
+
+    # --- Phase 2: component-pair merge over the remaining weak edges ---
+    # Group weak cross-edges by the phase-1 component pair they connect.
+    cross_edges_by_component_pair: dict[tuple[int, int], list[tuple[int, int]]] = {}
+    for (a, b), category in edge_category.items():
+        if category != EDGE_WEAK_BRIDGE:
+            continue
+        ra, rb = uf.find(a), uf.find(b)
+        if ra == rb:
+            continue  # already in one seed component; nothing to merge
+        cross_edges_by_component_pair.setdefault(_pair_key(ra, rb), []).append((a, b))
+
+    for component_key, edges in sorted(cross_edges_by_component_pair.items()):
+        # Aggregate component-pair support: how many DISTINCT endpoints on
+        # each side carry a cross-edge. One fragile edge gives 1/1 and can
+        # never satisfy `merge_min_distinct_endpoint_support`; a genuine
+        # multi-edge junction gives >=2/2.
+        side_a_endpoints = set()
+        side_b_endpoints = set()
+        root_a, _root_b = component_key
+        for a, b in edges:
+            if uf.find(a) == root_a:
+                side_a_endpoints.add(a)
+                side_b_endpoints.add(b)
+            else:
+                side_a_endpoints.add(b)
+                side_b_endpoints.add(a)
+        endpoint_support = min(len(side_a_endpoints), len(side_b_endpoints))
+
+        # The per-EDGE bridge veto still runs (unchanged semantics,
+        # `bridge_min_shared_neighbor_for_well_supported` untouched); the
+        # component-pair aggregate is an ADDITIONAL requirement, so this can
+        # only ever be stricter than the legacy single-edge path.
+        best_bridge = None
+        for a, b in edges:
+            bridge = _evaluate_bridge_veto(
+                a, b, consensus_by_pair[(a, b)], same_surface, frame, len(edges), config,
+            )
+            bridge_by_pair[(a, b)] = bridge
+            if bridge.bridge_state == BRIDGE_WELL_SUPPORTED:
+                best_bridge = (a, b)
+
+        if best_bridge is not None and endpoint_support >= config.merge_min_distinct_endpoint_support:
+            edge_category[best_bridge] = EDGE_MERGE_SUPPORTED
+            uf.union(*best_bridge)
+            for a, b in edges:
+                if (a, b) != best_bridge:
+                    boundary_conflict_edges.add((a, b))
+        else:
+            # Refused merge: both components KEEP their seeds. The edges
+            # stay recorded as conflict/adjacency evidence only.
+            for a, b in edges:
+                boundary_conflict_edges.add((a, b))
+
+    return uf, consensus_by_pair, bridge_by_pair, path_by_pair, boundary_conflict_edges
+
+
 def _seed_core_components(
     count: int, same_surface: list[set[int]], crease: list[set[int]], parallel_separate: list[set[int]],
     candidate_neighbors: list[set[int]], by_pair: dict[tuple[int, int], Any],
@@ -653,6 +865,21 @@ def _seed_core_components(
             continue
         core_eligible.append(key)
 
+    # Worklog 38: worklog 37 introduced an
+    # `exempt_intra_raw_component_unions_from_bridge_veto` flag that computed
+    # "raw same_surface connected components" FROM ``core_eligible`` itself
+    # and then skipped the bridge veto for any edge whose endpoints shared a
+    # raw component. That is a TAUTOLOGY: connected components of an edge set
+    # contain, by construction, both endpoints of every edge in that set, so
+    # 100% of core-eligible edges were exempt (measured: 2092/2092 on the 3k
+    # checkpoint, bridge veto evaluated on exactly 0 edges vs 1244 without
+    # the flag) and 47 genuine articulation ("single fragile edge, >=3 nodes
+    # on each side") bridges were unioned anyway. The flag disabled the
+    # bridge veto outright rather than separating seed existence from merge.
+    # It is reverted to False here and kept only as a diagnostic opt-in;
+    # the real separation is implemented as an explicit two-phase DSU below
+    # (`_seed_strong_edge_components` -> component-pair merge evaluation).
+
     for a, b in core_eligible:
         consensus_by_pair[(a, b)] = _compute_edge_consensus(a, b, same_surface, crease, parallel_separate, candidate_neighbors, by_pair, reliability, frame, config)
 
@@ -665,6 +892,13 @@ def _seed_core_components(
         return (rank, -metrics.shared_same_surface_neighbor_count, key)
 
     core_eligible.sort(key=priority)
+
+    if config.separate_seed_and_merge_phases:
+        return _seed_core_components_two_phase(
+            count, core_eligible, same_surface, crease, parallel_separate, candidate_neighbors,
+            by_pair, reliability, frame, config, uf, consensus_by_pair, bridge_by_pair,
+            path_by_pair, boundary_conflict_edges,
+        )
 
     pending_cross_edges: dict[tuple[int, int], list[tuple[int, int]]] = {}
     for a, b in core_eligible:
@@ -682,16 +916,40 @@ def _seed_core_components(
             boundary_conflict_edges.add((a, b))
             continue
 
-        component_key = _pair_key(ra, rb)
-        crossing_count = len(pending_cross_edges.get(component_key, [])) + 1
-        bridge = _evaluate_bridge_veto(a, b, consensus, same_surface, frame, crossing_count, config)
-        bridge_by_pair[(a, b)] = bridge
-
         # A direct pair that has a large normal-direction separation AND
         # nearby parallel-separated evidence is a close-parallel shortcut,
         # even when false same_surface triangles make it look locally dense.
-        # The scale-normalized bound is configurable policy, never a final
-        # canonical threshold.
+        # Edge-intrinsic (like CONTRADICTED/PHASE_ALIAS above) -- evaluated
+        # unconditionally, regardless of raw-component membership below.
+        #
+        # Worklog 35: `normal_direction_separation_over_thickness` is
+        # normalized by `frame.normal_thickness` -- an individual Gaussian
+        # FOOTPRINT scale, the same category of quantity worklog 30-33 found
+        # unusable for real long-horizon-trained data (median 12-16x off).
+        # Direct measurement on the real 3k/5k/10k checkpoints: this metric's
+        # distribution for edges the affinity graph ALREADY classified
+        # `same_surface` (median 108, range 0.09-4453) heavily OVERLAPS the
+        # distribution for genuine `parallel_separate` edges (median 645) --
+        # it does not discriminate at any fixed threshold on this data, let
+        # alone the literal "4.0" configured here. 30% of real cross-
+        # component pairs with >=2 same_surface bridge edges (56/184 on the
+        # 3k checkpoint) had at least one edge individually pass
+        # `_evaluate_bridge_veto` as well-supported, only to be vetoed again
+        # here by this raw metric -- silently keeping otherwise-well-
+        # evidenced core components fragmented.
+        #
+        # The comment above ("AND nearby parallel-separated evidence") states
+        # the intended guard correctly, but the code never actually checked
+        # for nearby parallel evidence -- only the direct pair's own
+        # mis-scaled metrics. `consensus.contradicting_parallel_neighbor_count`
+        # (already computed above, worklog 116) is exactly that missing
+        # signal: a genuine count of NEARBY parallel_separate relations
+        # shared between a and b's own candidate neighborhoods. Requiring it
+        # to be nonzero makes this override do what its own comment always
+        # claimed, using the affinity graph's OWN already-correctly-scaled
+        # same_surface/parallel_separate classification as the discriminator
+        # instead of re-deriving a second, differently-thresholded check on
+        # an unnormalized metric.
         direct_metrics = by_pair[(a, b)].metrics
         if (
             direct_metrics is not None
@@ -699,9 +957,25 @@ def _seed_core_components(
             > config.bridge_normal_separation_with_parallel_veto
             and direct_metrics.mutual_tangent_residual
             > config.bridge_borderline_tangent_residual_veto
+            and (
+                not config.require_nearby_parallel_evidence_for_parallel_veto
+                or consensus.contradicting_parallel_neighbor_count > 0
+            )
         ):
             boundary_conflict_edges.add((a, b))
             continue
+
+        if config.exempt_intra_raw_component_unions_from_bridge_veto:
+            # Diagnostic-only (worklog 38): reproduces worklog 37's
+            # tautological behavior for ablation replay. Never enabled in
+            # production -- see the note above `for a, b in core_eligible`.
+            uf.union(a, b)
+            continue
+
+        component_key = _pair_key(ra, rb)
+        crossing_count = len(pending_cross_edges.get(component_key, [])) + 1
+        bridge = _evaluate_bridge_veto(a, b, consensus, same_surface, frame, crossing_count, config)
+        bridge_by_pair[(a, b)] = bridge
 
         if bridge.bridge_state == BRIDGE_WELL_SUPPORTED:
             uf.union(a, b)
@@ -854,8 +1128,48 @@ def form_surface_regions(
                     continue
                 if ((config.nonlocal_shortcut_mode == "force" or config.enable_nonlocal_shortcut_filter) and (edge.metrics is None or edge.metrics.normalized_distance > config.local_backbone_max_normalized_distance)) or (config.nonlocal_shortcut_mode == "auto" and config.enable_nonlocal_shortcut_filter and edge.metrics is not None and edge.metrics.normalized_distance > config.local_backbone_max_normalized_distance):
                     continue
-                if _pair_key(n, neighbor) in boundary_conflict_edges:
-                    continue
+                pair_key = _pair_key(n, neighbor)
+                if pair_key in boundary_conflict_edges:
+                    # Worklog 34: `boundary_conflict_edges` (built in
+                    # `_seed_core_components`) conflates two different
+                    # concepts. (1) Edge-intrinsic low-trust signals --
+                    # CONSENSUS_CONTRADICTED, PATH_PHASE_ALIAS, and the
+                    # oversized-footprint-with-parallel-veto check -- are
+                    # real per-edge quality problems, valid regardless of
+                    # context, and must still block growth here. (2) A
+                    # WEAK/not-well-supported BRIDGE veto specifically
+                    # answers "should two ALREADY-DISTINCT core components
+                    # merge through this edge without enough independent
+                    # cross-support" -- a component-MERGE question that does
+                    # not apply to single-node GROWTH (attaching one still-
+                    # unassigned node `n` to an existing region is not a
+                    # component merge). Reusing the blanket set here
+                    # silently vetoed real long-horizon-checkpoint growth
+                    # candidates whose own same-surface support to their
+                    # target region was otherwise sufficient (worklog 34:
+                    # 93/93 checked real-snapshot candidates were blocked
+                    # this way, explaining consensus_attached=1 despite
+                    # 1079 representatives having same_surface degree>=2).
+                    if not config.allow_weak_bridge_only_growth_support:
+                        # Pre-fix behavior (ablation-only): blanket block,
+                        # weak-bridge-only vetoes included.
+                        continue
+                    consensus = consensus_by_pair.get(pair_key)
+                    path_result = path_by_pair.get(pair_key)
+                    is_contradicted = consensus is not None and consensus.consensus_state == CONSENSUS_CONTRADICTED
+                    is_phase_alias = path_result is not None and path_result.path_status == PATH_PHASE_ALIAS
+                    is_oversized_footprint_veto = (
+                        edge.metrics is not None
+                        and edge.metrics.normal_direction_separation_over_thickness
+                        > config.bridge_normal_separation_with_parallel_veto
+                        and edge.metrics.mutual_tangent_residual
+                        > config.bridge_borderline_tangent_residual_veto
+                    )
+                    if is_contradicted or is_phase_alias or is_oversized_footprint_veto:
+                        continue
+                    # else: the ONLY reason this edge is in
+                    # boundary_conflict_edges is a weak-bridge (component-
+                    # merge-specific) veto -- does not block single-node growth.
                 support[region_id] = support.get(region_id, 0) + 1
             if not support:
                 node_membership_state[n] = (

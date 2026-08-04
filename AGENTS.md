@@ -1,4 +1,9 @@
-﻿# Agent Notes
+# 최우선 지속 실행 규칙
+
+- 사용자가 하나의 구현 프롬프트를 완료할 때까지 계속 진행하라고 지시한 경우, 에이전트는 자체 판단으로 중간 진행 보고만 하고 작업을 종료하거나 사용자에게 제어를 돌려주어서는 안 된다.
+- 해당 배치의 명시된 완료 기준, 검증, Worklog, 문서 갱신까지 실제로 끝낼 때만 종료한다. 중간 결과는 `commentary`로 짧게 공유하되, 이는 중지 신호가 아니다.
+- 외부 권한, 실제로 불가능한 입력, 또는 사용자가 금지한 범위를 넘어서는 작업으로 막힌 경우에만 안전한 대안을 모두 확인한 뒤 blocker를 보고한다. 작업이 크거나 오래 걸린다는 이유는 중단 사유가 아니다.
+# Agent Notes
 
 This project is being edited through Codex on Windows. Keep the workflow simple
 and avoid spending time fighting the shell.
@@ -77,27 +82,6 @@ Do not spend time retrying those commands inside the restricted sandbox. Treat t
 - Avoid reintroducing `adapter`-style render APIs unless there is a clear
   compatibility reason.
 
-## Vendored Baseline Scene-Split Logic (2026-07-22)
-
-- `osn_gs/data/vendor/graphdeco_scene_split.py` is a verbatim port (license
-  header preserved) of two small, self-contained pieces of the original
-  Graphdeco `gaussian-splatting/` baseline: its held-out test-camera
-  selection (`readColmapSceneInfo`'s `llffhold` branch) and its resolution
-  auto-downscale decision (`loadCam`'s `>1600px` rule). Exists so the
-  OSN-GS vs. baseline 3DGS quality A/B (`TODO.md`'s top section) can use the
-  IDENTICAL train/test camera split and effective training resolution on
-  both sides -- verified bit-for-bit against upstream's own function output
-  on the real `DATASET/` scene (185 images: same 24 held out, same
-  `(1600, 1036)` resolution at scale `3.241875`).
-- `osn_gs/data/colmap_scene.py::load_colmap_scene_with_eval_split` is the
-  OSN-GS-side loader that uses it, returning a train-only `TorchScene` plus
-  the held-out test cameras/images kept separate (never sampled during
-  training). `load_colmap_scene` (the original, no-split loader) is
-  unchanged and still used by the normal training entry points.
-- Per the vendoring rule above: `gaussian-splatting/` itself is never
-  imported or modified at runtime -- only these two ported functions, living
-  under OSN-GS's own tree.
-
 ## WebRenderer Commit Policy
 
 - `WebRenderer/` is an independent nested Git repository. Commit renderer-only changes there promptly after scoped verification; do not mix them into the parent OSN-GS repository commit.
@@ -124,61 +108,6 @@ Do not spend time retrying those commands inside the restricted sandbox. Treat t
 - `docs/current_framework.md` is the paper/research-facing reference for the **implemented current pipeline only**. Do not add future designs, intended modules, or speculative roadmap material.
 - Update it whenever a major pipeline structure changes or an implementation-complete module materially enters or leaves the active framework path.
 
-## Ongoing Context Log
-
-- 2026-07-01: User requested that whenever the environment, project situation, or task direction changes, the relevant `.md` files should be updated with that context instead of relying only on chat history.
-- 2026-07-01: NURBS is an intermediate representation, not a replacement final output. Training should keep Gaussian primitives as the main output while preserving visible NURBS reconstruction data for later visualization tools.
-- 2026-07-01: The Colab training notebook should pass NURBS-related configuration alongside OSN-GS training/Gaussian primitive output handling so downstream visualization can consume both Gaussian and NURBS artifacts.
-
-
-- 2026-07-01: WebRenderer PLY compatibility request. Renderer requires Graphdeco-style Gaussian fields `x`, `y`, `z`, `f_dc_0..2`, raw `opacity`, optional raw log `scale_0..2`, and `rot_0..3`. OSN-GS has corresponding primitives in `TorchGaussianModel`, so `save_ply` should emit those names instead of debug-only RGB/`scale_x` fields.
-- 2026-07-01: `colab_train_3dgs.ipynb` output download cell must remain Colab/local compatible. Use `google.colab.files.download` only when `IS_COLAB` is true; local notebook runs should create the output zip in the project root (`GS_ROOT` or `NOTEBOOK_ROOT`) and show/print that path.
-- 2026-07-01: Notebook output packaging now includes NURBS visualization data. OSN-GS output inspection creates `visualization_manifest.json` under `MODEL_ROOT`, pairing each `point_cloud.ply` with its sibling `nurbs_surface.json` so external tools can load Gaussian primitives and the visible NURBS intermediate together.
-- 2026-07-02: Added `visible_surface_resolution_scale` so Stage 1 visible NURBS control-grid density can be increased from the notebook Train cell without changing the base U/V parameters. Final resolution is computed from `visible_surface_resolution_u/v * scale`.
-- 2026-07-02: High `visible_surface_resolution_scale` can increase NURBS fitting memory. Added `visible_surface_fit_device` and `visible_surface_fit_chunk_size` so fitting can run on CPU and process the uv grid in chunks while keeping the final NURBS intermediate available for visualization.
-- 2026-07-02: Notebook Train cell should show live RAM/VRAM usage, current training iteration, and a bounded train.py output tail so long runs do not leave the user waiting without feedback.
-- 2026-07-02: Implemented basic 3DGS-style Adaptive Density Control for OSN-GS. ADC now accumulates viewspace gradients/radii, clones or splits certain Gaussians, prunes low-opacity/oversized certain Gaussians, and is wired to `densify_until_iter`, `densification_interval`, and `densify_grad_threshold`. Uncertain-to-certain promotion is explicitly disabled; uncertain cleanup may prune only.
-- 2026-07-02: OSN-GS saved iteration output folders now use plain numeric names such as `1000` and `10000` instead of `iteration_001000`. Notebook output inspection sorts numeric iteration folders and still treats `final` as the latest consolidated output.
-
-## 2026-07-06 Training throughput note
-
-- Notebook training defaults no longer save full outputs at iteration 1; explicit save iterations are treated as exact output checkpoints.
-- Image staging and visible-surface NURBS fitting default to the selected training device, with chunked fitting kept configurable for VRAM control.
-- ADC growth is capped by default in the notebook so density control cannot accidentally exhaust VRAM during short experiments.
-
-## 2026-07-06 Runtime NURBS Chunk Sizing
-
-- Visible-surface NURBS fitting now treats chunk size `0` as auto mode.
-- Auto mode samples available CUDA VRAM once at pipeline initialization, fixes the chosen chunk size for the run, and logs the selected value.
-
-## 2026-07-06 Automatic Image Placement
-
-- Training image storage now supports `auto`, which loads images on CPU first, estimates the full stack size, and moves the stack to CUDA only when current free VRAM can safely hold it.
-- If the image stack exceeds the runtime VRAM budget, images remain on CPU while CUDA still handles Gaussian tensors, rasterization, NURBS fitting, and training math.
-
-## 2026-07-06 Per-View Image Staging
-
-- Training images now remain as CPU-staged per-view tensors instead of one full stacked tensor.
-- Each iteration samples the required view batch and transfers only that small batch to the training device, matching the original 3DGS memory pattern more closely.
-
-## 2026-07-06 ADC Gradient Fallback
-
-- Adaptive Density Control now falls back to Gaussian xyz gradients when the CUDA rasterizer does not populate screen-space point gradients.
-- ADC passes always log tracked gradient statistics, even when clone/split/prune counts are zero, so disabled or ineffective density control is visible in training output.
-
-## 2026-07-06 Streaming NURBS Snapshots
-
-- OSN-GS training can now stream packed Gaussian snapshots over WebSocket directly from `train.py`.
-- Streamed snapshots can include the visible NURBS intermediate as `nurbs_surface`; the payload is sent when the surface is first available or rebuilt.
-- Notebook OSN-GS training exposes streaming knobs and can disable slow PLY/NURBS/checkpoint file output when using the renderer stream.
-
-## 2026-07-06 Covariance Initialization Pipeline
-
-- OSN-GS now initializes Gaussian covariance scale from chunked nearest-neighbor point spacing, following the original 3DGS scale+rotation covariance convention without requiring `simple-knn`.
-- Notebook and CLI controls expose covariance initialization mode, KNN chunk sizing, min scale, max scene-scale ratio, and scale multiplier.
-
-
-
 ## Multi-Agent Handoff Rules
 
 - The user is working with multiple agents, including Codex and Claude. Keep `docs/README.md` updated as the primary follow-up/worklog file whenever implementation direction, important defaults, or known risks change.
@@ -186,13 +115,6 @@ Do not spend time retrying those commands inside the restricted sandbox. Treat t
 - When changing notebook training behavior, record the user-visible knobs and their intended semantics in `docs/README.md`.
 - Do not rely on chat-only memory for decisions such as "NURBS/Voxel must stay strongly integrated" or "uncertain-to-certain promotion is forbidden".
 - 2026-07-24: `docs/agent_memory/` is an in-repo mirror of Claude Code's persistent auto-memory (user-preference/feedback/project-state notes accumulated across Claude sessions on this project), kept there specifically so Codex and other agents can read it too. See `docs/agent_memory/README.md` for the sync convention. Claude keeps this mirror in sync whenever it updates its own memory; other agents should treat it as read-only project history, not as instructions.
-
-## 2026-07-10 Legacy Prototype Framework Removed
-
-- The original numpy-only prototype framework (`osn_gs/core/{framework,pipeline,state,trainer}.py`, non-`torch_*` files under `osn_gs/gaussian`, `osn_gs/surface`, `osn_gs/losses`, `osn_gs/optim`, `osn_gs/data/{cameras,scene_loader}.py`, `osn_gs/render/prototype_renderer.py`, and `osn_gs/utils/{checkpoint,geometry,logging,typing}.py`) has been deleted. It was self-documented as a smoke-test/algorithm-sketch scaffold, had zero dependents in the active torch training path, and its only consumers (`scripts/train_osn_gs.py`, `tests/test_framework_smoke.py`) were already broken.
-- Every `osn_gs/**/__init__.py` now exports only the real `torch_*` symbols. If you need something from the deleted prototype, look at the equivalent `torch_*` module instead of restoring the old file.
-- Two already-executed one-off migration scripts were also removed: `scripts/devtools/finalize_dataset_cleanup.py` and `scripts/devtools/patch_dataset_and_remove_synthetic.py`.
-- `osn_gs/gaussian/torch_model.py` had mojibake-corrupted Korean comments (pre-existing since the file's first commit, not recoverable from git history); they were rewritten in clean English.
 
 ## Incremental Worklog Rule
 
@@ -208,4 +130,6 @@ Do not spend time retrying those commands inside the restricted sandbox. Treat t
 - 전체 검증은 처음부터 최소 10분(600000 ms) timeout으로 실행한다: .venv\Scripts\python.exe -m pytest -q
 - 짧은 120초 실행이 중단된 경우에는 바로 충분한 timeout으로 한 번 재실행해 최종 결과를 확인한다. 동일 작업을 짧은 timeout으로 반복하지 않는다.
 - Windows stdout flush 오류(OSError: [Errno 22] Invalid argument)가 timeout 직후 동반될 수 있다. 이 경우에도 pytest summary 또는 충분한 timeout 재실행 결과를 기준으로 판정한다.
+
+
 

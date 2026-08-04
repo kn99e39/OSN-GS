@@ -40,6 +40,11 @@ from osn_gs.utils.torch_ops import default_device, psnr_from_mse, require_torch,
 from tqdm import tqdm
 
 
+# Keep this aligned with the local stream server. Full JSON snapshots may take
+# longer than websockets' default 20-second pong deadline to send.
+STREAM_KEEPALIVE_TIMEOUT_SECONDS = 120
+
+
 @dataclass
 class TorchTrainingConfig:
     """Controls the training loop and loss weights."""
@@ -569,7 +574,13 @@ class TorchOSNGSTrainer:
             return self._stream_socket
         from websockets.sync.client import connect
 
-        self._stream_socket = connect(self.training_config.stream_url, max_size=None, open_timeout=10, close_timeout=2)
+        self._stream_socket = connect(
+            self.training_config.stream_url,
+            max_size=None,
+            open_timeout=10,
+            close_timeout=2,
+            ping_timeout=STREAM_KEEPALIVE_TIMEOUT_SECONDS,
+        )
         try:
             self._stream_socket.recv(timeout=1)
         except Exception:
@@ -669,6 +680,24 @@ class TorchOSNGSTrainer:
         event.record(self.torch.cuda.current_stream(device=device))
         return event
 
+    def _surface_patch_confidence_lookup(self, state: TorchPipelineState, cluster_ids: Any) -> Any:
+        """Per-Gaussian construction-time confidence, looked up from
+        `state.surface_patch_confidence` (SurfaceRegionCandidate.region_confidence
+        aligned to `state.surface_patches`) via each row's `cluster_ids` patch
+        assignment. Rows with no assigned patch (or no materialized surface
+        yet) get the -1.0 sentinel -- NOT NaN, since this is JSON-serialized
+        for the WebSocket stream and bare NaN is not valid JSON."""
+
+        torch = self.torch
+        patch_confidence = state.surface_patch_confidence
+        if not patch_confidence:
+            return torch.full(cluster_ids.shape, -1.0, dtype=torch.float32, device=cluster_ids.device)
+        table = torch.as_tensor(patch_confidence, dtype=torch.float32, device=cluster_ids.device)
+        valid = (cluster_ids >= 0) & (cluster_ids < table.shape[0])
+        safe_idx = cluster_ids.clamp(min=0, max=max(0, int(table.shape[0]) - 1))
+        values = table[safe_idx]
+        return torch.where(valid, values, torch.full_like(values, -1.0))
+
     def _snapshot_tensor(self, value: Any) -> Any:
         """Clone a snapshot, using pinned CPU memory for asynchronous CUDA copies."""
 
@@ -721,11 +750,14 @@ class TorchOSNGSTrainer:
             sh_coefficients = self._snapshot_tensor(model.get_features[idx, : (sh_degree + 1) ** 2, :].float())
             stable_ids = self._snapshot_tensor(model.stable_gaussian_ids[idx].long())
             uncertain = self._snapshot_tensor(model.is_uncertain[idx].to(dtype=torch.int32))
-            confidence = self._snapshot_tensor(model.get_confidence[idx].float().reshape(-1))
+            uncertain_confidence = self._snapshot_tensor(model.get_uncertain_confidence[idx].float().reshape(-1))
             surface_uv = self._snapshot_tensor(model.surface_uv[idx].float())
             cluster_ids = self._snapshot_tensor(model.cluster_ids[idx].long())
             surface_owner_kind = self._snapshot_tensor(model.surface_owner_kind[idx].long())
             surface_owner_id = self._snapshot_tensor(model.surface_owner_id[idx].long())
+            surface_confidence = self._snapshot_tensor(
+                self._surface_patch_confidence_lookup(state, model.cluster_ids[idx])
+            )
 
         count = int(xyz.shape[0])
         payload: dict[str, Any] = {
@@ -740,11 +772,12 @@ class TorchOSNGSTrainer:
             "rotations": rotation.reshape(-1),
             "ids": stable_ids.reshape(-1),
             "uncertain": uncertain.reshape(-1),
-            "confidences": confidence.reshape(-1),
+            "uncertainConfidences": uncertain_confidence.reshape(-1),
             "surfaceUvs": surface_uv.reshape(-1),
             "clusterIds": cluster_ids.reshape(-1),
             "surfaceOwnerKinds": surface_owner_kind.reshape(-1),
             "surfaceOwnerIds": surface_owner_id.reshape(-1),
+            "surfaceConfidences": surface_confidence.reshape(-1),
             "shDegree": sh_degree,
             "shCoefficients": sh_coefficients.reshape(-1),
             "metadata": {
@@ -1052,13 +1085,13 @@ class TorchOSNGSTrainer:
             return
         with self.torch.no_grad():
             certain = ~state.model.is_uncertain
-            state.model._confidence[certain] = 12.0
+            state.model._uncertain_confidence[certain] = 12.0
 
     def save_outputs(self, state: TorchPipelineState, output_dir: Path, camera) -> None:
         """Save human-readable outputs plus a resumable checkpoint."""
 
         output_dir.mkdir(parents=True, exist_ok=True)
-        state.model.save_ply(output_dir / "point_cloud.ply")
+        state.model.save_ply(output_dir / "point_cloud.ply", surface_patch_confidence=state.surface_patch_confidence)
         render_pkg = self.rasterizer.render(camera, state.model)
         self._save_ppm(output_dir / "render.ppm", render_pkg["render"])
         self._save_training_state(output_dir / "metrics.txt", state)

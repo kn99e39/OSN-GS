@@ -50,6 +50,28 @@ class FullNeighborhoodEvidenceConfig:
     # Alignment below this is counted as "competing" (conflicting-orientation)
     # evidence rather than same-surface support.
     competing_mode_alignment_threshold: float = 0.5
+    # Worklog 135: assign_nearest_representative's Voronoi partition has no
+    # distance bound -- as the observed cloud grows past whatever N/M ratio
+    # the aggregate-evidence thresholds were calibrated for (worklog 129's
+    # ~139k/2048 ~= 68 members/representative), each representative's cell
+    # absorbs an unbounded, spatially non-local blob of full-cloud Gaussians
+    # (measured on a real 1.6M-3M-Gaussian scene: source counts up to 23,881
+    # per representative, tangent_residual_mean 13-16x the
+    # ``consistent_max_mutual_tangent_residual`` gate, monotonically worse as
+    # density increases at a fixed cap -- worklog 135 §waterfall). A full
+    # Gaussian only contributes to a representative's EVIDENCE aggregate
+    # (support_count and everything derived from it) when it is within a
+    # local radius of that representative's OWN intrinsic (no-neighbor-
+    # dependency) tangent scale -- reusing the same
+    # ``6 x tangent_major_scale`` local-scale convention already established
+    # by the full-cloud continuation shell (``torch_full_cloud_continuation_shell.py``,
+    # worklog 130), not a new invented constant. This does NOT change
+    # ``assign_nearest_representative``'s returned assignment itself (still
+    # used unchanged by continuation-shell/propagation callers) -- only which
+    # assigned members this module's OWN aggregation counts as "local
+    # support" for reliability purposes.
+    local_radius_tangent_scale_multiplier: float = 6.0
+    local_radius_min_absolute: float = 1e-6
 
 
 @dataclass(frozen=True)
@@ -57,7 +79,8 @@ class FullNeighborhoodEvidence:
     """Per-representative aggregate evidence over its full-cloud Voronoi cell."""
 
     representative_ids: tuple[Any, ...]
-    support_count: Any  # (M,) long -- full Gaussians assigned to this representative
+    support_count: Any  # (M,) long -- full Gaussians WITHIN LOCAL RADIUS of this representative (worklog 135)
+    out_of_local_radius_count: Any  # (M,) long -- assigned-nearest but excluded from evidence as non-local
     opacity_sum: Any  # (M,)
     opacity_weighted_centroid: Any  # (M, 3)
     mean_spacing: Any  # (M,) mean distance of assigned full Gaussians to the representative
@@ -78,6 +101,7 @@ class FullNeighborhoodEvidence:
             {
                 "representative_id": self.representative_ids[i],
                 "support_count": int(self.support_count[i]),
+                "out_of_local_radius_count": int(self.out_of_local_radius_count[i]),
                 "opacity_sum": float(self.opacity_sum[i]),
                 "mean_spacing": float(self.mean_spacing[i]),
                 "spacing_std": float(self.spacing_std[i]),
@@ -132,6 +156,7 @@ def compute_full_neighborhood_evidence(
     *,
     config: FullNeighborhoodEvidenceConfig | None = None,
     precomputed_assignment: tuple[Any, Any] | None = None,
+    local_evidence_scale: Any | None = None,
 ) -> FullNeighborhoodEvidence:
     """Aggregate full-cloud evidence into each representative's Voronoi cell.
 
@@ -149,6 +174,16 @@ def compute_full_neighborhood_evidence(
     needs the same Voronoi assignment for something else (e.g. a full-cloud
     continuation shell query) so it is computed exactly once per canonical
     construction call.
+
+    ``local_evidence_scale`` (worklog 32, ``(M,)``): the per-representative
+    LOCAL EVIDENCE SCALE used for the local-radius bound (worklog 135) and
+    the tangent-residual denominator, DISTINCT from
+    ``representative_frame.tangent_major_scale`` (a single Gaussian's own
+    covariance footprint -- worklog 31/32 found this is a poor proxy for the
+    true local full-cloud spacing on real long-horizon-trained data, ~8x too
+    small on the reference snapshot). Optional and defaults to
+    ``representative_frame.tangent_major_scale`` when omitted, so every
+    existing caller/test that doesn't pass it keeps byte-identical behavior.
     """
     torch = require_torch()
     config = config or FullNeighborhoodEvidenceConfig()
@@ -164,11 +199,29 @@ def compute_full_neighborhood_evidence(
             full_positions, representative_positions, chunk_size=config.chunk_size
         )
 
+    # Worklog 135: bound evidence aggregation to a genuinely LOCAL radius, so
+    # a member merely "nearest of all M representatives" (an unbounded global
+    # Voronoi partition) doesn't count as structural support when it is in
+    # fact far from that representative's local surface patch. This does not
+    # alter ``nearest``/``spacing`` themselves -- only which members this
+    # function's OWN aggregation treats as local.
+    evidence_scale = (
+        local_evidence_scale if local_evidence_scale is not None else representative_frame.tangent_major_scale
+    )
+    local_radius = (
+        config.local_radius_tangent_scale_multiplier
+        * evidence_scale[nearest]
+    ).clamp_min(config.local_radius_min_absolute)
+    in_local_radius = spacing <= local_radius
+    local_weight = in_local_radius.to(full_positions.dtype)
+
     support_count = torch.zeros((m,), dtype=torch.long, device=device)
-    support_count.index_add_(0, nearest, torch.ones_like(nearest, dtype=torch.long))
+    support_count.index_add_(0, nearest, in_local_radius.long())
+    out_of_local_radius_count = torch.zeros((m,), dtype=torch.long, device=device)
+    out_of_local_radius_count.index_add_(0, nearest, (~in_local_radius).long())
     safe_support = support_count.clamp_min(1).to(full_positions.dtype)
 
-    opacity_flat = torch.as_tensor(full_opacity).reshape(-1)
+    opacity_flat = torch.as_tensor(full_opacity).reshape(-1) * local_weight
     opacity_sum = torch.zeros((m,), dtype=full_positions.dtype, device=device)
     opacity_sum.index_add_(0, nearest, opacity_flat)
 
@@ -180,17 +233,17 @@ def compute_full_neighborhood_evidence(
     # Gaussians with (near-)zero opacity everywhere in a cell would otherwise
     # divide by ~0; fall back to the plain (unweighted) centroid for those.
     plain_sum = torch.zeros((m, 3), dtype=full_positions.dtype, device=device)
-    plain_sum.index_add_(0, nearest, full_positions)
+    plain_sum.index_add_(0, nearest, full_positions * local_weight.unsqueeze(-1))
     plain_centroid = plain_sum / safe_support.unsqueeze(-1)
     opacity_weighted_centroid = torch.where(
         (opacity_sum > 1e-9).unsqueeze(-1), opacity_weighted_centroid, plain_centroid
     )
 
     spacing_sum = torch.zeros((m,), dtype=full_positions.dtype, device=device)
-    spacing_sum.index_add_(0, nearest, spacing)
+    spacing_sum.index_add_(0, nearest, spacing * local_weight)
     mean_spacing = spacing_sum / safe_support
     spacing_sq_sum = torch.zeros((m,), dtype=full_positions.dtype, device=device)
-    spacing_sq_sum.index_add_(0, nearest, spacing.square())
+    spacing_sq_sum.index_add_(0, nearest, spacing.square() * local_weight)
     spacing_variance = (spacing_sq_sum / safe_support - mean_spacing.square()).clamp_min(0.0)
     spacing_std = torch.sqrt(spacing_variance)
 
@@ -200,32 +253,32 @@ def compute_full_neighborhood_evidence(
     sign = torch.where((full_normal * rep_normal_per_full).sum(dim=-1) < 0.0, -1.0, 1.0).unsqueeze(-1)
     corrected_normal = full_normal * sign
     normal_sum = torch.zeros((m, 3), dtype=full_positions.dtype, device=device)
-    normal_sum.index_add_(0, nearest, corrected_normal)
+    normal_sum.index_add_(0, nearest, corrected_normal * local_weight.unsqueeze(-1))
     mean_normal = normal_sum / safe_support.unsqueeze(-1)
     normal_consensus = torch.linalg.norm(mean_normal, dim=-1).clamp(max=1.0)
 
     rep_position_per_full = representative_positions[nearest]
-    rep_tangent_scale_per_full = representative_frame.tangent_major_scale[nearest].clamp_min(1e-12)
+    rep_tangent_scale_per_full = evidence_scale[nearest].clamp_min(1e-12)
     offset = full_positions - rep_position_per_full
     residual = (offset * rep_normal_per_full).sum(dim=-1).abs() / rep_tangent_scale_per_full
     residual_sum = torch.zeros((m,), dtype=full_positions.dtype, device=device)
-    residual_sum.index_add_(0, nearest, residual)
+    residual_sum.index_add_(0, nearest, residual * local_weight)
     tangent_residual_mean = residual_sum / safe_support
     residual_sq_sum = torch.zeros((m,), dtype=full_positions.dtype, device=device)
-    residual_sq_sum.index_add_(0, nearest, residual.square())
+    residual_sq_sum.index_add_(0, nearest, residual.square() * local_weight)
     residual_variance = (residual_sq_sum / safe_support - tangent_residual_mean.square()).clamp_min(0.0)
     tangent_residual_std = torch.sqrt(residual_variance)
 
     planarity = full_frame.planarity
     planarity_sum = torch.zeros((m,), dtype=full_positions.dtype, device=device)
-    planarity_sum.index_add_(0, nearest, planarity)
+    planarity_sum.index_add_(0, nearest, planarity * local_weight)
     eigenvalue_ratio_mean = planarity_sum / safe_support
     planarity_sq_sum = torch.zeros((m,), dtype=full_positions.dtype, device=device)
-    planarity_sq_sum.index_add_(0, nearest, planarity.square())
+    planarity_sq_sum.index_add_(0, nearest, planarity.square() * local_weight)
     planarity_variance = (planarity_sq_sum / safe_support - eigenvalue_ratio_mean.square()).clamp_min(0.0)
     eigenvalue_ratio_std = torch.sqrt(planarity_variance)
 
-    competing_mask = (alignment < config.competing_mode_alignment_threshold).to(full_positions.dtype)
+    competing_mask = (alignment < config.competing_mode_alignment_threshold).to(full_positions.dtype) * local_weight
     competing_sum = torch.zeros((m,), dtype=full_positions.dtype, device=device)
     competing_sum.index_add_(0, nearest, competing_mask)
     competing_mode_mass = competing_sum / safe_support
@@ -233,7 +286,7 @@ def compute_full_neighborhood_evidence(
     rejected_mask = torch.tensor(
         [c == INTRINSIC_REJECTED for c in full_intrinsic.intrinsic_class],
         device=device,
-    ).to(full_positions.dtype)
+    ).to(full_positions.dtype) * local_weight
     rejected_sum = torch.zeros((m,), dtype=full_positions.dtype, device=device)
     rejected_sum.index_add_(0, nearest, rejected_mask)
     rejected_neighbor_mass = rejected_sum / safe_support
@@ -244,6 +297,7 @@ def compute_full_neighborhood_evidence(
     return FullNeighborhoodEvidence(
         representative_ids=tuple(representative_ids),
         support_count=support_count.detach(),
+        out_of_local_radius_count=out_of_local_radius_count.detach(),
         opacity_sum=opacity_sum.detach(),
         opacity_weighted_centroid=opacity_weighted_centroid.detach(),
         mean_spacing=mean_spacing.detach(),

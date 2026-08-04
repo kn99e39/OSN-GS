@@ -1,14 +1,14 @@
 ---
 name: project-density-preserving-representative-evidence
-description: "Worklog 129 - fixed worklog 126's reliable_count=0-on-all-caps by replacing representative-only kNN contextual reliability with full-observed-cloud evidence + mode-aware representative selection"
+description: "Worklog 129 (now docs/worklogs/24_density_preserving_canonical_representative_evidence_and_reliability_repair.md) - fixed worklog 126 (now docs/worklogs/20_adc_synchronized_canonical_visible_nurbs_experiment.md)'s reliable_count=0-on-all-caps by replacing representative-only kNN contextual reliability with full-observed-cloud evidence + mode-aware representative selection"
 metadata: 
   node_type: memory
   type: project
   originSessionId: 2efdbcb1-f6ae-4abc-8cd4-dfbd07ed7f20
-  modified: 2026-07-30T04:50:57.002Z
+  modified: 2026-07-31T06:35:00.771Z
 ---
 
-Worklog 129 (2026-07-30) fixed the root cause behind [[project_boundary_conditioned_occlusion]]-adjacent worklog 126's finding that `reconstruct_visible_after_adc` on the real DATASET (~139k Gaussians) produced `reliable_count=0`/`region_count=0`/`no_admissible_region` at every representative cap tried (512/1024/2048).
+Worklog 129 (now `docs/worklogs/24_density_preserving_canonical_representative_evidence_and_reliability_repair.md` after the 2026-07-31 renumbering, 2026-07-30) fixed the root cause behind [[project_boundary_conditioned_occlusion]]-adjacent worklog 126 (now `docs/worklogs/20_adc_synchronized_canonical_visible_nurbs_experiment.md`)'s finding that `reconstruct_visible_after_adc` on the real DATASET (~139k Gaussians) produced `reliable_count=0`/`region_count=0`/`no_admissible_region` at every representative cap tried (512/1024/2048).
 
 **Root cause**: the representative sampler (`TorchOSNGSPipeline._canonical_construction_indices`) kept one Gaussian per occupied voxel cell, then contextual reliability recomputed 8-nearest-neighbor evidence *among that same sparse representative set* — representative spacing bore no relation to real local density, so almost every representative read as isolated/disagreeing.
 
@@ -22,4 +22,4 @@ Worklog 129 (2026-07-30) fixed the root cause behind [[project_boundary_conditio
 
 **Non-goal**: did not touch region formation (`torch_gaussian_surface_region_formation.py`), boundary/materialization stages, or ADC scheduling/transaction semantics (worklog 126) — those modules just now receive better-evidenced representative input.
 
-Full detail: `docs/worklogs/129_density_preserving_canonical_representative_evidence_and_reliability_repair.md`.
+Full detail: `docs/worklogs/24_density_preserving_canonical_representative_evidence_and_reliability_repair.md` (originally `129_...md`, renumbered 2026-07-31).

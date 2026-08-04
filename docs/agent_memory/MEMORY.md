@@ -1,21 +1,41 @@
 - [OSN-GS direction & constraints](project_osn_gs_direction.md) — surface-centric design, Stage 1 boundary, no perf-motivated NURBS/voxel disabling
 - [OSN-GS onboarding docs map](reference_osn_gs_docs.md) — reading order for docs/*.md and TODO.md at session start
-- [Notebook/CLI training parity](project_notebook_cli_parity.md) — defaults duplicated in 3 places; VRAM-safe shared recipe; keep in sync
-- [Baseline 3DGS comparison](project_baseline_comparison.md) — building/running local gaussian-splatting here; /Zc:preprocessor + arch; resolution/loss fairness caveats
+- [Notebook/CLI training parity](project_notebook_cli_parity.md) — defaults duplicated in 3 places; keep in sync
+- [Baseline 3DGS comparison](project_baseline_comparison.md) — building/running local gaussian-splatting; fairness caveats
 - [Branch rule](project_branch_rule.md) — all work only on voxel-surface-regions branch
-- [Stage 1 voxel-per-patch](project_stage1_voxel_patch.md) — approved scope A–E, exact polygon mask, global-union metrics, benchmark-only, no worklogs until asked
-- [Boundary-First direction, Phase 1-4 hardening (closed) + Phase 5 kickoff](project_boundary_first_phase1.md) — HISTORICAL background; seam-angle search exhausted (52-53); Step 5-A coupled patch-boundary fit PRODUCTION ADOPTED (worklog 55-56); superseded as active direction by [[project_boundary_conditioned_occlusion]]
-- [Boundary-conditioned occlusion direction reset (active, 2026-07-23)](project_boundary_conditioned_occlusion.md) — A-F/F.1/G/append-adapter/Ownership Foundation Gates all APPROVED (worklog 96); repo pytest NOT green (2 unrelated topology fails); Phase H not started; canonical doc is OSN_GS_Urgent_Work_Master.md
-- [Verify current state before reacting to corrections](feedback_verify_before_reacting.md) — check what's already done and report first, don't blindly redo on a 2nd/3rd review round
-- [Wire new phases into osn-gs benchmark, not new scripts](feedback_benchmark_cli_unification.md) — don't fork phaseN_report.py scripts; check the flag's *default*, not just that the choice exists; verify claims by running the real command, don't trust worklogs
-- [Worklogs must be in Korean](feedback_worklog_korean.md) — docs/worklogs/*.md entries in Korean regardless of nearby worklogs' language
-- [Deferred follow-ups: speed + quality gap](project_deferred_followups.md) — training speed AND scene quality gap vs baseline both parked until NURBS representation is complete; revisit together
-- [Commit scope: include other agents' work too](feedback_commit_scope.md) — when told to commit, cross-reference worklogs and bundle concurrent agents' changes, don't narrowly scope to Claude's own files only
-- [Mirror memory into repo for Codex](feedback_inrepo_memory_mirror.md) — every memory add/edit also gets copied into docs/agent_memory/ in the project so parallel agents can read it
-- [New worklog per follow-up round, don't append](feedback_new_worklog_per_round.md) — each Gate follow-up round gets its own new worklog file, not another section on the prior one
-- [Boundary-first isolated topology rebuild (active, 2026-07-29)](project_boundary_first_isolated_topology_rebuild.md) — separate thread from occlusion Phase A-H; fixing v6 fan/wedge; worklog 112 = star-shape validation + equal-angle resampling root-cause fix, all 6 flagged scenes now zero invalid crossings; anchor multi-candidate scoring still open
-- [Covariance-guided boundary redefinition (active, 2026-07-29)](project_covariance_guided_boundary_redefinition.md) — boundary = where covariance-guided same-surface adjacency breaks; worklog 113 foundation + worklog 115 robustness hardening, isolated, not connected to existing builder yet
-- [Volumetric Gaussian scene dataset (active, 2026-07-30)](project_volumetric_gaussian_scene_dataset.md) — worklog 125: old flat-plane/sine-sheet fixtures discarded, replaced with box/cylinder/sphere volumetric solids; 15 downstream test files migrated; sphere region-formation fragmentation disclosed but not fixed
-- [osn-gs benchmark's OWN volumetric dataset (active, 2026-07-30)](project_osn_gs_benchmark_volumetric_dataset.md) — worklog 128, DIFFERENT from the entry above: scenes.py/ground_truth.py/metrics.py (what `osn-gs benchmark` actually loads) rebuilt to box/cylinder/sphere with face-aware 3D-native ground truth; default `--constructor canonical` hard-fails on closed multi-face topology (disclosed gap, use `--constructor boundary_first` for now)
-- [Density-preserving canonical representative evidence (2026-07-30)](project_density_preserving_representative_evidence.md) — worklog 129: fixed worklog 126's reliable_count=0-at-every-cap on real DATASET via full-cloud contextual evidence + mode-aware representative selection; bottleneck now demonstrably boundary_recovery_failed, not reliability collapse; ~40x runtime cost per ADC event disclosed, not fixed
-- [Full-cloud continuation shell boundary recovery (2026-07-30)](project_full_cloud_continuation_boundary_recovery.md) — worklog 130: decomposed worklog 129's opaque boundary_recovery_failed into A/B/C stages; real DATASET bottleneck now precisely B_candidate_linking_failed (only 1-2 genuine termination candidates); two real bugs found+fixed via density-sweep and real-CUDA testing, runtime unchanged
+- [Stage 1 voxel-per-patch](project_stage1_voxel_patch.md) — approved scope A–E, benchmark-only, no worklogs until asked
+- [Boundary-First direction Phase 1-5](project_boundary_first_phase1.md) — HISTORICAL; superseded by [[project_boundary_conditioned_occlusion]]
+- [Boundary-conditioned occlusion reset](project_boundary_conditioned_occlusion.md) — Gates A-G APPROVED (worklog 96/3_*); canonical doc OSN_GS_Urgent_Work_Master.md
+- [Verify before reacting](feedback_verify_before_reacting.md) — check what's already done first, don't blindly redo on review rounds
+- [Wire new phases into osn-gs benchmark](feedback_benchmark_cli_unification.md) — don't fork scripts; check flag defaults; verify via real command
+- [Worklogs must be in Korean](feedback_worklog_korean.md) — docs/worklogs/*.md always Korean
+- [Deferred: speed + quality gap](project_deferred_followups.md) — parked until NURBS representation complete; revisit together
+- [Commit scope includes other agents' work](feedback_commit_scope.md) — bundle concurrent agents' changes when committing, not just Claude's
+- [Mirror memory into repo for Codex](feedback_inrepo_memory_mirror.md) — every memory add/edit also copied into docs/agent_memory/
+- [New worklog per follow-up round](feedback_new_worklog_per_round.md) — each round gets its own new worklog file, not appended
+- [Boundary-first isolated topology rebuild](project_boundary_first_isolated_topology_rebuild.md) — v6 fan/wedge fix (worklog 6_*); has old->new worklog renumbering map (87-134->1-29)
+- [Covariance-guided boundary redefinition](project_covariance_guided_boundary_redefinition.md) — boundary = where covariance-guided adjacency breaks (7_*/9_*), isolated from builder
+- [Volumetric Gaussian scene dataset](project_volumetric_gaussian_scene_dataset.md) — worklog 19_*: flat/sine fixtures -> box/cylinder/sphere solids, 15 test files migrated
+- [osn-gs benchmark's own volumetric dataset](project_osn_gs_benchmark_volumetric_dataset.md) — worklog 23_*: scenes.py/ground_truth.py rebuilt; canonical constructor gap on closed topology, use boundary_first
+- [Density-preserving representative evidence](project_density_preserving_representative_evidence.md) — worklog 24_*: fixed reliable_count=0 via full-cloud contextual evidence
+- [Full-cloud continuation shell recovery](project_full_cloud_continuation_boundary_recovery.md) — worklog 25_*: decomposed boundary_recovery_failed into A/B/C stages, bottleneck = candidate linking
+- [uncertain_confidence rename](project_uncertain_confidence_rename.md) — model._confidence -> _uncertain_confidence codebase-wide; BREAKING checkpoint/PLY format
+- [WebRenderer depth-sort perf regression](project_renderer_depth_sort_perf_regression.md) — reverted all-mode 50ms re-sort to 160ms idle-delay (composition mode only needs fast)
+- [Benchmark surface-aligned covariance variant](project_benchmark_surface_aligned_covariance.md) — worklog 29_*: `-surf`/`--surf` flag for idealized flat covariance
+- [Long-horizon reliability collapse repair](project_long_horizon_reliability_collapse_repair.md) — worklog 30: 10k-iter crash was cuSOLVER batch ceiling not NaN; local-radius evidence bound
+- [Per-representative reliability gate trace](project_per_representative_reliability_gate_trace.md) — worklog 31 diagnostic: region_seed_core=0 caused by affinity-graph candidate scarcity, not reliable_count
+- [Contextual reliability + affinity scale repair](project_contextual_reliability_manifold_affinity_scale_repair.md) — worklog 32: LocalEvidenceScale shipped; RepresentativeGraphScale reverted (broke invariance)
+- [Representative graph scale + region formation repair](project_representative_graph_scale_region_formation_repair.md) — worklog 33: G1 shipped, region_count 0->64-85; closed-loop linking still open
+- [Region quality + boundary component admission repair](project_region_quality_boundary_admission_repair.md) — worklog 34: growth veto bug fixed; C9 (too-small regions) vs C11 (mutual-matching fragments) split
+- [Core region consolidation + cycle recovery](project_core_region_consolidation_and_boundary_cycle_recovery.md) — worklog 35: C11 fixed via exact Hungarian one-in/one-out matching
+- [Directed cycle solver contract hardening](project_directed_cycle_solver_contract_hardening.md) — worklog 36: box_face accounting bug fixed; cardinality-first objective tried+rejected (regressed cylinder)
+- [Cross-region continuation certificate](project_cross_region_continuation_certificate.md) — worklog 40: sphere's 22 false terminations fixed via region-pair relation classification
+- [Boundary adjacency semantics separation](project_boundary_adjacency_semantics_separation.md) — worklog 39: accepted_core_pair misused as perimeter adjacency; fixed via 2-hop non-candidate bridge
+- [Seed/merge semantics correction](project_seed_merge_semantics_correction.md) — worklog 38: worklog 37's exemption was a tautology; replaced with explicit two-phase seed/merge DSU
+- [Core seeding coverage + candidate recall separation](project_core_seeding_coverage_candidate_recall_separation.md) — worklog 37: union-find bridge-veto bug fixed, core_member ~2x
+- [Candidate-local smooth continuation repair](project_candidate_local_smooth_continuation_repair.md) — worklog 48: no_gap fold/gap-crossing leak fixed (tiny effect); real bottleneck untouched
+- [Representative selection boundary evidence recovery](project_representative_selection_boundary_evidence_recovery.md) — worklog 49: FPS budget swap-in for orthogonal evidence; real fix, zero closed-loop effect
+- [Multi-scale local termination persistence](project_multi_scale_local_termination_persistence.md) — worklog 50: single-radius over-reach fixed via scale-persistence certificate; zero closed-loop effect
+- [Raw full-cloud boundary evidence audit](project_raw_full_cloud_boundary_evidence_audit.md) — worklog 51: raw-cloud chain hypothesis rejected; real blocker was Hungarian competition (see worklog 52/53)
+- [Directed matching objective audit](project_directed_matching_objective_audit.md) — worklog 52: corrected worklog 51; region 52 topologically infeasible, region 56 needs worklog 53
+- [Downstream-valid directed matching repair](project_downstream_valid_directed_matching_repair.md) — worklog 53: fixed 2-cycle capacity waste in Hungarian matching + exposed/fixed self-intersecting-loop bug in orientation quality() comparison; real fix, zero closed-loop effect; **5 consecutive worklogs (48-53) now find real defects with zero closed-loop effect — bottleneck is candidate evidence density, not a pipeline defect**

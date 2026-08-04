@@ -232,24 +232,38 @@ def _classify_endpoint_status(
 
 
 def _compute_pair_metrics(
-    positions: Any, frame: GaussianCovarianceFrame, neighbor_spacing: Any, a: int, b: int
+    positions: Any, frame: GaussianCovarianceFrame, neighbor_spacing: Any,
+    candidate_scale: Any, residual_scale: Any, a: int, b: int,
 ) -> PairAffinityMetrics:
+    """``candidate_scale``/``residual_scale`` (worklog 33, ``(N,)`` each): two
+    INDEPENDENT per-node scale roles (section 9 ablation).
+    ``candidate_scale`` normalizes ``normalized_distance`` (the crease gate's
+    distance-vs-local-scale ratio -- conceptually part of "is this pair even
+    worth evaluating", same role as the caller's ``within_radius`` check).
+    ``residual_scale`` normalizes ``mutual_tangent_residual`` and
+    ``tangent_direction_displacement_ratio`` (the same_surface/parallel
+    relation decision). Both default to ``frame.tangent_major_scale``
+    (Gaussian Footprint Scale) when the caller passes it unchanged,
+    preserving prior behavior exactly.
+    """
     torch = require_torch()
     displacement = positions[b] - positions[a]
     distance = float(torch.linalg.vector_norm(displacement))
 
-    tangent_major_a, tangent_major_b = frame.tangent_major_scale[a], frame.tangent_major_scale[b]
-    average_tangent_major = float((tangent_major_a + tangent_major_b) / 2.0)
-    normalized_distance = distance / max(average_tangent_major, 1e-12)
+    candidate_scale_a, candidate_scale_b = candidate_scale[a], candidate_scale[b]
+    average_candidate_scale = float((candidate_scale_a + candidate_scale_b) / 2.0)
+    normalized_distance = distance / max(average_candidate_scale, 1e-12)
 
     normal_alignment = float((frame.normal_candidate[a] * frame.normal_candidate[b]).sum().abs())
 
-    residual_from_a = float((displacement * frame.normal_candidate[a]).sum().abs() / tangent_major_a.clamp_min(1e-12))
-    residual_from_b = float((-displacement * frame.normal_candidate[b]).sum().abs() / tangent_major_b.clamp_min(1e-12))
+    residual_scale_a, residual_scale_b = residual_scale[a], residual_scale[b]
+    residual_from_a = float((displacement * frame.normal_candidate[a]).sum().abs() / residual_scale_a.clamp_min(1e-12))
+    residual_from_b = float((-displacement * frame.normal_candidate[b]).sum().abs() / residual_scale_b.clamp_min(1e-12))
     mutual_tangent_residual = max(residual_from_a, residual_from_b)
 
+    average_residual_scale = float((residual_scale_a + residual_scale_b) / 2.0)
     tangent_component = displacement - (displacement * frame.normal_candidate[a]).sum() * frame.normal_candidate[a]
-    tangent_direction_displacement_ratio = float(torch.linalg.vector_norm(tangent_component)) / max(average_tangent_major, 1e-12)
+    tangent_direction_displacement_ratio = float(torch.linalg.vector_norm(tangent_component)) / max(average_residual_scale, 1e-12)
 
     # Covariance normals are unoriented lines. Align before averaging so an
     # eigensolver sign flip cannot collapse the pair normal to zero.
@@ -320,6 +334,8 @@ def build_manifold_affinity_graph(
     *,
     config: ManifoldAffinityConfig | None = None,
     ids: Sequence[Any] | None = None,
+    candidate_scale: Any | None = None,
+    residual_scale: Any | None = None,
 ) -> ManifoldAffinityGraph:
     """Classify candidate spatial-neighbor pairs into orthogonal (candidate
     status, endpoint status, manifold relation, confidence) axes.
@@ -336,6 +352,18 @@ def build_manifold_affinity_graph(
     own endpoint status. ``ids`` are stable external identities (default:
     positional index) carried on every edge so results remain comparable
     across a shuffled input order.
+
+    ``candidate_scale``/``residual_scale`` (worklog 33, ``(N,)`` each):
+    independent REPRESENTATIVE GRAPH SCALE roles -- ``candidate_scale``
+    drives the ``within_radius`` candidate-radius test (this function) and
+    ``normalized_distance`` (crease gate, inside ``_compute_pair_metrics``);
+    ``residual_scale`` drives ``mutual_tangent_residual``/
+    ``tangent_direction_displacement_ratio`` (same_surface/parallel
+    decision). Both default to ``frame.tangent_major_scale`` (Gaussian
+    Footprint Scale) when omitted, preserving prior behavior exactly.
+    ``footprint_overlap`` (a genuinely different candidate criterion -- do
+    these two Gaussians' own splats physically overlap) always keeps using
+    ``frame.equivalent_tangent_scale`` regardless of these overrides.
     """
     torch = require_torch()
     config = config or ManifoldAffinityConfig()
@@ -346,7 +374,8 @@ def build_manifold_affinity_graph(
         raise ValueError("ids must have the same length as positions.")
 
     neighbor_spacing = reliability.contextual.neighbor_spacing
-    tangent_major_scale = frame.tangent_major_scale
+    candidate_scale = candidate_scale if candidate_scale is not None else frame.tangent_major_scale
+    residual_scale = residual_scale if residual_scale is not None else frame.tangent_major_scale
     equivalent_tangent_scale = frame.equivalent_tangent_scale
 
     k_candidates = max(1, min(config.candidate_neighbor_count, count - 1))
@@ -369,8 +398,8 @@ def build_manifold_affinity_graph(
             a, b = key
             mutual = (b in knn_set[a]) and (a in knn_set[b])
             distance = float(distances[a, b])
-            average_tangent_major = float((tangent_major_scale[a] + tangent_major_scale[b]) / 2.0)
-            within_radius = distance <= config.scale_radius_multiplier * max(average_tangent_major, 1e-12)
+            average_candidate_scale = float((candidate_scale[a] + candidate_scale[b]) / 2.0)
+            within_radius = distance <= config.scale_radius_multiplier * max(average_candidate_scale, 1e-12)
             footprint_sum = float(equivalent_tangent_scale[a] + equivalent_tangent_scale[b])
             footprint_overlap = distance <= config.footprint_overlap_multiplier * max(footprint_sum, 1e-12)
             pending.append((a, b, distance, mutual, within_radius, footprint_overlap))
@@ -427,7 +456,7 @@ def build_manifold_affinity_graph(
             per_node_candidate_count[a] += 1
             per_node_candidate_count[b] += 1
 
-            metrics = _compute_pair_metrics(positions, frame, neighbor_spacing, a, b)
+            metrics = _compute_pair_metrics(positions, frame, neighbor_spacing, candidate_scale, residual_scale, a, b)
             if endpoint_status in (ENDPOINT_ONE_UNRELIABLE, ENDPOINT_BOTH_UNRELIABLE):
                 edges.append(
                     ManifoldAffinityEdge(

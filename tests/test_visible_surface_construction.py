@@ -17,6 +17,23 @@ class VisibleSurfaceConstructionTest(unittest.TestCase):
         self.assertIsNotNone(result.manifold_affinity)
         self.assertIsNotNone(result.surface_regions)
 
+    def test_reliability_failure_stage_reflects_intrinsic_vs_contextual_collapse(self):
+        """Worklog 135: a healthy scene must classify as 'not_failed', and the
+        new field must never contradict reliable_count/intrinsic_reliable_count."""
+        scene = make_gaussian_reliability_scene("box_face")
+        result = construct_visible_nurbs_from_gaussians(scene.positions, covariance=scene.covariances)
+        summary = result.diagnostic_summary
+        self.assertIn("reliability_failure_stage", summary)
+        self.assertIn("intrinsic_reliable_count", summary)
+        if summary["intrinsic_reliable_count"] == 0:
+            self.assertEqual(summary["reliability_failure_stage"], "intrinsic_reliability_collapse")
+        elif summary["reliable_count"] == 0:
+            self.assertEqual(summary["reliability_failure_stage"], "contextual_reliability_collapse")
+        elif summary["reliable_count"] < summary["intrinsic_reliable_count"]:
+            self.assertEqual(summary["reliability_failure_stage"], "partial_contextual_reliability_collapse")
+        else:
+            self.assertEqual(summary["reliability_failure_stage"], "not_failed")
+
     def test_box_face_and_curved_patch_materialize_with_shared_methodology(self):
         import torch
         box_face = make_gaussian_reliability_scene("box_face")

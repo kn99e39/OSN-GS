@@ -95,6 +95,43 @@ def covariance_from_scale_rotation(scale: Any, rotation_quaternion: Any) -> Any:
     return rotation @ scale_matrix @ rotation.transpose(-1, -2)
 
 
+# cuSOLVER's batched symmetric eigensolver (`cusolverDnXsyevBatched`, what
+# `torch.linalg.eigh` dispatches to for a large (N, 3, 3) CUDA batch) has an
+# undocumented hard batch-size ceiling -- confirmed by direct reproduction
+# (worklog 135) with a fully finite, well-conditioned synthetic batch of
+# identity matrices: `CUSOLVER_STATUS_INVALID_VALUE` at exactly batch size
+# 2,064,888 on the reference GPU/driver/cuSOLVER combination, success at
+# 2,064,887. This is NOT a NaN/data-quality issue -- the exception message's
+# own "may appear if the input matrix contains NaN" hint is misleading here.
+# The exact boundary is not a documented constant and is not guaranteed
+# stable across GPU generations/driver/cuSOLVER versions, so a conservative
+# chunk size is used well below the measured boundary rather than hugging it.
+_EIGH_MAX_BATCH_SIZE = 1_000_000
+
+
+def _batched_eigh(symmetric: Any) -> tuple[Any, Any]:
+    """``torch.linalg.eigh`` chunked to stay under cuSOLVER's batch-size ceiling.
+
+    Eigendecomposition of a batch of independent (3, 3) matrices has no
+    cross-row interaction, so splitting the batch and concatenating results
+    is exactly equivalent to one call -- this changes nothing about the
+    returned values (beyond ordinary GPU batched-kernel float
+    nondeterminism, already present regardless of chunking).
+    """
+    torch = require_torch()
+    count = int(symmetric.shape[0])
+    if count <= _EIGH_MAX_BATCH_SIZE:
+        return torch.linalg.eigh(symmetric)
+    value_chunks = []
+    vector_chunks = []
+    for start in range(0, count, _EIGH_MAX_BATCH_SIZE):
+        end = min(start + _EIGH_MAX_BATCH_SIZE, count)
+        values, vectors = torch.linalg.eigh(symmetric[start:end])
+        value_chunks.append(values)
+        vector_chunks.append(vectors)
+    return torch.cat(value_chunks, dim=0), torch.cat(vector_chunks, dim=0)
+
+
 def extract_covariance_frame(
     covariance: Any,
     *,
@@ -123,7 +160,7 @@ def extract_covariance_frame(
     if covariance.ndim != 3 or tuple(covariance.shape[1:]) != (3, 3):
         raise ValueError("covariance must have shape (N, 3, 3).")
     symmetric = 0.5 * (covariance + covariance.transpose(-1, -2))
-    eigenvalues, eigenvectors = torch.linalg.eigh(symmetric)
+    eigenvalues, eigenvectors = _batched_eigh(symmetric)
     # torch.linalg.eigh returns ascending eigenvalues; reverse to descending.
     eigenvalues = torch.flip(eigenvalues, dims=(-1,))
     eigenvectors = torch.flip(eigenvectors, dims=(-1,))

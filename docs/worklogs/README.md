@@ -1,28 +1,78 @@
-﻿# 작업로그 보존 정책
+# 작업로그 보존 정책
 
 이 디렉터리는 현재 의사결정과 구현을 계속하는 데 필요한 최소 기록만 보존한다. 이전 실험, 폐기된 방법론, 과거 게이트의 세부 경과는 작업 디렉터리에서 제거했으며 필요할 때 Git 이력으로 복구한다.
 
 ## 유지 기록
 
-- `87_phase_g_uncertain_gaussian_proposal_foundation.md`: 불확실 Gaussian proposal 기반과 Gate G 승인 근거
-- `88_uncertain_gaussian_append_adapter_foundation.md`: model-only append adapter 기반과 승인된 계약
-- `96_occluded_chart_ownership_foundation.md`: occluded chart ownership 기반 계약
-- `110_boundary_first_review_geometry_semantics_and_crossing_gate.md`: isolated Boundary-first visible-surface 재구축의 최신 검증/차단 조건
-- `111_nurbs_construction_synthetic_3d_gaussian_dataset.md`: 기본 synthetic dataset의 3D shell·baseline-like covariance 교체 근거
-- `114_trimmed_component_jacobian_test_health.md`: trimmed-component Jacobian 진단 의미론과 전체 test-health 회복 근거
-- `112_boundary_first_star_shaped_anchor_correspondence.md`: observed-anchor fan support-curve crossing 근본 원인(arclength 재표본화의 불균등 각도 분포) 분석과 star-shape 검증 + equal-angle correspondence 수정
-- `113_gaussian_covariance_structural_reliability_foundation.md`: KDE/raster boundary extraction을 장기 대체할 covariance-guided structural reliability + pairwise manifold-affinity foundation(격리, 미연결)
-- `115_gaussian_reliability_affinity_robustness_hardening.md`: intrinsic/contextual reliability 분리, scale 계약, 직교 pairwise 상태, 불변성/오염/robustness 매트릭스 검증(격리, boundary extractor 미연결)
-- `116_consensus_aware_surface_region_formation_foundation.md`: pairwise edge를 다중 합의·bridge veto·경로 일관성으로 확장한 surface-region candidate foundation(격리, boundary graph/builder 미연결)
+- `1_phase_g_uncertain_gaussian_proposal_foundation.md`: 불확실 Gaussian proposal 기반과 Gate G 승인 근거
+- `2_uncertain_gaussian_append_adapter_foundation.md`: model-only append adapter 기반과 승인된 계약
+- `3_occluded_chart_ownership_foundation.md`: occluded chart ownership 기반 계약
+- `4_boundary_first_review_geometry_semantics_and_crossing_gate.md`: Boundary-first review geometry semantics와 support crossing gate
+- `5_nurbs_construction_synthetic_3d_gaussian_dataset.md`: 기본 synthetic dataset의 3D shell·baseline-like covariance 교체 근거
+- `6_boundary_first_star_shaped_anchor_correspondence.md`: star-shape 검증과 equal-angle anchor correspondence 수정
+- `7_gaussian_covariance_structural_reliability_foundation.md`: covariance-guided structural reliability와 manifold-affinity 기반
+- `8_trimmed_component_jacobian_test_health.md`: trimmed-component Jacobian 진단 의미론과 전체 test-health 회복 근거
+- `9_gaussian_reliability_affinity_robustness_hardening.md`: reliability/affinity robustness hardening
+- `10_consensus_aware_surface_region_formation_foundation.md`: consensus-aware surface-region candidate 기반
+- `11_surface_region_adversarial_validation_and_real_scene_diagnostic.md`: adversarial 검증과 real Gaussian reliable-core 진단
+- `12_experimental_world_space_boundary_halfedge_candidates.md`: review-only world-space boundary half-edge candidate 기반
+- `13_ordered_world_space_boundary_graph_and_role_recovery.md`: experimental ordered component와 boundary role recovery
+- `14_ordered_boundary_to_visible_nurbs_materialization_adapter.md`: ordered outer loop의 visible NURBS materialization adapter
+- `15_gaussian_to_visible_nurbs_end_to_end_integration.md`: Gaussian-to-visible-NURBS canonical execution path
+- `16_canonical_tangent_frame_invariance.md`: canonical tangent-frame invariance 검증
+- `17_canonical_tangent_frame_invariance_repair.md`: tangent-frame invariance repair
+- `18_canonical_visible_nurbs_training_integration.md`: canonical visible NURBS 학습 경로 통합
+- `19_volumetric_gaussian_reliability_scene_dataset.md`: volumetric solid synthetic dataset 교체
+- `20_adc_synchronized_canonical_visible_nurbs_experiment.md`: ADC 동기화 canonical visible NURBS 실험
+- `21_notebook_canonical_adc_nurbs_schedule.md`: 노트북 canonical ADC-NURBS 실행 설정
+- `22_webrenderer_gaussian_diagnostics.md`: OSN-GS PLY/WebSocket Gaussian 진단 모드
+- `23_osn_gs_benchmark_volumetric_solid_dataset_replacement.md`: `osn-gs benchmark` 3D-native dataset 교체
+- `24_density_preserving_canonical_representative_evidence_and_reliability_repair.md`: density-preserving representative evidence와 reliability 보완
+- `25_full_cloud_continuation_boundary_recovery.md`: full-cloud continuation support 기반 boundary recovery 보완
+- `26_canonical_reconstruction_gpu_synchronization_optimization.md`: canonical reconstruction GPU synchronization 최적화
+- `27_mode_aware_selection_phase2_exact_optimization.md`: mode-aware selection exact 최적화
+- `28_native_exact_cell_splitter_gate.md`: native exact cell splitter 채택 gate
+- `29_synthetic_benchmark_surface_aligned_covariance.md`: synthetic benchmark surface-aligned covariance 변형
+- `30_long_horizon_reliability_collapse_and_nan_repair.md`: 장시간 학습(1.6M~3M Gaussian) reliability collapse 진단 및 복구 — cuSOLVER 배치 한계(NaN 아님) eigh chunking 수정, unbounded Voronoi evidence를 local-radius로 제한
+- `31_per_representative_reliability_gate_trace.md`: representative별 reliability gate 진단 전용 trace — region-seed core가 전부 0인 진짜 원인은 final reliable 부족이 아니라 manifold affinity graph의 candidate 부족(representative 간격이 자기 tangent scale의 12~16배)임을 확인, 코드 미변경
+- `32_contextual_reliability_and_manifold_affinity_structural_scale_repair.md`: LocalEvidenceScale(contextual evidence 반경/잔차 분모)을 Gaussian Footprint Scale에서 분리해 production 반영·invariance 검증 완료; RepresentativeGraphScale(manifold affinity)은 3가지 후보 전부 rotation invariance 테스트를 깨뜨려 최종 원복 — region 형성 병목은 여전히 미해결로 정직하게 disclosed
+- `33_representative_graph_scale_invariance_and_region_formation_repair.md`: frozen-representative replay로 estimator invariance와 selection perturbation을 분리 검증 — worklog 32가 기각한 graph-scale 후보(G1, 대표점 kNN spacing)는 실제로는 완전히 rigid-transform invariant했고, 문제는 매번 selection을 재실행하던 end-to-end 테스트가 selection 자체의 회전 민감성(기존에 이미 알려진 문제)과 estimator를 혼동한 것이었음을 규명; G1을 production에 반영해 real 3k/5k/10k에서 region_count 0→64~85, boundary_failure_stage A→C까지 회복
+- `34_region_quality_and_boundary_component_admission_repair.md`: region membership breakdown(core 19~22%, ambiguous_unassigned 80% 가까이)과 boundary component 실패 원인을 candidate 단위로 분해 — real 장기학습 snapshot은 region당 genuine candidate가 1~2개뿐이라 구조적으로 closed loop 불가(C9), post-ADC 합성 box_face는 candidate가 충분한데도 directed ordering의 mutual-matching이 여러 조각으로 쪼갬(C11); growth-loop가 core-merge 전용 veto를 잘못 재사용하던 실제 버그 하나를 좁게 수정(consensus_attached 0~1→7~10), materialization은 두 근본 원인이 남아 있어 여전히 0
+- `35_core_region_consolidation_and_directed_boundary_cycle_recovery.md`: C11(candidate 충분한 box_face가 6조각으로 쪼개짐)을 mutual+greedy heuristic 대신 exact one-in/one-out matching(Hungarian algorithm)으로 교체해 해결(box_face closed loop 0→1, materialized 0→1); C9는 `_seed_core_components`의 parallel-shortcut override가 scale-mismatch된 raw metric으로 이미 bridge veto를 통과한 edge를 재차 vetoing하던 실제 결함을 "nearby parallel evidence" 조건 추가로 좁게 수정(real 3k/5k/10k consensus_attached 1→12/0→9/0→5); 두 수정이 독립적으로 기여함을 ablation으로 증명, real snapshot의 closed-loop/materialization은 region당 candidate 구조적 부족(C9 근본 한계)으로 여전히 0
+- `36_directed_cycle_solver_contract_hardening_and_region_coverage_recovery.md`: worklog 34/35 baseline 불일치의 정확한 원인(worklog 35 ablation이 파일 교체로 HEAD를 캡처했는데 HEAD는 worklog 34/35 어떤 수정도 커밋되지 않은 pre-34 상태였음)을 규명하고 config-flag 기반 authoritative ablation으로 재구성; box_face candidate 100% accounting 결함(고립 노드가 조용히 누락) 수정; Hungarian solver 계약을 10개 시나리오로 감사(전부 통과); lexicographic max-coverage objective를 시도했으나 cylinder를 fragmentation시켜 롤백(max-score 유지); branch admission gating도 정규 격자 전수 오탐으로 롤백(진단 함수만 유지); candidate>150 시 silent greedy fallback을 명시적 `ordering_capacity_exceeded`로 교체; 명시적 self-intersection 검사 모듈 신설 및 materialization에 wiring; real snapshot의 closed-loop 부재를 region coverage 부족(90%)과 candidate recall/compatibility 부족(10%)으로 정량 분리 — 순수 ordering-solver 결함 사례는 real snapshot에서 발견되지 않음
+- `37_core_seeding_coverage_and_boundary_candidate_recall_separation.md`: real snapshot region coverage 부족의 정확한 원인을 규명 — `_seed_core_components`의 union-find가 "아직 union 안 된 같은 raw same_surface component의 두 조각"과 "진짜 독립된 두 surface"를 구분 못해 bridge veto를 오적용(83-node raw component가 50개의 well-supported internal edge에도 43개 조각으로 쪼개짐, R2 노드의 84%가 이 패턴); raw same_surface connected component를 사전 계산해 intra-component union을 bridge veto에서 면제하는 narrow fix 적용, threshold는 전혀 변경 안 함; real 3k/5k/10k core_member 거의 2배 개선(414→908/454→882/375→782), false merge 없음; self-intersection 검사에 planarity 선행 계약 추가(nonplanar loop는 검사 자체를 fail-closed); worklog 번호 기반 config flag를 의미 기반 이름으로 정리; 부수 효과로 cylinder cap 1개 closed→ambiguous 회귀 정직하게 disclosed; real snapshot의 candidate recall 문제는 여전히 미해결로 다음 라운드 과제
+- `38_seed_merge_semantics_correction_and_candidate_recall_audit.md`: worklog 37의 `exempt_intra_raw_component_unions_from_bridge_veto`가 수학적 tautology임을 증명(raw component를 core_eligible edge 집합 자신의 connected component로 계산하므로 100% edge가 면제 — 실측 2092/2092, bridge veto 평가 0건, articulation bridge 47개 union)하고 기본값을 False로 원복; 대신 명시적 2-phase DSU(`separate_seed_and_merge_phases`)를 도입해 Phase 1은 seed_strong_edge만 union, Phase 2는 component-pair aggregate endpoint support로 merge 판정 — articulation bridge union 47→0, threshold 변경 없이 core_member 414→799; candidate rejection waterfall 구현 및 analytic precision/recall 측정(box_face 1.000/1.000, sphere false boundary 0); box는 face당 compat edge < candidate인 C4(compatibility 부족)로 확정; cylinder cap 회귀는 sector histogram smearing이 유효한 geometric gap을 veto하는 것으로 근본 원인 규명했으나 교정이 scene-tuned 상수를 요구해 원복하고 미해결 보고
+
+- `39_boundary_adjacency_semantics_and_angular_coverage_audit.md`: worklog 38이 최우선 병목으로 지목한 "sector histogram smearing이 유효한 geometric gap을 무력화"가 오진임을 노드 단위 전수 비교로 확인 — histogram은 실제로 하중을 지탱하며(닫힌 sphere에서 geometric gap 단독이면 154개 false candidate, histogram이 108개를 veto해 22개로 축소), 교체 제안(§8 후보 B/E)은 sphere false positive를 7배 악화시키므로 유지 판정; 실제 병목은 `accepted_core_pair`(region topology evidence)가 boundary perimeter adjacency로 오용된 것으로, box 각 면이 perimeter-adjacent pair 5~11개를 이 gate에서 잃어 ring 폐합 불가였고 그 45개 전부가 2-hop region-graph path로 도달 가능함을 측정 — direct edge 또는 non-candidate interior node 경유 2-hop으로 gate를 넓혀 cylinder closed 2→3(§16 필수 조건), box 0→5 복구, sphere는 여전히 0, 복구 loop 11개 전부 simple polygon이며 단일 face 유지; 공유 이웃을 non-candidate로 제한하지 않으면 Y-junction stub이 ring에 삽입되는 것을 측정으로 확인해 제약 추가; sphere의 22개 false candidate는 region fragmentation(두 반구 seam)이 근본 원인으로 확정했으나 guard 시도가 box/cylinder genuine candidate를 파괴해 원복하고 미해결 보고; two-phase seeding은 micro-region 비율 미억제로 provisional 유지
+
+- `40_cross_region_continuation_certificate_and_boundary_topology_safety.md`: sphere의 22개 false `observed_support_termination`을 REGION PAIR 단위 relation 집계로 해결 — per-Gaussian-pair로는 relation evidence가 없어 보이지만(bounded-kNN이 직접 edge를 누락) region pair (0,1)은 same_surface=12/crease=0으로 affinity graph가 이미 두 반구를 하나의 매끄러운 표면으로 판정하고 있었고, box는 face pair마다 crease=32~33, cylinder side/cap은 crease=88~90, thin_slab은 parallel=57 — sphere만 crease-free+same_surface인 유일한 fixture라는 것이 판별식; `classify_cross_region_pairs()`로 smooth_continuation verdict일 때만 `reliability_frontier`로 재분류(삭제 아님, provenance 유지)해 sphere genuine 22→0, box 110/closed=5·cylinder 74/closed=3·thin_slab 48/closed=2 전부 보존; folded-sheet 각도 sweep에서 90°/120° 실제 fold는 재분류 0건; worklog 39의 2-hop certificate topology safety를 U-shape(notch 벽 추적, 내부 진입 0)·hole(outer 48+inner 4 분리)·narrow neck(27+27 분리)·near-touching(gap 3종 모두 분리)으로 입증; real 3k/5k/10k waterfall로 closed-loop 부재를 확정 — **R4(ordering 실패)=0, R3(compatibility)=6~16%, R1/R2(candidate 부족)=84~94%**로 병목은 candidate extraction 단계; box 6번째 face는 corner candidate가 4개 중 2개만 생성되는 candidate 불규칙성으로 원인 확정하고 강제 복구 안 함
 
 현재 작업 범위와 우선순위는 `docs/Urgent_Work/OSN_GS_Urgent_Work_Master.md`를 단일 기준으로 삼는다. 이 작업로그들은 설계의 상위 문서가 아니라 검증 근거다.
-- 117_surface_region_adversarial_validation_and_real_scene_diagnostic.md: phase-alias, narrow-connection, 불변성 검증과 real Gaussian reliable-core 진단
-- 118_experimental_world_space_boundary_halfedge_candidates.md: region evidence에서 review-only world-space boundary half-edge candidate를 추출하는 기반
-- 119_ordered_world_space_boundary_graph_and_role_recovery.md: half-edge candidate의 experimental ordered component와 role recovery
-- 120_ordered_boundary_to_visible_nurbs_materialization_adapter.md: admissible ordered outer loop를 canonical evaluable visible NURBS로 전달하는 실험적 adapter
-- 121_gaussian_to_visible_nurbs_end_to_end_integration.md: Gaussian covariance에서 ordered boundary 및 visible NURBS adapter까지 연결한 canonical experimental execution path
-- 125_volumetric_gaussian_reliability_scene_dataset.md: 평면/사인곡면 fixture를 폐기하고 box/cylinder/sphere volumetric solid dataset으로 교체, 다운스트림 15개 테스트 파일 전체 재작성
-- 126_adc_synchronized_canonical_visible_nurbs_experiment.md: 구조적 ADC commit 뒤 canonical visible NURBS를 원자적으로 재구축하는 격리 스케줄, stable ID, fail-closed lifecycle, event 진단 및 controlled Gaussian invariance 검증
-- 127_notebook_canonical_adc_nurbs_schedule.md: Colab/local Train 셀이 현재 canonical NURBS 경로만 호출하고 구조적 ADC commit 뒤 재구성을 시도하도록 정리
-- 128_webrenderer_gaussian_diagnostics.md: OSN-GS PLY/WebSocket Gaussian metadata와 WebRenderer reliability·ownership 진단 모드
-- 128_osn_gs_benchmark_volumetric_solid_dataset_replacement.md: `osn-gs benchmark`가 실제로 로드하는 scenes.py/ground_truth.py/metrics.py를 box/cylinder/sphere 3D-native dataset으로 전면 교체, canonical constructor의 닫힌 다면체 미지원 갭 공개
+- `41_candidate_local_continuation_certificate_and_physical_termination_audit.md`: Worklog 40 global region-pair continuation은 candidate-local certificate가 아니며 mixed-relation 안전성도 미검증임을 명시; typed smooth provenance와 candidate-scale 전달 보정을 확인하고 real 3k/5k/10k replay에서 R1=2~3, R2=124~138 region으로 R2 candidate-extraction 병목을 분리; 두 waterfall의 candidate 집계 불일치(136/167/106 vs 153/181/121)를 다음 repair 전 선결 과제로 기록
+
+- 42_physical_termination_neighborhood_scale_contract_closure.md: RepresentativeGraphScale termination neighborhood 계약과 frozen 3k/5k/10k footprint A/B closure
+- `43_representative_sector_dual_scale_lineage_gate.md`: representative-sector termination neighborhood를 `equivalent_tangent_scale`와 `candidate_scale`로 dual-scale replay하고 stable-ID lineage, fixture downstream counter, false-support gate를 검증 — candidate-scale contract 승인, full-cloud continuation composition은 real downsampled checkpoint replay가 남은 위험
+- `44_full_cloud_candidate_lineage_and_trace_count_alignment.md`: real 3k/5k/10k full-cloud continuation 포함 production candidate lineage를 stable-ID와 candidate ID 양쪽으로 연결하고, 136/153·167/181·106/121 차이가 continuation-backed production candidate를 sector-only gate로 먼저 오분류하던 diagnostic trace 결함임을 수정 — frozen replay helper의 candidate-scale 전달도 정합화
+
+
+
+
+
+- 45_real_physical_boundary_coverage_and_compatibility_repair.md: Real 3k/5k/10k physical boundary coverage를 region-level로 추적해 Box 6번째 face와 real 5k closed/materialized 0의 직접 원인이 target tangent orientation gate 오거부임을 확인하고, target tangent를 방향 없는 boundary line alignment로 평가하도록 수정. Box 6/6, cylinder closed=3, sphere physical=0, focused 64 passed, full pytest 715 passed.
+
+- [Worklog 46: Real 3k/10k physical candidate chain 원인 감사](46_real_3k_10k_physical_candidate_chain_cause_audit.md)
+  - 3k/10k의 raw physical candidate에도 closed chain이 없음을 확인했고, candidate intermediary bridge로 생기는 짧은 loop는 topology safety 위반이라 production에 적용하지 않았다.
+- [Worklog 47: Boundary-proximate no_gap local evidence 복구](47_boundary_proximate_no_gap_local_evidence_repair.md)
+  - local crease/parallel/competing evidence가 angular occupancy만으로 smooth `no_gap`을 만들지 않도록 same-mode coverage를 분리하고 fail-closed typed state를 추가했다.
+- [Worklog 48: Candidate-local smooth continuation 복구](48_candidate_local_smooth_continuation_repair.md)
+  - same-mode support가 region의 accepted-topology 그래프로 candidate-local하게 연결됐는지(무제한 hop, 직선거리 대비 경로 길이 비율) 감사해 fold/gap-crossing support가 `no_gap`을 만드는 실제 결함을 좁게 수정했다. 3k/5k 각 1개 node만 재분류, 10k 불변, negative-control fixture 전부 무변화, full pytest 720 passed 유지, 남은 병목(evidence 밀도 부족)은 불변.
+- [Worklog 49: Representative selection boundary evidence 복구](49_representative_selection_boundary_evidence_recovery.md)
+  - `_split_cell_into_modes`가 분리한 cell 내 형제 mode 중 하나가 FPS 예산 경쟁으로 탈락하는 실제 결함(orientation alignment<=0.3, source_count>=3인 well-supported evidence, 3k 26개/10k 100개)을 확인하고 `_boundary_evidence_swap_in()`으로 cap 증가 없이 deterministic swap-in을 구현했다. box 합성 fixture에서 여러 차례 region_count 회귀(6->7/8/9)를 반복 재현·수정한 끝에 connectivity-safe eviction + swap-in 밀도 dedup으로 전부 해결, negative-control 완전 보존. Real 3k/5k/10k swap-in 22/51/76건 발동했지만 closed/materialized는 세 checkpoint 전부 불변 — representative selection 손실은 실재했으나 closed-loop 부재의 지배적 원인은 아님을 확인.
+- [Worklog 50: Multi-scale local termination 복구](50_multi_scale_local_termination_persistence.md)
+  - 단일 `4x candidate_scale` 반경이 근거리의 well-supported 진짜 gap(1x~3x에서 26~74도, 23~267개 same-mode Gaussian)을 원거리 support로만 덮어 `no_gap`을 만드는 결함을 5k의 실제 closed region(130/141, 전 scale에서 no_gap 전무)을 대조군으로 확정했다. `persistence_check_radius_ratio=0.5`로 작은 반경에서도 gap이 지속되는지 검증하는 scale-persistent 인증을 추가해 모순되는 경우 `ambiguous_continuation`으로 fail-closed. Real 3k/5k/10k에서 no_gap 76/36/39건이 정확히 ambiguous로 재분류됐지만 termination/physical/closed는 세 checkpoint 전부 완전 불변 — 오분류는 고쳤지만 closed-loop 부재의 원인은 아니었음을 확인.
+- [Worklog 51: Raw full-cloud boundary evidence 감사](51_raw_full_cloud_boundary_evidence_audit.md)
+  - representative-level open-chain gap 5곳에서 production과 동일한 same-mode+gap 알고리즘을 raw full-cloud Gaussian에 직접 적용해 ground-truth 측정을 했다. 3곳은 raw cloud에도 coherent chain이 없었고(순수 interior 또는 patchy), 2곳(region 52/56)은 raw·representative 양쪽에 evidence가 이미 있고 서로 compatible인데도 Hungarian matching 경쟁에서 탈락한 것으로 확정 — representative 축약 손실이 아니라 이번 작업 범위 밖(Hungarian solver 금지)의 별도 결함이라 boundary-anchor sidecar를 구현하지 않고 가설을 기각했다. production 코드 변경 없음, full pytest 720 passed 유지.
+- [Worklog 52: Directed matching objective 감사](52_directed_matching_objective_audit.md)
+  - worklog 51이 지목한 region 52/56의 두 edge가 실제로는 matching에 이미 포함돼 있었음을 정정하고, 완전 탐색으로 진짜 원인을 확정했다: region 52는 두 candidate가 outgoing edge가 아예 없어 cycle이 위상적으로 불가능, region 56은 feasible cycle이 있지만 matching의 실제 선택보다 23% 낮은 점수라 강제 선택은 "열등한 evidence로 closure" 금지 조항에 해당. 10k 4개 region에서도 동일 패턴 재확인. score 공식 단위/부호/tie-break 감사 결과도 결함 없음 — Hungarian solver 미변경, production 코드 변경 없음, full pytest 720 passed 유지.
+- [Worklog 53: Downstream-valid directed matching 복구](53_downstream_valid_directed_matching_repair.md)
+  - region 56이 사실은 downstream에서 무효(길이<3) 처리되는 2-cycle에 capacity를 낭비하고 있었음을 확인하고 solver를 수정했다(2-cycle 발견 시 두 방향 중 하나씩 금지한 branch를 재귀 탐색, closure bonus 없이 순수 점수로 선택). 2차로 이 수정이 direct/reverse tangent 비교의 `quality()`가 자기교차(self-intersecting) "닫힌 loop"를 진짜 승리로 잘못 세던 기존 결함을 노출시켜(thin_slab 3/3→2/0 회귀) `validate_simple_closed_loop`로 안전 인식하게 추가 수정. Region 56은 fragment 2개→4-node open path 1개로 개선(진짜 최댓값이 open이라 강제 폐쇄 안 함), region 52/10k region52 완전 불변, negative-control 전부 baseline 복구, real 3k/5k/10k candidate·closed 수 불변, full pytest 720 passed 유지.

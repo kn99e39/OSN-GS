@@ -171,9 +171,9 @@ def uncertain_anchor_loss(state: TorchPipelineState, weight: float = 0.01) -> An
     uv = state.model.surface_uv[state.model.is_uncertain]
     anchors = state.surface.evaluate(uv)
 
-    # confidence가 낮을수록 surface prior를 더 강하게 적용한다.
-    confidence = state.model.get_confidence[state.model.is_uncertain].detach()
-    return weight * ((uncertain_xyz - anchors).square() * (1.0 - confidence)).mean()
+    # uncertain_confidence가 낮을수록 surface prior를 더 강하게 적용한다.
+    uncertain_confidence = state.model.get_uncertain_confidence[state.model.is_uncertain].detach()
+    return weight * ((uncertain_xyz - anchors).square() * (1.0 - uncertain_confidence)).mean()
 
 
 def uncertain_confidence_loss(state: TorchPipelineState, residual_mse: Any, weight: float = 0.05) -> Any:
@@ -186,8 +186,8 @@ def uncertain_confidence_loss(state: TorchPipelineState, residual_mse: Any, weig
     torch = require_torch()
     if not state.model.is_uncertain.any():
         return torch.zeros((), dtype=torch.float32, device=state.model.device)
-    confidence = state.model.get_confidence[state.model.is_uncertain]
+    uncertain_confidence = state.model.get_uncertain_confidence[state.model.is_uncertain]
 
     # exp(-mse)는 0~1 범위의 부드러운 confidence target으로 쓰기 좋다.
     target_confidence = torch.exp(-residual_mse.detach()).clamp(0.0, 1.0)
-    return weight * (confidence - target_confidence).square().mean()
+    return weight * (uncertain_confidence - target_confidence).square().mean()
