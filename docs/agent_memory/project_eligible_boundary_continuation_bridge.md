@@ -1,0 +1,23 @@
+---
+name: eligible-boundary-continuation-bridge
+description: "Worklog 56 — real production bridge (+ orchestration entry point) from eligible_materialized_surfaces() to the previously-isolated Phase D/E occluded-candidate pipeline; deterministic UV resampling clears Phase D's representation-density floor, real 5k's 2 eligible regions now both reach a continuation domain"
+metadata:
+  node_type: memory
+  type: project
+  originSessionId: c91e18fb-6002-40ed-b911-d218589c420a
+  modified: 2026-08-04T04:16:18.520Z
+---
+
+Worklog 56 (docs/worklogs/56_eligible_visible_surface_occluded_candidate_production_bridge.md, two rounds) built `osn_gs/surface/torch_eligible_boundary_continuation_bridge.py` connecting [[project_eligible_boundary_downstream_integration]] (worklog 55)'s `eligible_materialized_surfaces()` to the previously-completely-isolated Phase D (`build_continuation_domain`) and Phase E (`build_geometric_region_candidates`) modules for the first time in production history.
+
+**Mechanism**: for each eligible surface, re-projects its own ordered boundary/interior world points back onto its own already-fitted `TorchNURBSSurface` via `project_torch_points_to_nurbs` (unchanged) to synthesize a `PatchBoundarySegment` (reusing `torch_patch_boundary._make_record`, unchanged) — inner isocurve is the nearest *genuine already-approved interior point*, never interpolated. Phase D/E modules themselves remain completely unmodified. Provenance (region/component ID, status, reason, supporting source IDs) is carried by reference via a stable `boundary_id` chain (`ContinuationDomain.source_boundary_id` → `OccludedRegionCandidate.supporting_boundary_ids` → `boundaries_by_id[...].provenance`), not duplicated into either dataclass.
+
+**Round 2 fix (the 4-sample floor)**: round 1 found real 5k's 2 eligible regions (130/141) both fail `build_continuation_domain`'s own pre-existing input contract (closed boundary needs >=4 unique world samples; these loops had only 3). Empirically verified via direct calls to `_world_arclength_tangent`/`_arclength_metadata` on a bare 3-vertex triangle that this floor is a REPRESENTATION-DENSITY convention, not a geometric necessity (tangents come out fully finite/non-degenerate at n=3). Fix: `_resample_closed_uv_loop_to_minimum()` deterministically upsamples an already-validated closed UV loop via edge-midpoint insertion (never moves the original vertices, never invents new topology/gap, same technique `build_rectangular_patch_edge` already uses) until it clears Phase D's own floor — Phase D's threshold itself is untouched. Any failure surviving resampling gets the explicit typed status `eligible_visible_only_not_continuation_ready` (`STATUS_CONTINUATION_INELIGIBLE`), never a generic exception string.
+
+**Round 2 orchestration**: added `run_eligible_boundary_continuation_bridge_from_gaussians()` — calls `construct_visible_nurbs_from_gaussians()` (unchanged, same signature) then feeds its `eligible_materialized_surfaces()` straight into the bridge, so a real caller no longer has to manually chain the two functions.
+
+**Fail-closed defense in depth**: even though `eligible_materialized_surfaces()` already restricts to `eligible_closed_boundary`, the bridge independently re-checks each element's own carried `region_status` before building a domain (protects against a future upstream refactor bug, not the current gate).
+
+**Final real-checkpoint result (cap 2048)**: 3k/10k have 0 eligible surfaces → 0 attempts → 0 domains/candidates, unchanged across both rounds. 5k's region 130/141 both now reach an actual `ContinuationDomain` (state `degenerate`, i.e. a valid-but-imperfect continuation hypothesis, not `rejected`) after resampling; candidate count is 0 because the two domains' AABBs don't overlap. Negative control (cap 64): Box 6/6 all bridged (7 candidates), Cylinder 2/2 all bridged (0 candidates, no AABB contact), Sphere 0, Thin-slab 3/3 all bridged (3 candidates) — all sourced only from pre-existing eligible surfaces. Full pytest 731→736→739 passed (8 tests total in `tests/test_eligible_boundary_continuation_bridge.py` by round 2).
+
+**How to apply:** any future work extending Phase D/E, or building Phase F (occluded NURBS fitting) on top, must go through `run_eligible_boundary_continuation_bridge_from_gaussians()` (or `build_eligible_boundary_continuation_bridge()` if construction already ran) — never call `build_continuation_domain`/`build_geometric_region_candidates` directly on ad-hoc boundary data. The `_CLOSED_BOUNDARY_MIN_SAMPLES = 4` constant in the bridge module is a duplicate of Phase D's own literal floor purely for pre-emptive resampling — if Phase D's own threshold ever changes, update this constant to match, never let it silently drift.

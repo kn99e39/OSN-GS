@@ -359,6 +359,79 @@ class CapacityLimitTest(unittest.TestCase):
             self.assertIn("region_candidate_count_exceeds_exact_matching_capacity", component.unresolved_reasons)
 
 
+class TwoCycleBudgetExhaustionTest(unittest.TestCase):
+    """Worklog 54: the 2-cycle branch-elimination budget (worklog 53) must
+    fail closed, never silently present an unvetted result as a normal
+    `ordered_closed_loop`."""
+
+    def test_forced_zero_budget_reports_exhaustion_and_stays_well_formed(self):
+        from osn_gs.surface.torch_directed_boundary_ordering import (
+            _max_weight_one_in_one_out_matching_with_diagnostics, DirectedBoundarySuccessor,
+        )
+
+        def edge(s, t, score):
+            return DirectedBoundarySuccessor(s, t, 1.0, 0.0, 0.5, 1.0, 1.0, 1.0, score, "compatible_directed_edge")
+
+        nodes = ["a", "b"]
+        edges = {("a", "b"): edge("a", "b", 3.0), ("b", "a"): edge("b", "a", 2.5)}
+        matched, exhausted = _max_weight_one_in_one_out_matching_with_diagnostics(nodes, edges, None, max_branch_expansions=0)
+        self.assertTrue(exhausted)
+        # Still a structurally valid one-in/one-out partial function -- no
+        # crash, no node matched twice as source or as target.
+        self.assertEqual(len(set(matched.keys())), len(matched))
+        self.assertEqual(len(set(matched.values())), len(matched))
+
+    def test_unbudgeted_two_cycle_resolves_without_exhaustion(self):
+        from osn_gs.surface.torch_directed_boundary_ordering import (
+            _max_weight_one_in_one_out_matching_with_diagnostics, DirectedBoundarySuccessor,
+        )
+
+        def edge(s, t, score):
+            return DirectedBoundarySuccessor(s, t, 1.0, 0.0, 0.5, 1.0, 1.0, 1.0, score, "compatible_directed_edge")
+
+        nodes = ["a", "b"]
+        edges = {("a", "b"): edge("a", "b", 3.0), ("b", "a"): edge("b", "a", 2.5)}
+        matched, exhausted = _max_weight_one_in_one_out_matching_with_diagnostics(nodes, edges, None)
+        self.assertFalse(exhausted)
+        # A 2-node "cycle" is never valid (length < 3); the production
+        # budget must resolve it to a one-directional edge, not a mutual pair.
+        self.assertFalse(matched.get("a") == "b" and matched.get("b") == "a")
+
+    def test_exhaustion_marks_component_and_region_status_rejected_unsafe(self):
+        from unittest.mock import patch
+
+        from osn_gs.surface.torch_visible_boundary_region_status import (
+            STATUS_REJECTED_UNSAFE, classify_all_region_boundary_statuses,
+        )
+
+        # Two candidates 0.1 apart with tangents pointing at each other are
+        # mutually forward-compatible in both directions -- a real 2-cycle.
+        candidates = [
+            WorldSpaceBoundaryHalfEdgeCandidate(
+                half_edge_id="h0", source_region_id=0, source_gaussian_id=0, adjacent_gaussian_id=None,
+                world_position=(0.0, 0.0, 0.0), local_normal=(0.0, 0.0, 1.0),
+                local_tangent_direction=(1.0, 0.0, 0.0), boundary_direction=(1.0, 0.0, 0.0),
+                boundary_reason="observed_support_termination", source_pair_ids=None, confidence=0.7,
+                ordering_state="locally_chainable", review_reasons=(),
+            ),
+            WorldSpaceBoundaryHalfEdgeCandidate(
+                half_edge_id="h1", source_region_id=0, source_gaussian_id=1, adjacent_gaussian_id=None,
+                world_position=(0.1, 0.0, 0.0), local_normal=(0.0, 0.0, 1.0),
+                local_tangent_direction=(-1.0, 0.0, 0.0), boundary_direction=(-1.0, 0.0, 0.0),
+                boundary_reason="observed_support_termination", source_pair_ids=None, confidence=0.7,
+                ordering_state="locally_chainable", review_reasons=(),
+            ),
+        ]
+        accepted = [(0, 1)]
+        with patch("osn_gs.surface.torch_directed_boundary_ordering._MAX_TWO_CYCLE_BRANCH_EXPANSIONS", 0):
+            _, components = recover_directed_boundary_components(candidates, accepted)
+        self.assertTrue(any("two_cycle_branch_budget_exhausted" in c.unresolved_reasons for c in components))
+        statuses = classify_all_region_boundary_statuses((0,), components, candidates)
+        self.assertEqual(len(statuses), 1)
+        self.assertEqual(statuses[0].status, STATUS_REJECTED_UNSAFE)
+        self.assertEqual(statuses[0].reason, "two_cycle_branch_budget_exhausted")
+
+
 class SelfIntersectionValidationTest(unittest.TestCase):
     """Worklog 36 task section 9."""
 

@@ -100,3 +100,9 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - [Worklog 53](worklogs/53_downstream_valid_directed_matching_repair.md): region 56의 진짜 결함(downstream-invalid 2-cycle의 capacity 낭비)을 수정하고, 그 수정이 노출한 direct/reverse tangent quality 비교의 self-intersection 인식 결함도 함께 수정. 최신 전체 pytest: `720 passed, 1 skipped, 1 warning, 8 subtests passed`.
 
 **결론**: 남은 병목은 candidate evidence의 밀도/위상 자체이며 파이프라인 결함이 아니다. 다음 단계 후보는 candidate 생성 밀도 자체의 근본 원인 조사이며, 아직 착수 승인은 없다.
+
+## 2026-08-04 Eligible boundary downstream bridge
+
+- Region별 visible-boundary status를 5-state fail-closed 계약으로 분리하고, `eligible_closed_boundary` component만 canonical visible NURBS materialization과 downstream continuation bridge에 전달한다.
+- Real 5k의 region 130/141 두 surface만 continuation domain까지 연결되며 candidate는 0이다. 3k/10k는 eligible surface가 없어 downstream attempt가 없다.
+- 상세 계약·검증·한계는 [Worklog 54](worklogs/54_visible_boundary_eligibility_and_unsupported_state_contract.md), [Worklog 55](worklogs/55_eligible_boundary_downstream_integration.md), [Worklog 56](worklogs/56_eligible_visible_surface_occluded_candidate_production_bridge.md) [Worklog 57](worklogs/57_occluded_candidate_safe_uncertain_proposal_production_integration.md)는 continuation-domain candidate를 safe uncertain proposal artifact까지 연결한 현재 model-only 경계를 기록한다.를 따른다.

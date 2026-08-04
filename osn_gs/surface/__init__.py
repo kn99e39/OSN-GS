@@ -36,6 +36,13 @@ from osn_gs.surface.torch_occluded_chart_hardening import (
 from osn_gs.surface.torch_chart_conflict import (
     OccludedChartConflictEdge, attach_conflict_edges, build_occluded_chart_conflicts,
 )
+from osn_gs.surface.torch_safe_uncertain_proposal_production import (
+    GaussianToSafeUncertainProposalResult,
+    SafeUncertainProposalAttempt,
+    SafeUncertainProposalProductionResult,
+    build_safe_uncertain_proposals_from_bridge,
+    run_safe_uncertain_proposals_from_gaussians,
+)
 from osn_gs.surface.torch_occluded_region_candidate import (
     ConflictEdge,
     CorrespondenceEdge,
@@ -74,6 +81,11 @@ __all__ = [
     "OccludedChartSafetyResult",
     "OccludedChartConflictEdge",
     "OccludedChartResult",
+    "GaussianToSafeUncertainProposalResult",
+    "SafeUncertainProposalAttempt",
+    "SafeUncertainProposalProductionResult",
+    "build_safe_uncertain_proposals_from_bridge",
+    "run_safe_uncertain_proposals_from_gaussians",
     "OccludedRegionCandidate",
     "PatchBoundarySegment",
     "PatchEdgePair",

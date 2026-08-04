@@ -21,6 +21,10 @@ from osn_gs.surface.torch_gaussian_surface_region_formation import RegionFormati
 from osn_gs.surface.torch_ordered_world_boundary_graph import BoundaryCompatibilityEdge, OrderedBoundaryComponent, build_boundary_compatibility, recover_ordered_boundary_components
 from osn_gs.surface.torch_directed_boundary_ordering import recover_directed_boundary_components
 from osn_gs.surface.torch_visible_boundary_materialization_adapter import VisibleBoundaryMaterializationResult, materialize_visible_boundary_component
+from osn_gs.surface.torch_visible_boundary_region_status import (
+    STATUS_AMBIGUOUS, STATUS_ELIGIBLE_CLOSED, STATUS_INSUFFICIENT, STATUS_OPEN_FRAGMENT, STATUS_REJECTED_UNSAFE,
+    RegionBoundaryStatus, classify_all_region_boundary_statuses, find_inconsistent_eligible_component_ids,
+)
 from osn_gs.surface.torch_world_space_boundary_halfedges import WorldSpaceBoundaryHalfEdgeCandidate, extract_world_space_boundary_halfedge_candidates
 
 
@@ -48,6 +52,7 @@ class VisibleSurfaceConstructionResult:
     boundary_compatibility: tuple[BoundaryCompatibilityEdge, ...]
     ordered_boundary_components: tuple[OrderedBoundaryComponent, ...]
     boundary_role_candidates: tuple[OrderedBoundaryComponent, ...]
+    region_boundary_statuses: tuple[RegionBoundaryStatus, ...]
     materialization_attempts: tuple[VisibleBoundaryMaterializationResult, ...]
     materialized_visible_nurbs_surfaces: tuple[VisibleBoundaryMaterializationResult, ...]
     review_results: tuple[VisibleBoundaryMaterializationResult, ...]
@@ -55,6 +60,21 @@ class VisibleSurfaceConstructionResult:
     policy_schema_version: str
     coverage_semantics: str
     construction_state: str
+
+    def eligible_materialized_surfaces(self) -> tuple[VisibleBoundaryMaterializationResult, ...]:
+        """Worklog 55: the ONLY sanctioned source of visible-surface geometry
+        for any downstream consumer -- occluded-chart/uncertain-Gaussian
+        continuation (currently an isolated, non-production-wired
+        foundation; see docs/worklogs/1-3), stream/PLY exporters, or any
+        future integration. Identical to `materialized_visible_nurbs_surfaces`
+        (already restricted to `eligible_closed_boundary` regions' approved
+        components -- worklog 54), exposed under this name so downstream code
+        has one clearly-labeled entry point instead of reading
+        `ordered_boundary_components` / `boundary_role_candidates` directly,
+        which include open/insufficient/ambiguous/rejected regions and must
+        NEVER be a source of downstream geometry.
+        """
+        return self.materialized_visible_nurbs_surfaces
 
 
 def _orient_normals_along_accepted_topology(normals: Any, accepted_edges: Sequence[tuple[Any, Any]], ids: Sequence[Any]):
@@ -192,9 +212,33 @@ def construct_visible_nurbs_from_gaussians(
     compatibility = build_boundary_compatibility(halfedges)
     _, components = recover_directed_boundary_components(halfedges, accepted)
 
+    # Worklog 54: the region-status contract is the SOLE gate deciding which
+    # component reaches materialization -- a validated, safety-checked simple
+    # closed loop, and nothing else. Every other region is recorded with a
+    # stable typed reason (`region_boundary_statuses`) instead of silently
+    # producing an empty or failed materialization attempt.
+    region_statuses = classify_all_region_boundary_statuses(
+        tuple(region.region_id for region in regions.regions), components, halfedges,
+    )
+    # Worklog 55: fail-closed consistency check -- an `eligible_component_id`
+    # that does not correspond to an actual `ordered_closed_loop` component is
+    # never trusted implicitly. This can only fire on a future refactor bug
+    # (the classifier derives IDs directly from `components`); when it does,
+    # the affected ID is excluded from materialization rather than silently
+    # materialized, and the count is surfaced in diagnostics.
+    inconsistent_component_ids = find_inconsistent_eligible_component_ids(region_statuses, components)
+    eligible_component_ids = frozenset(
+        component_id for status in region_statuses for component_id in status.eligible_component_ids
+    ) - frozenset(inconsistent_component_ids)
+    status_by_eligible_component_id = {
+        component_id: status for status in region_statuses for component_id in status.eligible_component_ids
+    }
+
     id_to_index = {item: index for index, item in enumerate(ids)}
     attempts = []
     for component in components:
+        if component.component_id not in eligible_component_ids:
+            continue
         boundary_ids = tuple(item for item in component.ordered_source_ids if item in id_to_index)
         if not boundary_ids:
             continue
@@ -204,7 +248,14 @@ def construct_visible_nurbs_from_gaussians(
         if not interior_ids:
             interior_ids = tuple(item for item in (region.core_member_ids if region else ()) if item in id_to_index)
         interior_points = positions[torch.tensor([id_to_index[item] for item in interior_ids], device=positions.device)] if interior_ids else boundary_points
-        attempts.append(materialize_visible_boundary_component(component, boundary_points, interior_points, boundary_ids=boundary_ids, interior_ids=interior_ids))
+        region_status = status_by_eligible_component_id.get(component.component_id)
+        attempts.append(materialize_visible_boundary_component(
+            component, boundary_points, interior_points, boundary_ids=boundary_ids, interior_ids=interior_ids,
+            region_status=region_status.status if region_status else "",
+            region_status_reason=region_status.reason if region_status else "",
+            boundary_role_scope=region_status.boundary_role_scope if region_status else "",
+            supporting_source_ids=region_status.supporting_source_ids if region_status else (),
+        ))
     attempts = tuple(attempts)
     materialized = tuple(item for item in attempts if item.state == "materialized")
     review = tuple(item for item in attempts if item.state != "materialized")
@@ -286,8 +337,18 @@ def construct_visible_nurbs_from_gaussians(
         "boundary_component_branching_count": branching_components,
         "boundary_component_ambiguous_count": ambiguous_components,
         "boundary_component_isolated_count": isolated_components,
+        # Worklog 54: the region-status production contract, region-by-region.
+        "region_boundary_status_count": len(region_statuses),
+        "region_boundary_eligible_closed_count": sum(item.status == STATUS_ELIGIBLE_CLOSED for item in region_statuses),
+        "region_boundary_open_fragment_count": sum(item.status == STATUS_OPEN_FRAGMENT for item in region_statuses),
+        "region_boundary_insufficient_observation_count": sum(item.status == STATUS_INSUFFICIENT for item in region_statuses),
+        "region_boundary_ambiguous_count": sum(item.status == STATUS_AMBIGUOUS for item in region_statuses),
+        "region_boundary_rejected_unsafe_count": sum(item.status == STATUS_REJECTED_UNSAFE for item in region_statuses),
+        "region_boundary_multiple_closed_loops_count": sum(len(item.eligible_component_ids) > 1 for item in region_statuses),
+        "region_boundary_status_inconsistency_count": len(inconsistent_component_ids),
+        "region_boundary_statuses": [item.payload() for item in region_statuses],
     }
-    return VisibleSurfaceConstructionResult(frame, reliability, graph, regions, accepted, phase_alias, halfedges, compatibility, components, components, attempts, materialized, review, summary, config.schema_version, "reliable_core_only", _state(attempts, components, regions))
+    return VisibleSurfaceConstructionResult(frame, reliability, graph, regions, accepted, phase_alias, halfedges, compatibility, components, components, region_statuses, attempts, materialized, review, summary, config.schema_version, "reliable_core_only", _state(attempts, components, regions))
 
 
 

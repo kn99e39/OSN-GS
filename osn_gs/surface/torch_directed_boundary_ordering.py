@@ -371,18 +371,27 @@ def _matching_forbidding_two_cycles(
     budget: list[int],
     world_position_by_id: dict[str, tuple[float, float, float]] | None,
     baseline: dict[str, str],
-) -> dict[str, str]:
+    max_branch_expansions: int,
+) -> tuple[dict[str, str], bool]:
+    """Returns ``(matched, budget_exhausted)``. ``budget_exhausted`` is True
+    only when the branch-expansion ceiling was hit WHILE a 2-cycle was still
+    unresolved in the returned assignment (worklog 54) -- i.e. the safety
+    exploration could not be completed, not merely that some node happened to
+    have zero compatible edges.
+    """
     matched = _solve_one_in_one_out_assignment(node_ids, edges, forbidden)
     two_cycle = _find_two_cycle(matched)
-    if two_cycle is None or budget[0] >= _MAX_TWO_CYCLE_BRANCH_EXPANSIONS:
-        return matched
+    if two_cycle is None:
+        return matched, False
+    if budget[0] >= max_branch_expansions:
+        return matched, True
     source_id, target_id = two_cycle
     budget[0] += 1
-    option_forward_forbidden = _matching_forbidding_two_cycles(
-        node_ids, edges, forbidden | {(source_id, target_id)}, budget, world_position_by_id, baseline,
+    option_forward_forbidden, exhausted_forward = _matching_forbidding_two_cycles(
+        node_ids, edges, forbidden | {(source_id, target_id)}, budget, world_position_by_id, baseline, max_branch_expansions,
     )
-    option_backward_forbidden = _matching_forbidding_two_cycles(
-        node_ids, edges, forbidden | {(target_id, source_id)}, budget, world_position_by_id, baseline,
+    option_backward_forbidden, exhausted_backward = _matching_forbidding_two_cycles(
+        node_ids, edges, forbidden | {(target_id, source_id)}, budget, world_position_by_id, baseline, max_branch_expansions,
     )
     # Worklog 53 (safety first): excluding a 2-cycle frees capacity that the
     # Hungarian solver can then spend absorbing OTHER nodes into a larger
@@ -397,13 +406,13 @@ def _matching_forbidding_two_cycles(
     safe_forward = _cycles_are_safe(node_ids, option_forward_forbidden, world_position_by_id)
     safe_backward = _cycles_are_safe(node_ids, option_backward_forbidden, world_position_by_id)
     if safe_forward != safe_backward:
-        return option_forward_forbidden if safe_forward else option_backward_forbidden
+        return (option_forward_forbidden, exhausted_forward) if safe_forward else (option_backward_forbidden, exhausted_backward)
     if not safe_forward and not safe_backward:
-        return baseline
+        return baseline, False
     score_forward = _matching_score(option_forward_forbidden, edges)
     score_backward = _matching_score(option_backward_forbidden, edges)
     if score_forward != score_backward:
-        return option_forward_forbidden if score_forward > score_backward else option_backward_forbidden
+        return (option_forward_forbidden, exhausted_forward) if score_forward > score_backward else (option_backward_forbidden, exhausted_backward)
     # Worklog 53: on a genuine score tie, deterministically prefer whichever
     # branch closes strictly more valid (length >= 3) cycles -- reusing the
     # same principle worklog 52 audited and confirmed as a safe, evidence-
@@ -412,8 +421,29 @@ def _matching_forbidding_two_cycles(
     closed_forward = _closed_cycle_count(node_ids, option_forward_forbidden)
     closed_backward = _closed_cycle_count(node_ids, option_backward_forbidden)
     if closed_forward != closed_backward:
-        return option_forward_forbidden if closed_forward > closed_backward else option_backward_forbidden
-    return option_forward_forbidden
+        return (option_forward_forbidden, exhausted_forward) if closed_forward > closed_backward else (option_backward_forbidden, exhausted_backward)
+    return option_forward_forbidden, exhausted_forward
+
+
+def _max_weight_one_in_one_out_matching_with_diagnostics(
+    node_ids: Sequence[str],
+    edges: dict[tuple[str, str], DirectedBoundarySuccessor],
+    world_position_by_id: dict[str, tuple[float, float, float]] | None = None,
+    *,
+    max_branch_expansions: int | None = None,
+) -> tuple[dict[str, str], bool]:
+    """Worklog 54: same result as :func:`_max_weight_one_in_one_out_matching`,
+    plus whether the 2-cycle branch-elimination budget was exhausted while a
+    2-cycle remained unresolved. ``max_branch_expansions`` is overridable
+    (production leaves it ``None``, which reads the module ceiling FRESH on
+    every call -- not bound at import time -- so tests can patch
+    ``_MAX_TWO_CYCLE_BRANCH_EXPANSIONS`` and force exhaustion deterministically
+    without waiting for a pathological region).
+    """
+    if max_branch_expansions is None:
+        max_branch_expansions = _MAX_TWO_CYCLE_BRANCH_EXPANSIONS
+    baseline = _solve_one_in_one_out_assignment(node_ids, edges, frozenset())
+    return _matching_forbidding_two_cycles(node_ids, edges, frozenset(), [0], world_position_by_id, baseline, max_branch_expansions)
 
 
 def _max_weight_one_in_one_out_matching(
@@ -474,8 +504,8 @@ def _max_weight_one_in_one_out_matching(
     rather than trading a harmlessly-discarded pair for a self-intersecting
     "closed" loop materialization would reject anyway.
     """
-    baseline = _solve_one_in_one_out_assignment(node_ids, edges, frozenset())
-    return _matching_forbidding_two_cycles(node_ids, edges, frozenset(), [0], world_position_by_id, baseline)
+    matched, _exhausted = _max_weight_one_in_one_out_matching_with_diagnostics(node_ids, edges, world_position_by_id)
+    return matched
 
 
 def _hungarian_min_cost(cost: list[list[float]]) -> list[int]:
@@ -655,25 +685,36 @@ def _recover_directed_boundary_components(
             continue
 
         world_position_by_id = {item.half_edge_id: item.world_position for item in region_candidates}
-        matched = _max_weight_one_in_one_out_matching(node_ids, edges, world_position_by_id)
+        matched, budget_exhausted = _max_weight_one_in_one_out_matching_with_diagnostics(node_ids, edges, world_position_by_id)
         cycles, paths, isolated = _decompose_into_paths_and_cycles(matched, node_ids)
         for chain in cycles:
             source = by_id[chain[0]]
+            # Worklog 54: if the 2-cycle branch-elimination budget was
+            # exhausted while resolving this region, the safety exploration
+            # (worklog 53) could not run to completion -- a returned
+            # `ordered_closed_loop` here has not been fully vetted against
+            # the alternative branches that would have been tried. Fail
+            # closed by tagging it rather than trusting it silently; the
+            # region-status layer (worklog 54) routes any tagged component to
+            # `rejected_unsafe` regardless of `ordering_state`.
             output.append(OrderedBoundaryComponent(
                 f"region:{region_id}:directed:{min(chain)}", region_id, tuple(chain),
                 tuple(by_id[x].source_gaussian_id for x in chain), "ordered_closed_loop", True, (),
                 {"observed_support_termination": len(chain)}, .7, "outer_boundary_candidate",
-                "reliable_core_only", False, (),
+                "reliable_core_only", False, ("two_cycle_branch_budget_exhausted",) if budget_exhausted else (),
             ))
         for chain in paths:
             if len(chain) < 1:
                 continue
             source = by_id[chain[0]]
+            reasons = ("one_in_one_out_cycle_not_closed",)
+            if budget_exhausted:
+                reasons = reasons + ("two_cycle_branch_budget_exhausted",)
             output.append(OrderedBoundaryComponent(
                 f"region:{region_id}:directed:{min(chain)}", region_id, tuple(chain),
                 tuple(by_id[x].source_gaussian_id for x in chain), "ambiguous_ordering", False, (),
                 {"observed_support_termination": len(chain)}, .7, "unresolved_boundary_role",
-                "reliable_core_only", False, ("one_in_one_out_cycle_not_closed",),
+                "reliable_core_only", False, reasons,
             ))
         for node_id in isolated:
             # Worklog 36: explicit final state for a candidate whose

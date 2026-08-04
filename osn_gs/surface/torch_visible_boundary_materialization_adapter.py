@@ -22,6 +22,16 @@ class VisibleBoundaryMaterializationInput:
     coverage_semantics: str
     materialization_state: str
     reasons: tuple[str, ...]
+    # Worklog 55: region-level boundary-status provenance (see
+    # torch_visible_boundary_region_status.py), threaded through so any
+    # downstream consumer of a materialized result has the eligibility
+    # status/reason/scope directly, without re-deriving it or cross-
+    # referencing a separate `region_boundary_statuses` list. Defaults keep
+    # every pre-existing caller (tests, devtools scripts) unaffected.
+    region_status: str = ""
+    region_status_reason: str = ""
+    boundary_role_scope: str = ""
+    supporting_source_ids: tuple[Any, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -34,12 +44,22 @@ class VisibleBoundaryMaterializationResult:
     review_reasons: tuple[str, ...]
 
 
-def materialize_visible_boundary_component(component: OrderedBoundaryComponent, boundary_points: Any, interior_points: Any, *, boundary_ids: tuple[Any, ...], interior_ids: tuple[Any, ...]) -> VisibleBoundaryMaterializationResult:
+def materialize_visible_boundary_component(
+    component: OrderedBoundaryComponent, boundary_points: Any, interior_points: Any, *,
+    boundary_ids: tuple[Any, ...], interior_ids: tuple[Any, ...],
+    region_status: str = "", region_status_reason: str = "", boundary_role_scope: str = "",
+    supporting_source_ids: tuple[Any, ...] = (),
+) -> VisibleBoundaryMaterializationResult:
     """Materialize only a single, non-branching observed outer loop.
 
     The existing canonical TorchNURBSSurface is returned and remains directly
     evaluable.  Open/branch/ambiguous components never receive a synthetic
     rectangular closure.
+
+    ``region_status``/``region_status_reason``/``boundary_role_scope``/
+    ``supporting_source_ids`` (worklog 55, all optional) are pure provenance
+    pass-through from the caller's region-status classification -- this
+    function's own admissibility/self-intersection gate is unchanged by them.
     """
     admissible = component.ordering_state == "ordered_closed_loop" and component.role_candidate == "outer_boundary_candidate" and not component.branch_node_ids
     self_intersection_reasons: tuple[str, ...] = ()
@@ -63,6 +83,8 @@ def materialize_visible_boundary_component(component: OrderedBoundaryComponent, 
         ordered_boundary_points=boundary_points, interior_reliable_point_ids=interior_ids,
         interior_points=interior_points, coverage_semantics="reliable_core_only", materialization_state=state,
         reasons=self_intersection_reasons if self_intersection_reasons else (() if admissible else (component.ordering_state, component.role_candidate)),
+        region_status=region_status, region_status_reason=region_status_reason,
+        boundary_role_scope=boundary_role_scope, supporting_source_ids=supporting_source_ids,
     )
     if not admissible:
         return VisibleBoundaryMaterializationResult(adapter, None, state, None, None, adapter.reasons)

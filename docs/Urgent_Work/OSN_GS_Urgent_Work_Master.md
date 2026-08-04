@@ -2,7 +2,7 @@
 
 최종 갱신: 2026-08-04
 
-이 문서는 현재 진행 방향과 승인 경계를 정의하는 canonical master다. 과거 실험의 상세 경과는 Git 이력에 보존하며, 현재 판단에 필요 없는 작업로그는 `docs/worklogs/`에서 제거했다. 작업로그 번호는 `docs/worklogs/README.md`의 최신 인덱스(1부터 재번호, 현재 53까지)를 기준으로 한다.
+이 문서는 현재 진행 방향과 승인 경계를 정의하는 canonical master다. 과거 실험의 상세 경과는 Git 이력에 보존하며, 현재 판단에 필요 없는 작업로그는 `docs/worklogs/`에서 제거했다. 작업로그 번호는 `docs/worklogs/README.md`의 최신 인덱스(1부터 재번호, 현재 55까지)를 기준으로 한다.
 
 ## 1. 목표 모델과 불변 조건
 
@@ -23,7 +23,7 @@ OSN-GS에서 NURBS는 관측 가능한 표면을 설명하고 가려진 영역�
 1. **Representative selection** (`torch_density_preserving_representative_selection.py`): 대량 Gaussian을 `canonical_construction_max_points`(기본 2048) 예산으로 mode-aware farthest-point sampling. worklog 49에서 boundary-evidence swap-in(예산 경쟁으로 탈락한 진짜 orientation-divergent evidence를 안전하게 복구)을 추가했다.
 2. **Reliability + region formation** (`torch_gaussian_structural_reliability.py`, `torch_gaussian_surface_region_formation.py`): full-cloud contextual evidence 기반 reliability, seed/merge DSU 기반 region consolidation.
 3. **Boundary candidate 추출** (`torch_full_cloud_continuation_shell.py`, `torch_boundary_support_termination.py`): representative 주변 same-mode angular gap을 관측해 `observed_support_termination`/`no_gap`/`parallel_sheet_conflict`/`crease_discontinuity`/`ambiguous_continuation`/`reliability_frontier`/`unresolved_sampling_gap`으로 분류. worklog 47(cross-surface leakage), 48(fold/gap-crossing locality), 50(single-radius over-reach)에서 순차적으로 오분류를 좁게 수정했다.
-4. **Directed ordering / materialization** (`torch_directed_boundary_ordering.py`): region별 compatible edge에 대한 exact one-in/one-out Hungarian matching으로 closed cycle과 open path를 결정론적으로 복원. worklog 53에서 downstream-invalid 2-cycle이 capacity를 낭비하는 결함과, 그로 인해 노출된 direct/reverse tangent quality 비교의 self-intersection 인식 결함을 수정했다.
+4. **Directed ordering / materialization** (`torch_directed_boundary_ordering.py`, `torch_visible_boundary_region_status.py`): region별 compatible edge에 대한 exact one-in/one-out Hungarian matching으로 closed cycle과 open path를 결정론적으로 복원. worklog 53에서 downstream-invalid 2-cycle이 capacity를 낭비하는 결함과, 그로 인해 노출된 direct/reverse tangent quality 비교의 self-intersection 인식 결함을 수정했다. worklog 54는 region별 5-state 계약(`eligible_closed_boundary`/`open_observed_fragment`/`insufficient_observation`/`ambiguous_boundary`/`rejected_unsafe`)을 확정해 validated closed loop만 materialization에 전달하도록 제한했다.
 
 ### 2.2 현재 결론 (worklog 40~53에 걸친 6단계 소진 감사)
 
@@ -40,12 +40,16 @@ Real 3k/5k/10k checkpoint(cap 2048) replay에서 **5k만 2개 region을 닫고(c
 | 51 | raw full-cloud에 representative 축약으로 잃은 chain이 있는지 | 기각(3곳 raw에도 chain 없음) + 2곳은 Hungarian 경쟁 문제로 재분류 |
 | 52 | 그 Hungarian "경쟁" 주장 자체의 정확성 | 정정 — edge는 실제로 matching에 포함돼 있었음, 진짜 원인은 topology 불가능(region 52) 또는 evidence 열세(region 56) |
 | 53 | region 56의 진짜 원인(2-cycle 낭비) | 수정, fragment 2개→4-node open path 1개로 개선(닫히진 않음, 진짜 최댓값이 open이므로) |
+| 54 | region별 boundary 상태를 production 계약으로 확정 | `eligible_closed_boundary`/`open_observed_fragment`/`insufficient_observation`/`ambiguous_boundary`/`rejected_unsafe` 5-state 도입, validated closed loop만 materialize, 2-cycle budget exhaustion fail-closed 추가 |
+| 55 | eligible region의 downstream 전달 완성 | fail-closed 일관성 검사 + provenance threading + 단일 진입점(`eligible_materialized_surfaces()`) 추가. 첫 시도(region당 최대 1개 closed loop만 유지)가 thin_slab materialization을 회귀시켜 즉시 되돌리고 "전부 유지 + reason으로 명시 disclosure"로 확정 |
+| 56 | `eligible_materialized_surfaces()` → Phase D/E(continuation domain·occluded candidate) production bridge | `build_eligible_boundary_continuation_bridge()` + `run_eligible_boundary_continuation_bridge_from_gaussians()` 신설, Phase D/E 두 모듈은 미변경. Phase D의 최소 4-sample 계약이 기하적 안전 조건이 아니라 표현 밀도 관례임을 실측 확인하고 검증된 loop를 결정론적으로 재표본화 — real 5k 2개 region 모두 domain 생성(candidate는 AABB 비접촉으로 0), 남는 실패는 `eligible_visible_only_not_continuation_ready`로 typed 분리 |
+| 57 | Occluded candidate → safe uncertain proposal production integration | 기존 Phase F constrained fit → Phase F.1 sampled safety → Phase G proposal을 `run_safe_uncertain_proposals_from_gaussians()`로 Worklog 56 bridge 뒤에 연결. candidate별 1:1 typed accounting과 provenance chain 유지, `degenerate` domain은 Phase E provenance로만 보존하고 Phase F/G 입력으로는 fail-closed rejection. model append/appearance/opacity는 미수행 |
 
-**결론: 남은 병목은 파이프라인 결함이 아니라 candidate evidence 자체의 밀도/위상이다.** 3k/10k의 큰 region은 perimeter 전체를 덮을 만큼 충분히 독립적인 observed-termination evidence가 없다 — representative를 더 정확한 위치로 옮기거나(49), 오분류를 고치거나(47/48/50), matching 낭비를 없애도(53) 이 밀도 자체는 바뀌지 않는다. 5k가 성공하는 이유는 이런 결함이 없어서가 아니라 해당 region이 작아서(candidate 4개)다.
+**결론: 남은 병목은 파이프라인 결함이 아니라 candidate evidence 자체의 밀도/위상이다.** 3k/10k의 큰 region은 perimeter 전체를 덮을 만큼 충분히 독립적인 observed-termination evidence가 없다 — representative를 더 정확한 위치로 옮기거나(49), 오분류를 고치거나(47/48/50), matching 낭비를 없애도(53) 이 밀도 자체는 바뀌지 않는다. 5k가 성공하는 이유는 이런 결함이 없어서가 아니라 해당 region이 작아서(candidate 4개)다. worklog 54는 이 결론을 region별 5-state production 계약으로 확정했다 — real 5k는 region 130/141만 `eligible_closed_boundary`, 3k/10k는 전부 나머지 4-state로 명시 기록되며 빈 결과/실패로 뭉뚱그려지지 않는다.
 
 ### 2.3 검증된 negative control (모든 worklog가 반복 확인)
 
-cap=64 기준: Box `physical=51 closed=6 materialized=6`, Cylinder `16/2/2`, Sphere `14/0/0`, Thin slab `37/3/3`. 이 수치는 worklog 47부터 53까지 매 라운드 재확인했다 — 새 작업은 이 표를 반드시 재현해야 하며, 벗어나면 즉시 원인을 규명한다(worklog 53의 2차 self-intersection 결함이 이렇게 발견됐다).
+cap=64 기준: Box `physical=51 closed=6 materialized=6`, Cylinder `16/2/2`, Sphere `14/0/0`, Thin slab `37/3/3`. 이 수치는 worklog 47부터 56까지 매 라운드 재확인했다 — 새 작업은 이 표를 반드시 재현해야 하며, 벗어나면 즉시 원인을 규명한다(worklog 53의 2차 self-intersection 결함, worklog 55의 multi-loop exclusion 회귀가 각각 이렇게 발견됐다).
 
 ### 2.4 다음 착수 후보 (미승인, 방향 제안일 뿐)
 
@@ -60,8 +64,8 @@ cap=64 기준: Box `physical=51 closed=6 materialized=6`, Cylinder `16/2/2`, Sph
 
 Phase G proposal, model-only append adapter, occluded chart ownership foundation은 각각 구현·검증된 계약으로 유지한다. 이들은 visible-surface quality를 대신 증명하지 않으며, append 대상의 appearance/opacity와 downstream lifecycle은 여전히 명시적 차단 조건이다.
 
-- 현재는 model-only 범위다.
-- optimizer, trainer, renderer, checkpoint schema, global ranking/selection, conflict resolution 및 production integration은 시작하지 않는다.
+- raw Gaussian evidence → safe uncertain proposal orchestration은 구현됐다. 다만 proposal은 model-only artifact다.
+- optimizer/trainer/renderer/checkpoint schema, global ranking/selection, conflict resolution, Gaussian model append는 시작하지 않는다.
 - Gaussian append가 허용되려면 chart state와 safety eligibility를 포함한 상위 gate가 충족되어야 한다.
 
 근거: `docs/worklogs/1_phase_g_uncertain_gaussian_proposal_foundation.md`, `docs/worklogs/2_uncertain_gaussian_append_adapter_foundation.md`, `docs/worklogs/3_occluded_chart_ownership_foundation.md`.
@@ -80,11 +84,11 @@ Phase G proposal, model-only append adapter, occluded chart ownership foundation
 
 ## 6. 현재 검증 상태와 알려진 위험
 
-Repository-wide pytest 최신 기준(worklog 53): `720 passed, 1 skipped, 1 warning, 8 subtests passed`. §2.3의 negative-control 표와 함께 매 라운드 재확인한다.
+Repository-wide pytest 최신 기준(worklog 57): `744 passed, 1 skipped, 1 warning, 12 subtests passed`. §2.3의 negative-control 표와 함께 매 라운드 재확인한다.
 
 알려진 위험:
 - §2.2 표의 real 3k/10k closed-loop 부재는 미해결이며, §2.4 후보(candidate 생성 밀도) 전에는 착수 승인이 없다.
 - §2 파이프라인의 direct/reverse tangent quality 비교는 scene 전체 단위 선택이라, 한 region의 수정이 다른 region의 결과를 바꿀 수 있다(worklog 53에서 실측). 이 구조를 변경하는 작업은 반드시 §2.3 negative-control 전체 재확인을 동반한다.
 - §3(Isolated Boundary-first)은 재개 시 이 문서를 먼저 갱신하고 시작한다 — 현재는 활성 작업자가 없다.
 
-다음 작업자는 먼저 이 문서와 `docs/worklogs/README.md`의 최신 인덱스, 그리고 가장 최근 작업로그(현재 `docs/worklogs/53_downstream_valid_directed_matching_repair.md`)를 읽고 이어서 작업한다. 과거 방향의 세부 기록은 필요할 때 Git history로만 조회한다.
+다음 작업자는 먼저 이 문서와 `docs/worklogs/README.md`의 최신 인덱스, 그리고 가장 최근 작업로그(현재 `docs/worklogs/57_occluded_candidate_safe_uncertain_proposal_production_integration.md`)를 읽고 이어서 작업한다. 과거 방향의 세부 기록은 필요할 때 Git history로만 조회한다.
