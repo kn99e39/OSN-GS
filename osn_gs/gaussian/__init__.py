@@ -36,3 +36,10 @@ __all__ = [
     "is_visible_patch_owned",
     "project_occluded_chart_owner_id",
 ]
+from osn_gs.gaussian.torch_safe_uncertain_append_production import (
+    GaussianToAtomicUncertainAppendResult,
+    SafeUncertainAppendAttempt,
+    SafeUncertainAppendProductionResult,
+    append_safe_uncertain_proposals,
+    run_safe_uncertain_proposals_and_append_from_gaussians,
+)
