@@ -109,7 +109,9 @@ def load_colmap_scene(
         colmap_camera = cameras[image.camera_id]
         image_path = resolve_image_path(image_root, image.name)
         image_tensor, height, width = load_image_tensor(image_path, device="cpu", downscale=image_downscale)
-        fovx, fovy = camera_fovs(colmap_camera, width=width, height=height, downscale=image_downscale)
+        # Worklog 62: FoV from COLMAP's own ORIGINAL camera resolution, never
+        # the downscaled render resolution -- see camera_fovs' docstring.
+        fovx, fovy = camera_fovs(colmap_camera, width=colmap_camera.width, height=colmap_camera.height)
         world_view, full_proj, center = camera_matrices(image.qvec, image.tvec, fovx, fovy, device=device)
         torch_cameras.append(
             TorchCamera(
@@ -235,7 +237,9 @@ def load_colmap_scene_with_eval_split(
         image_tensor, out_h, out_w = load_image_tensor(
             image_path, device="cpu", downscale=downscale_factor, target_size=(target_w, target_h)
         )
-        fovx, fovy = camera_fovs(colmap_camera, width=out_w, height=out_h, downscale=downscale_factor)
+        # Worklog 62: FoV from COLMAP's own ORIGINAL camera resolution, never
+        # the downscaled render resolution -- see camera_fovs' docstring.
+        fovx, fovy = camera_fovs(colmap_camera, width=colmap_camera.width, height=colmap_camera.height)
         world_view, full_proj, center = camera_matrices(image.qvec, image.tvec, fovx, fovy, device=device)
         camera_obj = TorchCamera(
             image_height=out_h,
@@ -465,21 +469,46 @@ def load_image_tensor(
 
     with Image.open(path) as image:
         image = image.convert("RGB")
+        # Worklog 62: BICUBIC, not BILINEAR -- matches Graphdeco baseline's
+        # own `PILtoTorch` (`pil_image.resize(resolution)`, no explicit
+        # `resample` argument, so Pillow's own default applies; for RGB
+        # images that default is BICUBIC, not NEAREST). Confirmed via a
+        # lockstep parity harness: the prior BILINEAR choice produced a
+        # measurably different resized ground-truth image
+        # (mean abs diff ~0.005 out of [0,1]) from byte-identical source
+        # pixels and an identical target resolution.
         if target_size is not None:
-            image = image.resize(target_size, Image.BILINEAR)
+            image = image.resize(target_size, Image.BICUBIC)
         elif downscale > 1:
             width = max(1, round(image.width / downscale))
             height = max(1, round(image.height / downscale))
-            image = image.resize((width, height), Image.BILINEAR)
+            image = image.resize((width, height), Image.BICUBIC)
         array = np.asarray(image, dtype=np.float32) / 255.0
     tensor = torch.as_tensor(array, dtype=torch.float32, device=device).permute(2, 0, 1).contiguous()
     return tensor, int(tensor.shape[1]), int(tensor.shape[2])
 
 
 def camera_fovs(camera: ColmapCamera, width: int, height: int, downscale: int = 1) -> tuple[float, float]:
+    """``width``/``height`` MUST be the camera's ORIGINAL (pre-resize) COLMAP
+    dimensions -- FoV is a resolution-independent angle, computed once from
+    the original intrinsics and never recomputed for a later render/training
+    resolution. Matches Graphdeco baseline's own convention exactly
+    (``dataset_readers.py`` computes ``FovX``/``FovY`` once at full
+    resolution; ``utils/camera_utils.py::loadCam`` passes them through
+    UNCHANGED into the resized ``Camera``, regardless of ``--resolution``).
+
+    Worklog 62: recomputing FoV from a rounded downscaled width/height (the
+    prior behavior here, dividing focal by ``downscale`` and using the
+    already-resized width/height) introduces small rounding-induced drift
+    whenever width and height don't round by EXACTLY the same factor --
+    confirmed via a lockstep parity harness against the real baseline
+    (FoVy differed while FoVx happened to match, causing a measurably
+    different projection matrix and rendered image from byte-identical
+    Gaussian tensors and the same camera). ``downscale`` is kept as an
+    accepted-but-unused parameter for call-site backward compatibility.
+    """
+
     fx, fy = camera_focals(camera)
-    fx = fx / max(downscale, 1)
-    fy = fy / max(downscale, 1)
     return focal_to_fov(fx, width), focal_to_fov(fy, height)
 
 

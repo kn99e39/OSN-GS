@@ -123,6 +123,20 @@ class TorchPipelineConfig:
     """Canonical visible-surface construction and Gaussian initialization."""
 
     sh_degree: int = 3
+    # Worklog 64: which tensors seed a *newly created* visible/certain
+    # Gaussian's TRAINABLE _scaling/_rotation. "baseline_compatible"
+    # (default) matches Graphdeco's gaussian_model.create_from_pcd exactly --
+    # isotropic scale from distCUDA2-equivalent nearest-neighbor spacing,
+    # identity rotation -- so ADC/anisotropy dynamics start from the same
+    # place baseline's own thresholds were tuned against. "covariance_knn"
+    # keeps the pre-worklog-64 local-PCA planar-surfel init (tangent axes
+    # ~25x the normal axis by construction) as an explicit experimental
+    # option; it is NEVER selected implicitly. Neither mode touches the
+    # SEPARATE local-PCA covariance always used for canonical visible
+    # surface construction/reliability (`_canonical_initial_covariance`
+    # below) -- that is surface-reconstruction geometry, not Gaussian
+    # training init, and this flag intentionally does not reach it.
+    gaussian_initialization_mode: str = "baseline_compatible"
     canonical_covariance_knn: int = 8
     canonical_construction_max_points: int = 2048
     covariance_knn_chunk_size: int = 0
@@ -168,6 +182,13 @@ class TorchOSNGSPipeline:
     """Builds canonical visible NURBS state used by the trainer."""
 
     def __init__(self, config: TorchPipelineConfig, device: str = "cuda") -> None:
+        mode = str(config.gaussian_initialization_mode).strip().lower()
+        if mode not in {"baseline_compatible", "covariance_knn"}:
+            raise ValueError(
+                "gaussian_initialization_mode must be baseline_compatible or covariance_knn, "
+                f"got {config.gaussian_initialization_mode!r}"
+            )
+        config.gaussian_initialization_mode = mode
         self.config = config
         self.device = device
 
@@ -229,9 +250,20 @@ class TorchOSNGSPipeline:
         torch = require_torch()
         points = torch.as_tensor(points, dtype=torch.float32, device=self.device)
         colors = torch.as_tensor(colors, dtype=torch.float32, device=self.device)
-        construction_indices = self._canonical_construction_indices(points)
-        construction_points = points[construction_indices]
-        sampled = int(construction_indices.numel()) < int(points.shape[0])
+        # NOTE: unlike `_initialize_canonical`, `gaussian_initialization_mode`
+        # intentionally does NOT reach the model init here. The deferred
+        # ("adc_post_commit"/"disabled") schedule materializes no surface at
+        # initialize time -- `reconstruct_visible_after_adc` builds the FIRST
+        # canonical surface later from whatever `model.get_scaling`/
+        # `get_rotation` currently hold (`covariance_from_scale_rotation`).
+        # Before any real ADC event, image loss alone has not meaningfully
+        # rotated a fresh Gaussian, so the local-PCA planar-surfel frame
+        # computed here is the only source of usable orientation evidence for
+        # that first reconstruction. Feeding it an isotropic/identity-rotation
+        # init instead would starve the deferred schedule's own surface
+        # bootstrap of evidence -- a surface-reconstruction change this
+        # worklog's task explicitly forbids. This is a deliberate, narrower
+        # scope than `_initialize_canonical`, not an oversight.
         if covariance_scales is not None or covariance_rotations is not None:
             scales, rotations, _ = self._canonical_initial_covariance(
                 points,
@@ -239,6 +271,9 @@ class TorchOSNGSPipeline:
                 covariance_rotations=covariance_rotations,
             )
         else:
+            construction_indices = self._canonical_construction_indices(points)
+            construction_points = points[construction_indices]
+            sampled = int(construction_indices.numel()) < int(points.shape[0])
             sample_scales, sample_rotations, _ = self._canonical_initial_covariance(
                 construction_points,
                 covariance_scales=None,
@@ -386,13 +421,29 @@ class TorchOSNGSPipeline:
                 chunk_size=int(self.config.surface_projection_chunk_size),
             )
 
+        # `scales`/`rotations` above are the local-PCA planar-surfel frame --
+        # always required to build `construction_covariance` for visible
+        # surface construction (untouched by this flag). The Gaussian
+        # MODEL's own trainable init is a separate decision: an explicit
+        # covariance override always wins (ground truth, e.g. synthetic
+        # fixtures); otherwise `gaussian_initialization_mode` picks between
+        # reusing that same planar-surfel frame ("covariance_knn",
+        # experimental) or Graphdeco-equivalent isotropic init
+        # ("baseline_compatible", default).
+        if covariance_scales is not None or covariance_rotations is not None:
+            model_scales, model_rotations = scales, rotations
+        elif self.config.gaussian_initialization_mode == "covariance_knn":
+            model_scales, model_rotations = scales, rotations
+        else:
+            model_scales, model_rotations = self._baseline_compatible_scale_rotation(points)
+
         model = TorchGaussianModel(sh_degree=self.config.sh_degree, device=self.device)
         model.initialize(
             positions=points,
             colors=colors,
             opacities=torch.full((count, 1), 0.12, dtype=torch.float32, device=points.device),
-            scales=scales,
-            rotations=rotations,
+            scales=model_scales,
+            rotations=model_rotations,
             uncertain_mask=torch.zeros((count,), dtype=torch.bool, device=points.device),
             surface_uv=surface_uv,
             cluster_ids=cluster_ids,
@@ -727,6 +778,31 @@ class TorchOSNGSPipeline:
         rotations = self._quaternion_from_rotation_matrix(rotation_matrix)
         covariance = covariance_from_scale_rotation(scales, rotations)
         return scales, rotations, covariance
+
+    def _baseline_compatible_scale_rotation(self, points: Any) -> tuple[Any, Any]:
+        """Graphdeco-equivalent isotropic Gaussian init.
+
+        Matches ``gaussian-splatting/scene/gaussian_model.py::create_from_pcd``
+        tensor-for-tensor: ``dist2 = clamp_min(distCUDA2(points), 1e-7)``,
+        ``scale = sqrt(dist2)`` repeated identically on all three axes (log
+        activation is applied by ``TorchGaussianModel.initialize`` itself,
+        exactly like baseline's ``scaling_inverse_activation`` = ``torch.log``),
+        and an identity wxyz quaternion (``rot[:, 0] = 1``, no orientation
+        preference). ``_graphdeco_neighbor_mean_dist2`` already implements
+        the mean-squared-distance-to-3-nearest-neighbors definition
+        ``distCUDA2`` uses, so it is reused verbatim here -- only the
+        downstream scale/rotation construction differs from the local-PCA
+        planar-surfel path in ``_canonical_initial_covariance``.
+        """
+
+        torch = require_torch()
+        count = int(points.shape[0])
+        dist2 = self._graphdeco_neighbor_mean_dist2(points.detach()).clamp_min(1e-7)
+        iso_scale = torch.sqrt(dist2)
+        scales = iso_scale.reshape(count, 1).repeat(1, 3)
+        rotations = torch.zeros((count, 4), dtype=torch.float32, device=points.device)
+        rotations[:, 0] = 1.0
+        return scales, rotations
 
     @staticmethod
     def _quaternion_from_rotation_matrix(matrix: Any) -> Any:

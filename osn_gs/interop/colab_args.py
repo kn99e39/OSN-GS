@@ -94,6 +94,20 @@ def build_osn_gs_train_parser() -> argparse.ArgumentParser:
         choices=("scene", "calibration"),
         help="Position-LR scale: robust point-cloud scene extent (default) or Graphdeco camera calibration extent for A/B.",
     )
+    parser.add_argument(
+        "--gaussian_initialization_mode",
+        type=str,
+        default="baseline_compatible",
+        choices=("baseline_compatible", "covariance_knn"),
+        help=(
+            "Trainable scale/rotation init for newly created visible Gaussians. "
+            "baseline_compatible (default) matches Graphdeco's isotropic "
+            "distCUDA2-based create_from_pcd exactly. covariance_knn is the "
+            "experimental local-PCA planar-surfel init (worklog 64); it does "
+            "not affect the separate covariance always used for visible "
+            "surface construction/reliability."
+        ),
+    )
     parser.add_argument("--canonical_covariance_knn", type=int, default=8, help="Neighbor count for canonical local-PCA planar covariance initialization.")
     parser.add_argument("--canonical_construction_max_points", type=int, default=2048, help="Maximum deterministic voxel-center samples used by canonical O(N^2) topology construction.")
     parser.add_argument("--covariance_knn_chunk_size", type=int, default=0, help="KNN chunk for canonical covariance initialization. 0 auto-selects from VRAM.")

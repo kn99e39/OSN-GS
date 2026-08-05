@@ -62,6 +62,13 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("scene", "calibration"),
         help="Position-LR scale: robust point-cloud scene extent (default) or Graphdeco camera calibration extent for A/B.",
     )
+    parser.add_argument(
+        "--gaussian_initialization_mode",
+        type=str,
+        default="baseline_compatible",
+        choices=("baseline_compatible", "covariance_knn"),
+        help="Trainable scale/rotation init for new visible Gaussians; see train.py for details.",
+    )
     parser.add_argument("--canonical_covariance_knn", type=int, default=8)
     parser.add_argument("--canonical_construction_max_points", type=int, default=2048)
     parser.add_argument("--covariance_knn_chunk_size", type=int, default=0)
@@ -163,6 +170,7 @@ def main() -> None:
     )
 
     pipeline_config = TorchPipelineConfig(
+        gaussian_initialization_mode=str(args.gaussian_initialization_mode),
         canonical_covariance_knn=max(3, int(args.canonical_covariance_knn)),
         canonical_construction_max_points=max(
             16, int(args.canonical_construction_max_points)

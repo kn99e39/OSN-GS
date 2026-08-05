@@ -123,6 +123,11 @@ class TorchOSNGSTrainer:
         self._progress_bar: Any | None = None
         self._last_progress_iteration = 0
         self._visible_nurbs_event_counter = 0
+        # Worklog 62: cumulative ADC event counters + the extent values this
+        # run actually used, for the scene-extent-basis A/B report. Additive
+        # logging only -- never read back by any algorithm/threshold.
+        self._cumulative_adc = {"cloned": 0, "split": 0, "pruned": 0, "opacity_reset_count": 0}
+        self._extent_log: dict[str, float] = {}
         schedule = str(self.training_config.visible_nurbs_update_schedule).strip().lower()
         if schedule not in {"initialize", "adc_post_commit", "disabled"}:
             raise ValueError(
@@ -179,6 +184,17 @@ class TorchOSNGSTrainer:
         calibration_extent = self._calibration_extent(scene)
         position_lr_extent = self._position_lr_extent(scene_extent, calibration_extent)
         state.model.spatial_lr_scale = position_lr_extent
+        self._extent_log = {
+            "scene_extent_point_cloud": float(scene_extent),
+            "calibration_extent_camera": float(calibration_extent),
+            "position_lr_extent_used": float(position_lr_extent),
+            "adc_dense_extent_threshold": max(
+                float(self.training_config.density_control.percent_dense) * float(calibration_extent), 1e-6,
+            ),
+            "adc_world_size_prune_threshold": (
+                float(self.training_config.density_control.max_scale_ratio) * float(calibration_extent)
+            ),
+        }
         self._print(
             "OSN-GS position LR extent: "
             f"mode={self.training_config.position_lr_extent_mode} "
@@ -335,6 +351,9 @@ class TorchOSNGSTrainer:
                 report = apply_adaptive_density_control(
                     state.model, self.training_config.density_control, calibration_extent, iteration=iteration
                 )
+                self._cumulative_adc["cloned"] += report.cloned
+                self._cumulative_adc["split"] += report.split
+                self._cumulative_adc["pruned"] += report.pruned
                 structural_adc = (report.cloned + report.split + report.pruned) > 0
                 if structural_adc:
                     self._visible_nurbs_event_counter += 1
@@ -384,6 +403,7 @@ class TorchOSNGSTrainer:
                 and iteration % reset_interval == 0
             ):
                 state.model.reset_opacity()
+                self._cumulative_adc["opacity_reset_count"] += 1
                 if pending_adc_event is not None:
                     pending_adc_event["adc_opacity_reset"] = True
                 self._print(f"OSN-GS ADC: iteration={iteration} opacity_reset=0.01")
@@ -1087,6 +1107,65 @@ class TorchOSNGSTrainer:
             certain = ~state.model.is_uncertain
             state.model._uncertain_confidence[certain] = 12.0
 
+    def activate_and_train_uncertain_step(
+        self,
+        state: TorchPipelineState,
+        positions: Any,
+        *,
+        initialization_provider,
+        camera,
+        target,
+        background=None,
+        adapter=None,
+        **safe_proposal_kwargs: Any,
+    ) -> tuple[Any, dict[str, Any] | None]:
+        """Real production connection point (worklog 60): raw Gaussian
+        evidence -> Worklog 57 safe proposal -> Worklog 58/60 composite
+        atomic append+activate -> ONE real trainer step, through the SAME
+        rasterizer/loss path ``_train_loop`` uses for every other Gaussian.
+
+        The step is restricted to exactly this call's newly-activated rows
+        via ``masked_optimizer_step`` (true row-level isolation: every other
+        row's parameter value AND Adam moments are left completely
+        untouched, not merely zero-gradient). Returns
+        ``(activation_result, step_result)`` -- ``step_result`` is ``None``
+        when nothing became trainable this call.
+        """
+
+        from osn_gs.gaussian.torch_uncertain_trainer_activation import (
+            masked_optimizer_step,
+            run_safe_uncertain_proposals_append_and_activate,
+        )
+
+        torch = self.torch
+        activation = run_safe_uncertain_proposals_append_and_activate(
+            positions, model=state.model, initialization_provider=initialization_provider,
+            adapter=adapter, **safe_proposal_kwargs,
+        )
+        if state.model.optimizer is None:
+            return activation, None
+        row_mask = activation.activated_row_mask(state.model)
+        if not bool(row_mask.any()):
+            return activation, None
+
+        camera, target = self._prepare_training_view(camera, target)
+        background = (
+            torch.zeros((3,), dtype=torch.float32, device=self.device) if background is None else background
+        )
+        render_pkg = self.rasterizer.render(camera, state.model, background)
+        image = render_pkg["render"]
+        target = target.to(device=self.device, dtype=torch.float32)
+        image_loss, mse = image_reconstruction_loss(image, target, self.training_config.lambda_dssim)
+
+        state.model.optimizer.zero_grad(set_to_none=True)
+        image_loss.backward()
+        step_stats = masked_optimizer_step(state.model, row_mask)
+        return activation, {
+            "loss": float(image_loss.detach().cpu()),
+            "mse": float(mse.detach().cpu()),
+            **step_stats,
+        }
+
     def save_outputs(self, state: TorchPipelineState, output_dir: Path, camera) -> None:
         """Save human-readable outputs plus a resumable checkpoint."""
 
@@ -1127,3 +1206,9 @@ class TorchOSNGSTrainer:
             handle.write(f"uncertain={int(state.model.is_uncertain.sum().item())}\n")
             handle.write(f"cuda_rasterizer={self.rasterizer.has_cuda_backend}\n")
             handle.write("nurbs_intermediate=nurbs_surface.json\n")
+            # Worklog 62: extent-basis A/B report fields (pure logging).
+            for key, value in self._extent_log.items():
+                handle.write(f"{key}={value}\n")
+            for key, value in self._cumulative_adc.items():
+                handle.write(f"cumulative_adc_{key}={value}\n")
+            handle.write(f"position_lr_extent_mode={self.training_config.position_lr_extent_mode}\n")

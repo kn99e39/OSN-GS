@@ -25,6 +25,11 @@ from osn_gs.surface.torch_visible_boundary_region_status import (
     STATUS_AMBIGUOUS, STATUS_ELIGIBLE_CLOSED, STATUS_INSUFFICIENT, STATUS_OPEN_FRAGMENT, STATUS_REJECTED_UNSAFE,
     RegionBoundaryStatus, classify_all_region_boundary_statuses, find_inconsistent_eligible_component_ids,
 )
+from osn_gs.surface.torch_region_parametric_chart_boundary import (
+    STATUS_ELIGIBLE_PARAMETRIC_CHART,
+    RegionParametricChartBoundary,
+    construct_region_parametric_chart_boundaries,
+)
 from osn_gs.surface.torch_world_space_boundary_halfedges import WorldSpaceBoundaryHalfEdgeCandidate, extract_world_space_boundary_halfedge_candidates
 
 
@@ -60,6 +65,14 @@ class VisibleSurfaceConstructionResult:
     policy_schema_version: str
     coverage_semantics: str
     construction_state: str
+    # Worklog 61: region-local PARAMETRIC chart boundaries (topology-only,
+    # possibly `partition_seam` -- never a physical-termination claim),
+    # additive to and fully independent of the fields above. Defaulted so
+    # this dataclass's single construction site (this module's own main
+    # function) remains the only thing that ever needs to supply them.
+    region_parametric_chart_boundaries: tuple[RegionParametricChartBoundary, ...] = ()
+    parametric_chart_materialization_attempts: tuple[VisibleBoundaryMaterializationResult, ...] = ()
+    materialized_parametric_chart_surfaces: tuple[VisibleBoundaryMaterializationResult, ...] = ()
 
     def eligible_materialized_surfaces(self) -> tuple[VisibleBoundaryMaterializationResult, ...]:
         """Worklog 55: the ONLY sanctioned source of visible-surface geometry
@@ -75,6 +88,20 @@ class VisibleSurfaceConstructionResult:
         NEVER be a source of downstream geometry.
         """
         return self.materialized_visible_nurbs_surfaces
+
+    def eligible_parametric_chart_surfaces(self) -> tuple[VisibleBoundaryMaterializationResult, ...]:
+        """Worklog 61: a SEPARATE sanctioned entry point for chart boundaries
+        derived from accepted region topology rather than physical surface
+        termination -- some or all boundary segments may be `partition_seam`
+        (topology-only, no physical evidence). Deliberately NOT merged into
+        `eligible_materialized_surfaces()`: existing downstream consumers of
+        that method (e.g. the Worklog 56 continuation bridge) assume every
+        entry is a physically-terminated boundary suitable for outward
+        continuation, which a parametric chart boundary is not guaranteed to
+        be. A caller that wants both must combine them explicitly and is
+        responsible for keeping the two provenances visibly distinct.
+        """
+        return self.materialized_parametric_chart_surfaces
 
 
 def _orient_normals_along_accepted_topology(normals: Any, accepted_edges: Sequence[tuple[Any, Any]], ids: Sequence[Any]):
@@ -260,6 +287,61 @@ def construct_visible_nurbs_from_gaussians(
     materialized = tuple(item for item in attempts if item.state == "materialized")
     review = tuple(item for item in attempts if item.state != "materialized")
 
+    # Worklog 61: region-local parametric chart boundaries -- independent of
+    # and additive to the eligible_closed_boundary path above. Every region
+    # gets exactly one RegionParametricChartBoundary; only
+    # eligible_parametric_chart_boundary regions reach materialization, and
+    # never through the physical-termination `region_statuses` gate above.
+    parametric_chart_boundaries = construct_region_parametric_chart_boundaries(
+        positions, ids, regions, canonical_frames, halfedges,
+    )
+    parametric_chart_attempts_list = []
+    for chart in parametric_chart_boundaries:
+        if chart.status != STATUS_ELIGIBLE_PARAMETRIC_CHART:
+            continue
+        chart_boundary_ids = tuple(item for item in chart.ordered_node_ids if item in id_to_index)
+        if not chart_boundary_ids:
+            continue
+        chart_boundary_points = positions[torch.tensor(
+            [id_to_index[item] for item in chart_boundary_ids], device=positions.device,
+        )]
+        chart_region = next((item for item in regions.regions if item.region_id == chart.region_id), None)
+        chart_interior_ids = tuple(
+            item for item in (chart_region.core_member_ids if chart_region else ())
+            if item not in set(chart_boundary_ids) and item in id_to_index
+        )
+        if not chart_interior_ids:
+            chart_interior_ids = tuple(
+                item for item in (chart_region.core_member_ids if chart_region else ()) if item in id_to_index
+            )
+        chart_interior_points = (
+            positions[torch.tensor([id_to_index[item] for item in chart_interior_ids], device=positions.device)]
+            if chart_interior_ids else chart_boundary_points
+        )
+        synthetic_chart_component = OrderedBoundaryComponent(
+            component_id=f"region:{chart.region_id}:parametric_chart",
+            region_id=chart.region_id,
+            ordered_half_edge_ids=(),
+            ordered_source_ids=chart.ordered_node_ids,
+            ordering_state="ordered_closed_loop",
+            closed=True,
+            branch_node_ids=(),
+            boundary_reason_distribution=chart.segment_kind_counts(),
+            confidence=0.5,
+            role_candidate="outer_boundary_candidate",
+            coverage_semantics="reliable_core_only",
+            full_surface_coverage_claimed=False,
+            unresolved_reasons=(),
+        )
+        parametric_chart_attempts_list.append(materialize_visible_boundary_component(
+            synthetic_chart_component, chart_boundary_points, chart_interior_points,
+            boundary_ids=chart_boundary_ids, interior_ids=chart_interior_ids,
+            region_status=STATUS_ELIGIBLE_PARAMETRIC_CHART, region_status_reason=chart.reason,
+            boundary_role_scope="outer_boundary_only", supporting_source_ids=chart.ordered_node_ids,
+        ))
+    parametric_chart_attempts = tuple(parametric_chart_attempts_list)
+    materialized_parametric_chart = tuple(item for item in parametric_chart_attempts if item.state == "materialized")
+
     # Boundary-pipeline yield, stage by stage (worklog 130 item 2) -- never
     # collapse straight to a single boundary_component_count=0 number.
     genuine_candidates = sum(item.boundary_reason == "observed_support_termination" for item in halfedges)
@@ -347,8 +429,41 @@ def construct_visible_nurbs_from_gaussians(
         "region_boundary_multiple_closed_loops_count": sum(len(item.eligible_component_ids) > 1 for item in region_statuses),
         "region_boundary_status_inconsistency_count": len(inconsistent_component_ids),
         "region_boundary_statuses": [item.payload() for item in region_statuses],
+        # Worklog 61: parametric chart boundary distribution, kept fully
+        # separate from the physical `region_boundary_*` counts above.
+        "parametric_chart_boundary_count": len(parametric_chart_boundaries),
+        "parametric_chart_eligible_count": sum(
+            item.status == STATUS_ELIGIBLE_PARAMETRIC_CHART for item in parametric_chart_boundaries
+        ),
+        "parametric_chart_insufficient_topology_count": sum(
+            item.status == "parametric_chart_insufficient_topology" for item in parametric_chart_boundaries
+        ),
+        "parametric_chart_open_or_branching_count": sum(
+            item.status == "parametric_chart_topology_open_or_branching" for item in parametric_chart_boundaries
+        ),
+        "parametric_chart_self_intersecting_count": sum(
+            item.status == "parametric_chart_self_intersection_failed" for item in parametric_chart_boundaries
+        ),
+        "parametric_chart_no_tangent_frame_count": sum(
+            item.status == "parametric_chart_no_canonical_tangent_frame" for item in parametric_chart_boundaries
+        ),
+        "parametric_chart_materialized_surface_count": len(materialized_parametric_chart),
+        "parametric_chart_partition_seam_segment_count": sum(
+            item.segment_kind_counts().get("partition_seam", 0) for item in parametric_chart_boundaries
+        ),
+        "parametric_chart_physical_termination_segment_count": sum(
+            item.segment_kind_counts().get("physical_termination", 0) for item in parametric_chart_boundaries
+        ),
+        "region_parametric_chart_boundaries": [item.payload() for item in parametric_chart_boundaries],
     }
-    return VisibleSurfaceConstructionResult(frame, reliability, graph, regions, accepted, phase_alias, halfedges, compatibility, components, components, region_statuses, attempts, materialized, review, summary, config.schema_version, "reliable_core_only", _state(attempts, components, regions))
+    return VisibleSurfaceConstructionResult(
+        frame, reliability, graph, regions, accepted, phase_alias, halfedges, compatibility, components, components,
+        region_statuses, attempts, materialized, review, summary, config.schema_version, "reliable_core_only",
+        _state(attempts, components, regions),
+        region_parametric_chart_boundaries=parametric_chart_boundaries,
+        parametric_chart_materialization_attempts=parametric_chart_attempts,
+        materialized_parametric_chart_surfaces=materialized_parametric_chart,
+    )
 
 
 

@@ -81,6 +81,7 @@ def main() -> None:
     )
 
     pipeline_config = TorchPipelineConfig(
+        gaussian_initialization_mode=str(args.gaussian_initialization_mode),
         canonical_covariance_knn=max(3, int(args.canonical_covariance_knn)),
         canonical_construction_max_points=max(
             16, int(args.canonical_construction_max_points)

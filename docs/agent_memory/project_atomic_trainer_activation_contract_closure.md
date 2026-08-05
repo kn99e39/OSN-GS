@@ -1,0 +1,21 @@
+---
+name: atomic-trainer-activation-contract-closure
+description: "Worklog 60 — connects worklog 59's optimizer activation to the REAL TorchOSNGSTrainer render/loss path (not just the standalone harness); composite append+activate transaction (full rollback of model/sidecar/registry/ledger/optimizer on activation failure); true row-level isolation including Adam momentum via masked_optimizer_step"
+metadata: 
+  node_type: memory
+  type: project
+  originSessionId: c91e18fb-6002-40ed-b911-d218589c420a
+  modified: 2026-08-05T04:07:05.650Z
+---
+
+Worklog 60 (docs/worklogs/60_atomic_trainer_activation_contract_closure.md) closed two gaps [[project_appended_uncertain_gaussian_trainer_activation]] (worklog 59) deliberately left open, without re-auditing Phase D-G or the append adapter.
+
+**1. Real trainer connection**: `TorchOSNGSTrainer.activate_and_train_uncertain_step()` (`osn_gs/core/torch_trainer.py`) is the actual production wiring point — calls `self.rasterizer.render(camera, state.model, background)` + `image_reconstruction_loss(...)`, the SAME calls `_train_loop` makes every iteration, then applies `masked_optimizer_step()` restricted to this call's newly-activated rows. `run_one_training_step` (worklog 59's synthetic-loss harness) still exists for isolated unit verification but is no longer treated as sufficient on its own.
+
+**2. Composite append+activate transaction**: `append_and_activate()` was rewritten to process one candidate at a time as a single atomic unit (previously: append the whole batch first via worklog 58's function, activate separately). Before each candidate's append, snapshots `model.snapshot_state()` + adapter's `_sidecar` dict + `model.appended_uncertain_batch_ids` + `model.occluded_chart_owner_registry` + (if an optimizer is active) its state keyed by stable group NAME (never object identity — `model.restore_state()` always builds brand-new `nn.Parameter` objects). If activation fails, `_restore_transaction_state()` undoes ALL of it — the append itself is now reversed too, reported `ROLLED_BACK`. The old worklog-59 behavior (append stays committed, only optimizer rolls back, reported `appended_inactive`) survives as the explicit lower-level `activate_appended_receipts()` for a caller managing its own outer transaction.
+
+**3. True row-level isolation (`masked_optimizer_step`)**: plain `torch.optim.Adam.step()` still lets an excluded row's PRE-EXISTING momentum decay it even at exactly-zero gradient (`m <- beta1*m + (1-beta1)*0`) — real Adam behavior, not isolation. `masked_optimizer_step(model, row_mask)` reimplements Adam's per-row update equations directly, gated by `row_mask`: excluded rows never even have `exp_avg`/`exp_avg_sq` read or written. Step/bias-correction stays a single shared scalar per parameter (matches existing `_preserve_optimizer_state` scalar-step handling, same convention as `torch.optim.SparseAdam`).
+
+**Verified**: candidate-ready planar fixture (same as worklog 57-59) on a model pre-trained with real non-zero Adam momentum — uncertain-only step leaves visible rows' value AND momentum bit-for-bit unchanged (not just gradient-zero); visible-only step leaves uncertain rows' value AND momentum bit-for-bit unchanged. Real `TorchOSNGSTrainer.activate_and_train_uncertain_step` end-to-end (real render/backward through the actual rasterizer) confirms the same isolation while producing a finite loss. Composite-rollback failure injection (scoped to only the post-append activation call, never the append's own internal no-op call to the same `_preserve_optimizer_state` method — patching it unconditionally breaks worklog 58's untouched transaction too) restores model tensors/sidecar/ledger/registry/optimizer to the exact pre-append snapshot, and every optimizer param_group reference matches `model`'s CURRENT (freshly restored) Parameter object by identity. Full pytest 759->760.
+
+**How to apply:** any future masked-step usage must go through `masked_optimizer_step`, never a plain `.step()`, whenever true row isolation (momentum included) is required. Any new failure-injection test around `TorchGaussianModel._preserve_optimizer_state` must condition the mock on `self.optimizer is not None` (or otherwise scope it) — unconditional patching breaks the append transaction's own harmless internal call too (tripped this up twice now, worklog 59 and 60).
