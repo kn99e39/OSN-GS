@@ -341,11 +341,24 @@ def _boundary_evidence_swap_in(
         pool_median_spacing = float(pool_nearest_distance.median())
         edge_radius = pool_median_spacing * 4.0
         adjacency: dict[int, list[int]] = {local: [] for local in range(len(pool))}
-        for a in range(len(pool)):
-            for b in range(a + 1, len(pool)):
-                if float(pool_pairwise[a, b]) <= edge_radius:
-                    adjacency[a].append(b)
-                    adjacency[b].append(a)
+        # Worklog 66: this used to compare `float(pool_pairwise[a, b])` one
+        # pair at a time inside a Python double loop. Each `float(...)` on a
+        # CUDA tensor forces a device-to-host sync, so the O(pool^2) loop
+        # became O(pool^2) individual GPU synchronizations -- profiled as the
+        # dominant cost of a real-checkpoint run (minutes of wall-clock per
+        # condition while GPU utilization stayed near 10%, i.e. latency-bound
+        # on sync stalls, not compute). A single vectorized comparison
+        # produces the EXACT same boolean adjacency relation (same
+        # `edge_radius`, same strict a<b pairing) in one pass; only the
+        # (typically far sparser) resulting edge list is then transferred to
+        # Python, once, so this changes nothing about which edges exist.
+        if len(pool) > 1:
+            within_radius = pool_pairwise <= edge_radius
+            triu = torch.triu_indices(len(pool), len(pool), offset=1, device=pool_pairwise.device)
+            edge_mask = within_radius[triu[0], triu[1]]
+            for a, b in zip(triu[0][edge_mask].tolist(), triu[1][edge_mask].tolist()):
+                adjacency[a].append(b)
+                adjacency[b].append(a)
 
         def _component_count(exclude: int | None) -> int:
             remaining = [n for n in range(len(pool)) if n != exclude]
@@ -375,9 +388,13 @@ def _boundary_evidence_swap_in(
         # would INCREASE the component count (a genuine articulation point)
         # is rejected.
         original_component_count = _component_count(exclude=None)
+        # Same one-sync-per-element issue as the adjacency loop above: index
+        # the CUDA tensor once into a plain Python list instead of inside the
+        # sort key (called once per pool element by Timsort).
+        pool_nearest_distance_list = pool_nearest_distance.tolist()
         redundancy_order = sorted(
             range(len(pool)),
-            key=lambda local: (float(pool_nearest_distance[local]), str(stable_ids[candidates[pool[local]]["representative_index"]])),
+            key=lambda local: (pool_nearest_distance_list[local], str(stable_ids[candidates[pool[local]]["representative_index"]])),
         )
         # Component-count non-increase alone still under-protects a node that
         # remains "connected" only through a single thin remaining path (the
