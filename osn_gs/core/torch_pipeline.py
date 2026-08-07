@@ -47,6 +47,10 @@ from osn_gs.surface.torch_visible_surface_construction import (
     VisibleSurfaceConstructionResult,
     construct_visible_nurbs_from_gaussians,
 )
+from osn_gs.surface.torch_region_owned_full_evidence import (
+    collect_region_owned_evidence,
+    fit_region_owned_full_evidence_patch,
+)
 from osn_gs.utils.torch_ops import require_torch
 
 
@@ -117,6 +121,12 @@ class CanonicalConstructionWithEvidence:
     representative_indices: Any  # (M,) long, indices into the input full cloud
     representative_stable_ids: tuple[Any, ...]
     nearest_representative_index: Any | None = None  # (N,) long, worklog 130: reused by propagation, never recomputed
+    # Worklog 67: region-owned full-cloud evidence re-fit, ADDITIVE only --
+    # never read by region formation/boundary ordering/chart eligibility.
+    # Keyed by (chart_type, source_region_id). Empty when construction was
+    # not downsampled (representatives already ARE the full cloud, so there
+    # is no extra evidence to recover).
+    region_owned_full_evidence_fits: dict[tuple[str, int], Any] = field(default_factory=dict)
 
 @dataclass
 class TorchPipelineConfig:
@@ -627,7 +637,7 @@ class TorchOSNGSPipeline:
                 continuation_input=continuation_input,
                 candidate_scale=representative_graph_scale, residual_scale=representative_graph_scale,
             )
-        return CanonicalConstructionWithEvidence(
+        bundle = CanonicalConstructionWithEvidence(
             construction=construction,
             selection=selection,
             evidence=evidence,
@@ -635,6 +645,74 @@ class TorchOSNGSPipeline:
             representative_stable_ids=rep_stable_ids,
             nearest_representative_index=precomputed_assignment[0] if precomputed_assignment is not None else None,
         )
+        if downsampled:
+            bundle.region_owned_full_evidence_fits = self._collect_region_owned_full_evidence_fits(
+                points, covariance, stable_ids_list, bundle,
+            )
+        return bundle
+
+    def _collect_region_owned_full_evidence_fits(
+        self, points: Any, covariance: Any, full_stable_ids: list[Any], bundle: CanonicalConstructionWithEvidence,
+    ) -> dict[tuple[str, int], Any]:
+        """Worklog 67: additive-only region-owned full-evidence recovery.
+
+        Never touches ``bundle.construction`` -- region formation, boundary
+        ordering, and chart eligibility (``materialized_visible_nurbs_surfaces``
+        / ``materialized_parametric_chart_surfaces`` themselves) are computed
+        BEFORE this runs and are read here only, never written.
+        """
+
+        torch = require_torch()
+        materialized_items: list[tuple[str, Any]] = [
+            ("physical", item) for item in bundle.construction.materialized_visible_nurbs_surfaces if item.surface is not None
+        ] + [
+            ("parametric", item) for item in bundle.construction.materialized_parametric_chart_surfaces if item.surface is not None
+        ]
+        if not materialized_items:
+            return {}
+
+        stable_to_local = {stable_id: local for local, stable_id in enumerate(bundle.representative_stable_ids)}
+        cluster_ids_by_representative = torch.full(
+            (len(bundle.representative_stable_ids),), -1, dtype=torch.long, device=points.device,
+        )
+        patch_id_by_key: dict[tuple[str, int], int] = {}
+        for patch_id, (chart_type, item) in enumerate(materialized_items):
+            key = (chart_type, item.input.source_region_id)
+            patch_id_by_key[key] = patch_id
+            local_indices = [
+                stable_to_local[stable_id]
+                for stable_id in item.input.supporting_source_ids
+                if stable_id in stable_to_local
+            ]
+            if not local_indices:
+                # `supporting_source_ids` is optional pass-through provenance
+                # (worklog 55); fall back to the boundary+interior point IDs
+                # this item was actually fit from, which are always present.
+                fallback_ids = tuple(item.input.ordered_boundary_point_ids) + (
+                    tuple(item.input.interior_reliable_point_ids) if item.input.interior_points is not None else ()
+                )
+                local_indices = [stable_to_local[stable_id] for stable_id in fallback_ids if stable_id in stable_to_local]
+            if local_indices:
+                cluster_ids_by_representative[torch.tensor(local_indices, dtype=torch.long, device=points.device)] = patch_id
+
+        propagated, _diagnostics = self._propagate_with_evidence_gating(points, covariance, bundle, cluster_ids_by_representative)
+
+        fits: dict[tuple[str, int], Any] = {}
+        for chart_type, item in materialized_items:
+            key = (chart_type, item.input.source_region_id)
+            patch_id = patch_id_by_key[key]
+            representative_support_count = int(
+                item.input.ordered_boundary_points.shape[0]
+                + (item.input.interior_points.shape[0] if item.input.interior_points is not None else 0)
+            )
+            full_evidence_points, full_evidence_stable_ids = collect_region_owned_evidence(
+                points, full_stable_ids, propagated, patch_id,
+            )
+            fits[key] = fit_region_owned_full_evidence_patch(
+                chart_type, item.input.source_region_id, item.input.ordered_boundary_points,
+                full_evidence_points, full_evidence_stable_ids, representative_support_count,
+            )
+        return fits
 
     def _propagate_with_evidence_gating(
         self,
