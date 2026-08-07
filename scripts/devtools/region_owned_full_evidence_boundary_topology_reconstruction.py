@@ -56,7 +56,10 @@ import osn_gs.core.torch_pipeline  # noqa: F401 -- resolve osn_gs's own circular
 from osn_gs.core.torch_pipeline import TorchOSNGSPipeline, TorchPipelineConfig
 from osn_gs.surface.torch_boundary_support_termination import extract_support_termination_candidates
 from osn_gs.surface.torch_canonical_region_tangent_frame import construct_canonical_region_tangent_frames
-from osn_gs.surface.torch_gaussian_covariance_frame import covariance_from_scale_rotation
+from osn_gs.surface.torch_gaussian_covariance_frame import covariance_from_scale_rotation, extract_covariance_frame
+from osn_gs.surface.torch_region_owned_dense_boundary_support import extract_dense_boundary_support
+from osn_gs.surface.torch_dense_boundary_connectivity_diagnostics import diagnose_dense_boundary_connectivity
+from osn_gs.surface.torch_dense_boundary_scale_diagnostics import diagnose_scale_domain
 from osn_gs.surface.torch_local_orientation_folding import compute_local_orientation_folding
 from osn_gs.surface.torch_nurbs import fit_torch_visible_surface_lsq, pca_parameterize_points
 from osn_gs.surface.torch_parametric_diagnostics import compute_parametric_jacobian_metrics
@@ -353,7 +356,9 @@ def analyze_condition(model, cap: int, device: str, label: str) -> dict:
             })
             continue
         evidence_ids = [stable_ids[i] for i in evidence_indices]
-        evidence_positions = points[torch.tensor(evidence_indices, dtype=torch.long, device=points.device)]
+        evidence_index_tensor = torch.tensor(evidence_indices, dtype=torch.long, device=points.device)
+        evidence_positions = points[evidence_index_tensor]
+        evidence_normals = extract_covariance_frame(covariance[evidence_index_tensor]).normal_candidate
 
         # A single already-established scale per region (worklog 32's own
         # mean_spacing, median over this region's own representatives) --
@@ -365,6 +370,11 @@ def analyze_condition(model, cap: int, device: str, label: str) -> dict:
             local_scale = float(mean_spacing[torch.tensor(member_local, dtype=torch.long, device=mean_spacing.device)].median())
         else:
             local_scale = _median_nn_spacing(evidence_positions)
+
+        dense_support = extract_dense_boundary_support(evidence_positions, evidence_normals, evidence_ids, representative_scale=local_scale)
+
+        connectivity_diagnostics = diagnose_dense_boundary_connectivity(dense_support.candidates)
+        scale_diagnostics = diagnose_scale_domain(dense_support.candidates, local_scale)
 
         topology_results = reconstruct_region_boundary_topology(
             region_id, all_seed_candidates, evidence_ids, evidence_positions, local_scale,
@@ -394,7 +404,7 @@ def analyze_condition(model, cap: int, device: str, label: str) -> dict:
             fit_record["densified_extension_count"] = densified.extension_count
             fit_record["seed_vertex_count"] = densified.seed_vertex_count
             loops.append(fit_record)
-        region_records.append({"region_id": region_id, "loops": loops})
+        region_records.append({"region_id": region_id, "loops": loops, "dense_boundary_support": {"candidate_count": len(dense_support.candidates), "evidence_bbox_extent": (evidence_positions.max(dim=0).values-evidence_positions.min(dim=0).values).detach().cpu().tolist(), "candidate_bbox_span_ratio": ((torch.tensor([c.position for c in dense_support.candidates], device=evidence_positions.device).max(dim=0).values-torch.tensor([c.position for c in dense_support.candidates], device=evidence_positions.device).min(dim=0).values)/(evidence_positions.max(dim=0).values-evidence_positions.min(dim=0).values).clamp_min(1e-9)).detach().cpu().tolist() if dense_support.candidates else [0.0,0.0,0.0], "full_evidence_sampling_scale": dense_support.full_evidence_scale, "representative_mean_spacing": dense_support.representative_scale, "components": [{"status": c.status, "closed": c.closed, "vertex_count": len(c.stable_ids), "planarity_class": c.geometry.planarity.planarity_class if c.geometry and c.geometry.planarity else None, "crossing_check": c.geometry.crossing_check if c.geometry else None, "proper_crossing_count": c.geometry.proper_crossing_count if c.geometry else None, "surface_self_intersection": "not_checked"} for c in dense_support.components], "adjacency_rejection_counts": dense_support.rejection_counts, "connectivity_diagnostics": connectivity_diagnostics, "scale_diagnostics": scale_diagnostics}})
 
     return {"label": label, "region_count": len(region_records), "regions": region_records}
 
@@ -406,6 +416,7 @@ def main() -> None:
     parser.add_argument("--baseline_run_dir", type=Path, default=Path("output/extent_ab/val64/baseline"))
     parser.add_argument("--iterations", nargs="+", type=int, default=[2900, 3100])
     parser.add_argument("--out", type=Path, default=Path("output/extent_ab/val71/full_evidence_boundary_topology_report.json"))
+    parser.add_argument("--skip_baseline", action="store_true")
     args = parser.parse_args()
     device = "cuda"
 
@@ -437,7 +448,7 @@ def main() -> None:
             model = load_ckpt(ckpt)
             report["baseline_compatible"][str(it)] = analyze_condition(model, args.cap, device, f"baseline_compatible@{it}")
         ply = args.baseline_run_dir / "point_cloud" / f"iteration_{it}" / "point_cloud.ply"
-        if ply.exists():
+        if not args.skip_baseline and ply.exists():
             print(f"analyzing baseline@{it} ...", flush=True)
             model = baseline_ply_analysis.load_baseline_ply_as_model(ply, device)
             report["baseline"][str(it)] = analyze_condition(model, args.cap, device, f"baseline@{it}")
