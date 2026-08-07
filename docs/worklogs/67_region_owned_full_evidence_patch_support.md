@@ -34,16 +34,16 @@ worklog 66에서 승인된 결과 위에서, representative topology와 chart bo
 | baseline@2900(참조) | 8 | 4 | 20 | 6,653 | **332.6×** | extrapolative 4 | 23.8/576 |
 | baseline@3100(참조) | 3 | 2 | 10 | 547 | **54.7×** | extrapolative 2 | 5.0/576 |
 
-**full_evidence_state는 21개 patch 전부 `materialized`다 — `under_supported`/`unsafe_geometry`/`fit_failed`가 0건이다.** worklog 66에서 다수를 차지하던 `under_supported`(evidence 3~4개)가 region-owned full evidence로는 완전히 사라졌다 — representative 3~4개짜리 "최소 region"도 실제로는 수십~수천 개의 원본 Gaussian을 대표하고 있었고, 그 evidence는 정상적으로 복원 가능했다.
+**[worklog 69에서 정정] full_evidence_state는 22개 patch 전부 `materialized`다(합계 오류 정정: 5+11+4+2=22, 기존 "21개"는 오기) — `under_supported`/`unsafe_geometry`/`fit_failed`가 0건이다.** worklog 66에서 다수를 차지하던 `under_supported`(evidence 3~4개)가 region-owned full evidence로는 완전히 사라졌다 — representative 3~4개짜리 "최소 region"도 실제로는 수십~수천 개의 원본 Gaussian을 대표하고 있었고, 그 evidence는 정상적으로 복원 가능했다.
 
-**대신 거의 모든 patch가 `extrapolative`로 재분류됐다(20/21, 95%).** 원인은 fitting 자체가 아니라 **평가 기준의 척도 변화**다: worklog 66의 `local_evidence_scale`은 representative 3~8개로 계산돼 값이 크고(성긴 기준), 이번 `local_evidence_scale`은 실제 수백~수천 개의 조밀한 원본 Gaussian으로 계산돼 훨씬 작다(0.007~0.045 범위). 같은 6×6 degree-2 NURBS fit이 이제 훨씬 엄격한(조밀한) 기준으로 평가되면서, surface-to-evidence p95가 4.0× 기준을 넘는 patch가 대다수가 됐다. **baseline(Graphdeco 참조)도 동일한 패턴을 보인다(4/4, 2/2 전부 extrapolative)** — OSN-GS 학습 품질 문제가 아니라, 6×6/degree-2라는 fitting 해상도 자체가 실제 조밀한 Gaussian cloud의 국소 노이즈/굴곡을 따라가기엔 낮다는, 두 조건에 공통된 별개 발견이다.
+**[worklog 69에서 정정] 대신 거의 모든 patch가 `extrapolative`로 재분류됐다(21/22, 95%, 기존 "20/21"은 오기).** 원인은 fitting 자체가 아니라 **평가 기준의 척도 변화**다: worklog 66의 `local_evidence_scale`은 representative 3~8개로 계산돼 값이 크고(성긴 기준), 이번 `local_evidence_scale`은 실제 수백~수천 개의 조밀한 원본 Gaussian으로 계산돼 훨씬 작다(0.007~0.045 범위). 같은 6×6 degree-2 NURBS fit이 이제 훨씬 엄격한(조밀한) 기준으로 평가되면서, surface-to-evidence p95가 4.0× 기준을 넘는 patch가 대다수가 됐다. **baseline(Graphdeco 참조)도 동일한 패턴을 보인다(4/4, 2/2 전부 extrapolative)** — OSN-GS 학습 품질 문제가 아니라, 6×6/degree-2라는 fitting 해상도 자체가 실제 조밀한 Gaussian cloud의 국소 노이즈/굴곡을 따라가기엔 낮다는, 두 조건에 공통된 별개 발견이다.
 
 Orientation consistency는 대체로 양호(대부분 0~14% flip)하나 baseline_compatible@2900의 region 0은 468/576(81%)로 눈에 띄게 높다 — 분류 결과 자체는 이미 extrapolative라 바뀌지 않지만, 해당 patch의 fit이 심하게 뒤틀려 있다는 별도 신호로 기록해 둔다.
 
 ## 완료 기준 대조
 
 - representative support 수 vs unique full-evidence support 수: **측정 완료, 55~333배 차이.**
-- materialized/valid_supported/under_supported/unsafe 수: **측정 완료** — full_evidence_state는 100% materialized(0/0/0), 최종 classification은 extrapolative가 지배적(20/21).
+- materialized/valid_supported/under_supported/unsafe 수: **측정 완료** — full_evidence_state는 100% materialized(0/0/0), 최종 classification은 extrapolative가 지배적(21/22, worklog 69에서 22로 정정).
 - point-to-surface/surface-to-evidence normalized p95: **측정 완료**(패치별 세부값, `output/extent_ab/val67/region_owned_evidence_report.json`).
 - Jacobian degeneracy/orientation consistency: **측정 완료** — Jacobian degenerate 0건, orientation flip은 대체로 낮으나 1건 예외(위 참고).
 - region-owned full evidence coverage/uncovered 비율: **의도적으로 미보고** — 아래 해석 유의사항 참고(조건 간 공통 척도가 아님).
