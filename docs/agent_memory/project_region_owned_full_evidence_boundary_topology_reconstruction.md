@@ -1,0 +1,25 @@
+---
+name: project_region_owned_full_evidence_boundary_topology_reconstruction
+description: "worklog 71 - retired worklog 70's densification approach, recovered ordered boundary TOPOLOGY directly from typed half-edge evidence + region-owned full evidence instead; 17/282 seed components reach closed_loop_recovered (0 self-intersecting) but all are minimal 3-vertex triangles, converging with worklog 69/70 on 'typed boundary evidence is intrinsically sparse/local' as the real bottleneck"
+metadata: 
+  node_type: memory
+  type: project
+  originSessionId: c91e18fb-6002-40ed-b911-d218589c420a
+  modified: 2026-08-07T07:06:45.735Z
+---
+
+worklog 71: retired [[project_region_owned_full_evidence_boundary_materialization]] (worklog 70's representative-edge densification) as canonical -- its diagnostic results stand. New goal: recover ordered boundary TOPOLOGY directly from the region's typed half-edge evidence (physical termination/crease/observation frontier/ambiguous) + region-owned full evidence, never referencing worklog 61's fixed 3-4-point loop at all.
+
+First design (evidence-density graph built from scratch: attach every evidence point within a radius to every nearby typed candidate, connect all resulting nodes pairwise) was implemented, fully tested (22 tests), then measured on real checkpoints and REJECTED: every region collapsed into one giant branching blob (up to 260 nodes) because dense evidence near any single seed candidate is mutually close to itself far more than it bridges to a neighbouring seed's evidence.
+
+Final design reuses PRODUCTION's unmodified `torch_ordered_world_boundary_graph.build_boundary_compatibility`/`recover_ordered_boundary_components` for SEED-level topology (representative density, where that rule was actually designed/tested) -- avoids the clumping failure entirely. Found and worked around (without touching production) a dead-code gap: `extract_world_space_boundary_halfedge_candidates`'s crease/parallel/ambiguous output is computed by `torch_visible_surface_construction.py` but never merged into `VisibleSurfaceConstructionResult.boundary_halfedge_candidates` -- this script calls both extractors itself. Also found `recover_ordered_boundary_components`'s "ordered_source_ids" is actually just gaussian-id-sorted, NOT a real geometric walk (verified by direct construction: a square whose ids sort out of cyclic order comes back non-adjacent) -- rebuilt true adjacency-walk order from the same accepted compatibility edges, using that function only for topology-STATE classification.
+
+Only `ordered_closed_loop`/`ordered_open_chain` seed components get densified per-edge with region-owned evidence (world-3D, `local_evidence_scale`-binned, same algorithm family as worklog 70's `materialize_dense_boundary` but reimplemented in the new module -- decoupled from `validate_simple_closed_loop`'s conflated nonplanar=self-intersection-failure behavior). New `evaluate_closed_loop_geometry()` separates 3D planarity (`compute_planarity`, unmodified) from the 2D proper-crossing check: nonplanar loops get `crossing_check="not_checked_nonplanar"`, never treated as a failure by itself.
+
+Real result (37 regions, 282 seed-level connected components): `boundary_topology_closed_loop_recovered` 17 (0 self-intersecting; some regions recovered 2 independent loops, kept separate, no outer/inner role inferred), `open_fragment` 79, `branch_detected` 30, `insufficient_evidence` 156. All 17 recovered loops are the smallest possible shape (3-vertex triangle from sparse seed candidates), densification adds only ~1 point per loop, `interior_outside_boundary` stays ~100% in 16/17, all 17 end up `partition_materialization_required` (0 valid_supported/extrapolative). Two structurally independent construction methods (worklog 61's leftmost-turn, this round's half-edge-graph recovery) now converge on the same conclusion: the bottleneck isn't the boundary-construction algorithm, it's that typed half-edge evidence itself is intrinsically sparse and local relative to a region's real evidence footprint.
+
+New `osn_gs/surface/torch_region_owned_full_evidence_boundary_topology.py`, `tests/test_region_owned_full_evidence_boundary_topology.py` (14 tests, all pass), `scripts/devtools/region_owned_full_evidence_boundary_topology_reconstruction.py`. worklog 70's module/tests left untouched. Focused pytest only, no full pytest per standing instruction.
+
+**Why:** answers whether the boundary itself (not just densification) needs to be topology-recovered from evidence rather than assumed fixed -- yes it's a real, working, better-founded mechanism (multiple independent loops correctly preserved, planarity/crossing correctly separated), but the underlying seed evidence sparsity is the true limiting factor, not the construction method.
+
+**How to apply:** any future round addressing this must target increasing typed half-edge candidate DENSITY/coverage itself (or moving off a boundary-loop representation entirely), not another boundary-construction/densification algorithm variant -- three rounds (69, 70, 71) via three different methods have now converged on this.
