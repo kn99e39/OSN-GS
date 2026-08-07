@@ -40,12 +40,18 @@ def estimate_full_evidence_sampling_scale(points: Any) -> float:
     d=torch.cdist(points, points); d.fill_diagonal_(float('inf'))
     return float(d.min(dim=1).values.median())
 
-def extract_dense_boundary_support(points: Any, normals: Any, stable_ids: Sequence[Any], *, representative_scale: float|None=None, neighbors: int=12, missing_sector_radians: float=math.pi) -> DenseBoundarySupportResult:
+def extract_dense_boundary_support(points: Any, normals: Any, stable_ids: Sequence[Any], *, representative_scale: float|None=None, neighbors: int=12, missing_sector_radians: float=math.pi, boundary_support_spacing_mode: str|None=None) -> DenseBoundarySupportResult:
     """Classify boundary support from local full-cloud angular evidence only.
 
     A candidate is admitted only when its kNN tangent-plane directions contain
     an observed empty sector.  The reason is local `observed_support_termination`,
     not a reason inherited from a nearby sparse seed.
+
+    Worklog 76: ``boundary_support_spacing_mode`` selects the SCALE DOMAIN of
+    the connectivity certificate (see ``torch_boundary_support_spacing``).
+    ``None`` keeps the pre-worklog-76 behaviour exactly (full-evidence
+    spacing). Candidate ADMISSION above is never affected -- the mode only
+    changes which spacing the already-admitted candidates are connected in.
     """
     torch=require_torch(); n=int(points.shape[0]); scale=estimate_full_evidence_sampling_scale(points)
     if n < 4 or scale <= 0: return DenseBoundarySupportResult((),(),scale,representative_scale,{"insufficient_local_evidence":n})
@@ -62,27 +68,47 @@ def extract_dense_boundary_support(points: Any, normals: Any, stable_ids: Sequen
         outward=torch.cos(angles[ix]+gap/2)*ref+torch.sin(angles[ix]+gap/2)*axis
         tangent=torch.linalg.cross(normal,outward); tangent=tangent/tangent.norm().clamp_min(_EPS)
         out.append(DenseBoundarySupportCandidate(stable_ids[i],tuple(float(x) for x in points[i]),tuple(float(x) for x in normal),tuple(float(x) for x in tangent),'observed_support_termination',scale))
-    return _connect(tuple(out), representative_scale)
+    candidates=tuple(out)
+    connectivity_scale=None
+    if boundary_support_spacing_mode is not None and candidates:
+        from osn_gs.surface.torch_boundary_support_spacing import resolve_boundary_support_spacing
+        resolved=resolve_boundary_support_spacing(
+            boundary_support_spacing_mode,
+            torch.tensor([c.position for c in candidates],dtype=points.dtype,device=points.device),
+            full_evidence_spacing=scale, representative_spacing=representative_scale,
+        )
+        connectivity_scale=resolved.per_candidate_scale
+    return _connect(candidates, representative_scale, connectivity_scale)
 
-def _connect(candidates: tuple[DenseBoundarySupportCandidate,...], representative_scale: float|None) -> DenseBoundarySupportResult:
+def _connect(candidates: tuple[DenseBoundarySupportCandidate,...], representative_scale: float|None, connectivity_scale: Sequence[float]|None=None) -> DenseBoundarySupportResult:
+    """Worklog 76: ``connectivity_scale`` is an OPTIONAL per-candidate scale for
+    the distance gate and the ambiguity tolerance. ``None`` (the default)
+    reproduces the pre-worklog-76 behaviour exactly -- every candidate uses the
+    region's ``full_evidence_scale``. The certificate itself is unchanged: same
+    stage order, same 2.5x distance multiplier, same 0.1x ambiguity tolerance,
+    same reason/tangent/normal predicates, same mutuality requirement. Only the
+    SCALE DOMAIN those multipliers are applied to can differ (see
+    ``torch_boundary_support_spacing``)."""
     torch=require_torch(); n=len(candidates)
     if not n: return DenseBoundarySupportResult((),(),0.0,representative_scale,{"no_local_termination_support":1})
     p=torch.tensor([x.position for x in candidates]); t=torch.tensor([x.tangent for x in candidates]); z=torch.tensor([x.normal for x in candidates]); scale=candidates[0].full_evidence_scale
+    scales=[float(scale)]*n if connectivity_scale is None else [float(s) for s in connectivity_scale]
     chosen={}; rejected={}
     for i in range(n):
+        local_scale=scales[i]
         for sign in (-1,1):
             valid=[]
             for j in range(n):
                 if i==j: continue
                 delta=p[j]-p[i]; dist=float(delta.norm())
-                if dist > 2.5*scale: rejected['distance_local_scale']=rejected.get('distance_local_scale',0)+1; continue
+                if dist > 2.5*local_scale: rejected['distance_local_scale']=rejected.get('distance_local_scale',0)+1; continue
                 if candidates[i].boundary_reason!=candidates[j].boundary_reason: rejected['reason_incompatibility']=rejected.get('reason_incompatibility',0)+1; continue
                 if abs(float(t[i]@t[j]))<.5: rejected['tangent_mismatch']=rejected.get('tangent_mismatch',0)+1; continue
                 if abs(float(z[i]@z[j]))<.8: rejected['normal_mismatch']=rejected.get('normal_mismatch',0)+1; continue
                 if sign*float(delta@t[i]) <= 0: continue
                 valid.append((dist,j))
             valid.sort()
-            if len(valid)>1 and abs(valid[1][0]-valid[0][0]) <= .1*scale:
+            if len(valid)>1 and abs(valid[1][0]-valid[0][0]) <= .1*local_scale:
                 rejected['ambiguity']=rejected.get('ambiguity',0)+1; continue
             if valid: chosen[(i,sign)]=valid[0][1]
     adj={i:set() for i in range(n)}
