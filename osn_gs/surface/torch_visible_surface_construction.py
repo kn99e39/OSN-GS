@@ -293,7 +293,7 @@ def construct_visible_nurbs_from_gaussians(
     # eligible_parametric_chart_boundary regions reach materialization, and
     # never through the physical-termination `region_statuses` gate above.
     parametric_chart_boundaries = construct_region_parametric_chart_boundaries(
-        positions, ids, regions, canonical_frames, halfedges,
+        positions, ids, regions, canonical_frames, tuple(sorted(termination_halfedges + relation_halfedges, key=lambda item: item.half_edge_id)),
     )
     parametric_chart_attempts_list = []
     for chart in parametric_chart_boundaries:

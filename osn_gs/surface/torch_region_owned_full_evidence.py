@@ -35,6 +35,7 @@ from typing import Any, Sequence
 
 from osn_gs.surface.torch_nurbs import TorchNURBSSurface, fit_torch_visible_surface_lsq
 from osn_gs.surface.torch_parametric_diagnostics import compute_parametric_jacobian_metrics
+from osn_gs.surface.torch_single_chart_uv_validity import interior_within_boundary
 from osn_gs.utils.torch_ops import require_torch
 
 # Same constant as worklog 66's `under_supported` cutoff, itself borrowed
@@ -47,6 +48,24 @@ STATE_MATERIALIZED = "materialized"
 STATE_UNDER_SUPPORTED = "under_supported"
 STATE_UNSAFE_GEOMETRY = "unsafe_geometry"
 STATE_FIT_FAILED = "fit_failed"
+# Worklog 79: the chart boundary and the full-evidence fitting set are two
+# DIFFERENT scales of the same region -- the boundary comes from the region's
+# representative topology while the evidence comes from ownership
+# propagation. Nothing previously checked that the boundary actually bounds
+# the evidence it is paired with. Measured on baseline_compatible@2900, all 5
+# materialized charts bound 3-4 representatives spanning 0.15-0.67 of their
+# own owned evidence extent, leaving 89.1-99.8% of that evidence OUTSIDE the
+# chart domain; the resulting fits were reported as ordinary surfaces while
+# being pure extrapolation over most of the region.
+STATE_DOMAIN_NOT_COVERING = "chart_domain_does_not_cover_evidence"
+
+# A chart must bound a MAJORITY of the evidence it is fit to. This is a
+# structural eligibility contract, not a tuned quantity: the measured
+# violations are 89.1-99.8% outside, so every bound in roughly (0.5, 0.85)
+# selects exactly the same set (verified in worklog 79). 0.5 is chosen only
+# because "a chart that does not contain most of its own evidence is not that
+# evidence's chart" is the weakest defensible statement of the contract.
+MAX_EVIDENCE_OUTSIDE_DOMAIN_FRACTION = 0.5
 
 
 @dataclass(frozen=True)
@@ -104,6 +123,41 @@ def collect_region_owned_evidence(
     return full_points[index_tensor], tuple(unique_ids)
 
 
+def evidence_outside_chart_domain_fraction(boundary_points: Any, evidence_points: Any) -> float | None:
+    """Fraction of ``evidence_points`` lying OUTSIDE the closed boundary loop,
+    measured in the LOOP'S OWN best-fit plane.
+
+    The loop defines the chart domain, so the loop's own plane -- not a plane
+    refit to the combined set -- is the frame the containment question is
+    posed in; refitting to the union would let distant evidence rotate the
+    very frame it is being tested against. Returns ``None`` when the test is
+    not defined (fewer than 3 boundary points or no evidence), so the caller
+    fails open to its existing states rather than on an undefined measurement.
+    """
+
+    torch = require_torch()
+    n = int(boundary_points.shape[0])
+    m = int(evidence_points.shape[0])
+    if n < 3 or m == 0:
+        return None
+    centered = boundary_points - boundary_points.mean(dim=0, keepdim=True)
+    # Right-singular vectors of the loop: columns 0/1 span its own plane.
+    _u, _s, vh = torch.linalg.svd(centered, full_matrices=False)
+    axis_u, axis_v = vh[0], vh[1]
+    origin = boundary_points.mean(dim=0)
+    boundary_uv = torch.stack((
+        (boundary_points - origin) @ axis_u, (boundary_points - origin) @ axis_v,
+    ), dim=1)
+    evidence_uv = torch.stack((
+        (evidence_points - origin) @ axis_u, (evidence_points - origin) @ axis_v,
+    ), dim=1)
+    report = interior_within_boundary(evidence_uv, boundary_uv)
+    total = report["interior_total_count"]
+    if not total:
+        return None
+    return report["interior_outside_boundary_count"] / total
+
+
 def fit_region_owned_full_evidence_patch(
     chart_type: str,
     source_region_id: int,
@@ -113,6 +167,7 @@ def fit_region_owned_full_evidence_patch(
     representative_support_count: int,
     *,
     min_support: int = MIN_FULL_EVIDENCE_SUPPORT,
+    max_evidence_outside_domain_fraction: float = MAX_EVIDENCE_OUTSIDE_DOMAIN_FRACTION,
     resolution_u: int = 6,
     resolution_v: int = 6,
     degree_u: int = 2,
@@ -143,6 +198,23 @@ def fit_region_owned_full_evidence_patch(
             **base_kwargs, state=STATE_UNDER_SUPPORTED, surface=None, boundary_residual=None,
             full_evidence_interior_residual=None, jacobian_near_degenerate_count=None,
             reasons=(f"full_evidence_support_count={full_evidence_support_count}<{min_support}",),
+        )
+
+    # Worklog 79: chart-domain coverage contract. The boundary loop and the
+    # evidence set are paired here for the first time, so this is where the
+    # pairing must be shown to be meaningful. Fail closed BEFORE fitting --
+    # a surface fit inside a domain that excludes most of its own evidence is
+    # extrapolation everywhere else, and reporting it as an ordinary
+    # materialized surface overstates visible-surface coverage.
+    outside_fraction = evidence_outside_chart_domain_fraction(boundary_points, full_evidence_points)
+    if outside_fraction is not None and outside_fraction > max_evidence_outside_domain_fraction:
+        return RegionOwnedFullEvidenceFit(
+            **base_kwargs, state=STATE_DOMAIN_NOT_COVERING, surface=None, boundary_residual=None,
+            full_evidence_interior_residual=None, jacobian_near_degenerate_count=None,
+            reasons=(
+                f"evidence_outside_chart_domain_fraction={outside_fraction:.4f}"
+                f">{max_evidence_outside_domain_fraction}",
+            ),
         )
 
     try:

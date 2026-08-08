@@ -60,9 +60,22 @@ class FitRegionOwnedFullEvidencePatchTest(unittest.TestCase):
         self.assertEqual(fit.full_evidence_support_count, 3)
         self.assertIn("full_evidence_support_count=3<4", fit.reasons[0])
 
+    def _perimeter_loop(self, grid: torch.Tensor, n: int = 6) -> torch.Tensor:
+        """The grid's actual perimeter, in loop order. Worklog 79: the earlier
+        fixture used `grid[:4]`, which is four COLLINEAR points on one edge --
+        a zero-area 'boundary' that bounds none of the evidence it was paired
+        with. That is exactly the chart-domain mismatch worklog 79 makes
+        fail-closed, so the fixture now uses a boundary that really encloses
+        the patch."""
+        top = [0 * n + c for c in range(n)]
+        right = [r * n + (n - 1) for r in range(1, n)]
+        bottom = [(n - 1) * n + c for c in range(n - 2, -1, -1)]
+        left = [r * n + 0 for r in range(n - 2, 0, -1)]
+        return grid[torch.tensor(top + right + bottom + left, dtype=torch.long)]
+
     def test_materializes_with_a_well_supported_planar_patch(self):
         grid = self._planar_grid(6)
-        boundary = grid[:4]
+        boundary = self._perimeter_loop(grid)
         fit = fit_region_owned_full_evidence_patch(
             "physical", 3, boundary, grid, tuple(range(grid.shape[0])), representative_support_count=4,
         )
@@ -76,7 +89,7 @@ class FitRegionOwnedFullEvidencePatchTest(unittest.TestCase):
 
     def test_representative_and_full_evidence_counts_recorded_separately(self):
         grid = self._planar_grid(6)
-        boundary = grid[:4]
+        boundary = self._perimeter_loop(grid)
         fit = fit_region_owned_full_evidence_patch(
             "physical", 3, boundary, grid, tuple(range(grid.shape[0])), representative_support_count=4,
         )
@@ -121,7 +134,10 @@ class PipelineWiringTest(unittest.TestCase):
 
         recovered_more_evidence = False
         for key, fit in bundle.region_owned_full_evidence_fits.items():
-            self.assertIn(fit.state, ("materialized", "under_supported", "unsafe_geometry", "fit_failed"))
+            self.assertIn(fit.state, (
+                "materialized", "under_supported", "unsafe_geometry", "fit_failed",
+                "chart_domain_does_not_cover_evidence",  # worklog 79
+            ))
             if fit.full_evidence_support_count > fit.representative_support_count:
                 recovered_more_evidence = True
         self.assertTrue(recovered_more_evidence, "expected at least one region to recover MORE than representative-only evidence")
@@ -166,3 +182,65 @@ class PipelineWiringTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ChartDomainCoverageContractTest(unittest.TestCase):
+    """Worklog 79: a chart must bound a MAJORITY of the evidence it is fit to.
+
+    On real baseline_compatible@2900 every materialized chart bounded 3-4
+    representatives spanning a small fraction of its own owned evidence,
+    leaving 89.1-99.8% of that evidence outside the chart domain; the fit was
+    still reported as an ordinary materialized surface.
+    """
+
+    def _planar_grid(self, n: int = 6) -> torch.Tensor:
+        axis = torch.linspace(-0.5, 0.5, n)
+        grid_x, grid_y = torch.meshgrid(axis, axis, indexing="ij")
+        return torch.stack((grid_x.reshape(-1), grid_y.reshape(-1), torch.zeros(n * n)), dim=1)
+
+    def _small_loop(self) -> torch.Tensor:
+        # A tiny triangle near the origin -- the real-data shape: a 3-node
+        # representative loop paired with far wider owned evidence.
+        return torch.tensor([[-0.05, -0.05, 0.0], [0.05, -0.05, 0.0], [0.0, 0.05, 0.0]])
+
+    def test_evidence_outside_a_tiny_chart_domain_fails_closed(self):
+        from osn_gs.surface.torch_region_owned_full_evidence import STATE_DOMAIN_NOT_COVERING
+        grid = self._planar_grid(6)
+        fit = fit_region_owned_full_evidence_patch(
+            "parametric", 1, self._small_loop(), grid, tuple(range(36)), representative_support_count=3,
+        )
+        self.assertEqual(fit.state, STATE_DOMAIN_NOT_COVERING)
+        self.assertIsNone(fit.surface)
+        self.assertIn("evidence_outside_chart_domain_fraction", fit.reasons[0])
+
+    def test_a_boundary_that_encloses_its_evidence_still_materializes(self):
+        grid = self._planar_grid(6)
+        n = 6
+        top = [c for c in range(n)]
+        right = [r * n + (n - 1) for r in range(1, n)]
+        bottom = [(n - 1) * n + c for c in range(n - 2, -1, -1)]
+        left = [r * n + 0 for r in range(n - 2, 0, -1)]
+        boundary = grid[torch.tensor(top + right + bottom + left, dtype=torch.long)]
+        fit = fit_region_owned_full_evidence_patch(
+            "parametric", 1, boundary, grid, tuple(range(36)), representative_support_count=4,
+        )
+        self.assertEqual(fit.state, STATE_MATERIALIZED)
+
+    def test_verdict_is_insensitive_to_the_exact_bound(self):
+        # The measured real violations are 89-99.8% outside, so the contract's
+        # verdict must not depend on where in the plausible range the bound
+        # sits -- this is an eligibility contract, not a tuned quantity.
+        from osn_gs.surface.torch_region_owned_full_evidence import STATE_DOMAIN_NOT_COVERING
+        grid = self._planar_grid(6)
+        for bound in (0.5, 0.6, 0.7, 0.8, 0.85):
+            fit = fit_region_owned_full_evidence_patch(
+                "parametric", 1, self._small_loop(), grid, tuple(range(36)),
+                representative_support_count=3, max_evidence_outside_domain_fraction=bound,
+            )
+            self.assertEqual(fit.state, STATE_DOMAIN_NOT_COVERING, f"bound={bound}")
+
+    def test_undefined_containment_does_not_fail_closed_on_that_basis(self):
+        from osn_gs.surface.torch_region_owned_full_evidence import evidence_outside_chart_domain_fraction
+        grid = self._planar_grid(6)
+        self.assertIsNone(evidence_outside_chart_domain_fraction(grid[:2], grid))
+        self.assertIsNone(evidence_outside_chart_domain_fraction(grid, grid[:0]))
