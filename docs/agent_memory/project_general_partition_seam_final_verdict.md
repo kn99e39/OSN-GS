@@ -1,0 +1,21 @@
+---
+name: project_general_partition_seam_final_verdict
+description: worklog 87 -- partition_seam generalized to first-class boundary type; TRUE FINAL NO-GO closing the entire worklog 79-87 boundary-first visible-constructor line
+metadata: 
+  node_type: memory
+  type: project
+  originSessionId: c91e18fb-6002-40ed-b911-d218589c420a
+  modified: 2026-08-10T06:20:02.935Z
+---
+
+Worklog 87 (docs/worklogs/87_general_partition_seam_final_go_no_go.md): generalizes [[project_partition_seam_parametric_chart_domain]]'s restricted "exactly 1 fragment + 1 seam" case into partition_seam as a genuine first-class parametric-boundary type, no longer treating physical boundary-support availability as an implicit prerequisite.
+
+Rewrote `osn_gs/surface/torch_chart_unit_partition_seam.py` (no longer a wrapper around worklog 85's function, now a direct implementation reusing its primitives): every independently-closed physical loop becomes its own domain (a unit can yield multiple domains); remaining open topology (fragments of any count, plus isolated single candidates treated as length-1 fragments needing 2 seams) is closed into at most one additional domain via DETERMINISTIC daisy-chain stitching (pieces ordered by first-candidate stable id, never geometric) -- supporting 1-fragment+1-seam (worklog 86's case), N-fragment+N-seam chains, and seam-dominated domains (zero/minimal physical evidence, mostly seam segments) as one unified mechanism. Any single missing seam in the chain fails the WHOLE attempt closed (no partial/alternate-order retry). Lowered the candidate floor from <3 to <2 (fragment needs only 2 points; the old <3 was a physical-loop-only relic).
+
+**Self-caught a real bug via direct measurement**: the first implementation excluded ALL other boundary candidates as seam intermediates (inherited from worklog 86's design choice, not actually required by the task). Measured directly on a real 140-point unit (47 candidates): the two fragment endpoints ARE connected via the interior same_surface graph (38/140 reachable, target included) when other candidates are allowed as pass-through waypoints, but NOT when excluded. Fixed by narrowing exclusion to only nodes ALREADY placed in the chain being built, guarded by an explicit duplicate-vertex check on the final stitched chain (fail closed if one would occur).
+
+Real result (evidence-weighted, 3526 points, 7 regions): coherent 88.1%, partitioned domain only 1.0%, valid_supported 0.4%, unresolved 87.1%. `seam_dominated` composition appears (0.5% evidence-weighted) proving the generalization creates genuinely new domain types, but total materialized units (8/178) barely changed from worklog 86's 8. Worklog 86's `no_dense_support` (71 units, 64 with literally 0 admitted candidates) recovers 0% -- structurally impossible, a seam needs at least one physical anchor pair, and "no prerequisite" cannot mean inventing geometry from nothing. `multi_fragment_unresolved` (23 units) also recovers 0% -- daisy-chain requires ALL seam legs to succeed simultaneously, and real fragmented evidence almost always breaks at least one leg (confirmed even after the exclusion-bug fix: the failure point moved to a different pair, total yield unchanged).
+
+**Verdict: NO-GO (final).** This closes the ENTIRE worklog 79-87 boundary-first visible-constructor redesign line (nine rounds) with the same conclusion reached independently at every step: the current trained Gaussian evidence's density/continuity/consistency cannot support chart-scale parametric boundary-first representation at production scale. Not integrated as canonical; no full regression. Do not reopen without new evidence -- next direction must address WHY evidence density/continuity is insufficient upstream (e.g. training/ADC-stage distribution), or reconsider the boundary-first assumption itself, not another boundary heuristic.
+
+Related: [[project_partition_seam_parametric_chart_domain]], [[project_evidence_scale_local_surface_topology_boundary]], [[project_chart_unit_coherence_audit_evidence_scale_boundary]], [[project_dense_chart_unit_assembly]]

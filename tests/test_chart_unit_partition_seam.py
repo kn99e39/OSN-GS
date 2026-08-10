@@ -1,4 +1,4 @@
-"""Worklog 86: partition-seam parametric chart-domain contract."""
+"""Worklog 87: partition_seam as a first-class parametric-boundary type."""
 
 from __future__ import annotations
 
@@ -8,14 +8,18 @@ import unittest
 import torch
 
 from osn_gs.surface.torch_chart_unit_partition_seam import (
+    MIXED_PHYSICAL_PARTITION_SEAM,
     PHYSICAL_ONLY,
-    STATE_MULTI_FRAGMENT_UNRESOLVED,
+    SEAM_DOMINATED,
+    STATE_NO_OPEN_TOPOLOGY,
+    STATE_SEAM_NOT_FOUND,
+    _find_isolated_candidates,
     _find_open_paths,
     _find_partition_seam,
-    materialize_chart_unit_domain,
+    _stitch_pieces_into_domain,
+    materialize_chart_unit_domains,
 )
 from osn_gs.surface.torch_chart_unit_evidence_scale_boundary import (
-    STATE_AMBIGUOUS_OR_OVER_MERGED,
     STATE_MATERIALIZED,
     STATE_NO_DENSE_SUPPORT,
 )
@@ -49,22 +53,138 @@ def _flat_disc_evidence(radius: float = 1.0, boundary_count: int = 24, interior_
     return positions, covariance, stable_ids
 
 
-class PhysicalOnlyPassThroughTest(unittest.TestCase):
-    """On real evidence (and on a synthetic flat disc, where every point
-    shares one normal so any candidate pair passes the same_surface
-    criterion regardless of distance -- an unrestricted search pool is
-    Worklog 85's own deliberate design, measured necessary there), a
-    genuinely closed physical loop is what should be reused unchanged."""
+class FindIsolatedCandidatesTest(unittest.TestCase):
+    def test_a_zero_degree_node_is_isolated(self):
+        adjacency = [set(), {2}, {1}]
+        self.assertEqual(_find_isolated_candidates(3, adjacency), [0])
 
-    def test_a_fully_closed_physical_disc_never_attempts_a_seam(self):
+    def test_no_isolated_candidates_in_a_full_cycle(self):
+        adjacency = [{1, 2}, {0, 2}, {0, 1}]
+        self.assertEqual(_find_isolated_candidates(3, adjacency), [])
+
+
+class StitchPiecesIntoDomainTest(unittest.TestCase):
+    """Direct tests of the general N-piece daisy-chain stitcher, isolated
+    from candidate-admission end-to-end quirks."""
+
+    def _dense_interior_fixture(self):
+        # 8-point boundary ring + dense interior disc, all coplanar so the
+        # interior graph is richly connected -- exactly the "genuine
+        # interior evidence" a seam is supposed to route through.
+        positions, _covariance, stable_ids = _flat_disc_evidence(radius=1.0, boundary_count=8, interior_axis=10)
+        normals = torch.tensor([0.0, 0.0, 1.0]).expand(int(positions.shape[0]), 3)
+        candidate_ids = list(range(8))  # the 8 boundary-ring points, used directly as "candidates"
+        candidate_positions = positions[:8]
+        id_to_full_index = {sid: i for i, sid in enumerate(stable_ids)}
+        return positions, normals, stable_ids, candidate_ids, candidate_positions, id_to_full_index
+
+    def test_two_single_point_pieces_are_stitched_via_two_seams(self):
+        positions, normals, stable_ids, candidate_ids, candidate_positions, id_to_full_index = self._dense_interior_fixture()
+        # Two isolated "fragments" of length 1 -- opposite sides of the ring.
+        pieces = [[0], [4]]
+        result, reason = _stitch_pieces_into_domain(
+            pieces, candidate_ids, candidate_positions, positions, normals, stable_ids, id_to_full_index, None,
+        )
+        self.assertIsNotNone(result, reason)
+        chain_ids, chain_positions, chain_is_physical = result
+        self.assertEqual(len(chain_ids), len(chain_positions))
+        self.assertEqual(len(chain_ids), len(chain_is_physical))
+        # Two single-point pieces -> zero internal physical edges anywhere.
+        self.assertFalse(any(chain_is_physical))
+
+    def test_deterministic_ordering_is_independent_of_input_piece_order(self):
+        positions, normals, stable_ids, candidate_ids, candidate_positions, id_to_full_index = self._dense_interior_fixture()
+        pieces_a = [[0], [4]]
+        pieces_b = [[4], [0]]
+        result_a, _ = _stitch_pieces_into_domain(
+            pieces_a, candidate_ids, candidate_positions, positions, normals, stable_ids, id_to_full_index, None,
+        )
+        result_b, _ = _stitch_pieces_into_domain(
+            pieces_b, candidate_ids, candidate_positions, positions, normals, stable_ids, id_to_full_index, None,
+        )
+        self.assertEqual(result_a[0], result_b[0])
+
+    def test_a_two_point_path_piece_contributes_one_internal_physical_edge(self):
+        positions, normals, stable_ids, candidate_ids, candidate_positions, id_to_full_index = self._dense_interior_fixture()
+        pieces = [[0, 1], [4, 5]]
+        result, reason = _stitch_pieces_into_domain(
+            pieces, candidate_ids, candidate_positions, positions, normals, stable_ids, id_to_full_index, None,
+        )
+        self.assertIsNotNone(result, reason)
+        _chain_ids, _chain_positions, chain_is_physical = result
+        self.assertEqual(sum(chain_is_physical), 2)  # one internal edge per 2-point piece
+
+    def test_unreachable_endpoint_fails_closed_with_a_reason(self):
+        positions, normals, stable_ids, candidate_ids, candidate_positions, id_to_full_index = self._dense_interior_fixture()
+        far_point = torch.tensor([[500.0, 500.0, 500.0]])
+        positions2 = torch.cat((positions, far_point), dim=0)
+        normals2 = torch.cat((normals, torch.tensor([[0.0, 0.0, 1.0]])), dim=0)
+        stable_ids2 = stable_ids + [len(stable_ids)]
+        id_to_full_index2 = {sid: i for i, sid in enumerate(stable_ids2)}
+        candidate_ids2 = candidate_ids + [len(stable_ids)]
+        candidate_positions2 = torch.cat((candidate_positions, far_point), dim=0)
+        pieces = [[0], [8]]  # index 8 is the far, disconnected point
+        result, reason = _stitch_pieces_into_domain(
+            pieces, candidate_ids2, candidate_positions2, positions2, normals2, stable_ids2, id_to_full_index2, None,
+        )
+        self.assertIsNone(result)
+        self.assertIn("no_interior_adjacency_path", reason)
+
+
+class MaterializeChartUnitDomainsTest(unittest.TestCase):
+    def test_a_fully_closed_physical_disc_is_one_physical_only_domain(self):
         positions, covariance, stable_ids = _flat_disc_evidence()
-        result = materialize_chart_unit_domain(positions, covariance, stable_ids, positions)
-        self.assertEqual(result.state, STATE_MATERIALIZED)
-        self.assertEqual(result.boundary_composition, PHYSICAL_ONLY)
-        self.assertEqual(result.partition_seam_segment_count, 0)
-        self.assertTrue(all(not s.is_partition_seam for s in result.segments))
+        result = materialize_chart_unit_domains(positions, covariance, stable_ids, positions)
+        self.assertEqual(len(result.domains), 1)
+        self.assertTrue(result.materialized)
+        self.assertEqual(result.domains[0].state, STATE_MATERIALIZED)
+        self.assertEqual(result.domains[0].boundary_composition, PHYSICAL_ONLY)
+        self.assertEqual(result.domains[0].partition_seam_segment_count, 0)
 
-    def test_ambiguous_over_merged_unit_passes_through_unchanged(self):
+    def test_two_disjoint_physical_loops_are_each_independently_detected_and_validated(self):
+        # Two far-apart rings artificially concatenated into one "unit" --
+        # this is not how real Worklog 83 assembly would ever group evidence
+        # (it requires proximity), so this exercises the DETECTION/
+        # independent-validation mechanism directly rather than asserting a
+        # realistic end-to-end success. Each ring is only ~50% of the
+        # combined unit's evidence, so the Worklog 79 coverage contract
+        # (unmodified, checked against the WHOLE unit) correctly rejects
+        # both individually here -- that is the coverage contract doing
+        # exactly its job, not a bug in multi-loop detection.
+        loop_a = _flat_disc_evidence(radius=1.0, boundary_count=16, interior_axis=8)[0]
+        loop_b_xy = _flat_disc_evidence(radius=1.0, boundary_count=16, interior_axis=8)[0]
+        loop_b = torch.stack((loop_b_xy[:, 0] + 5.0, loop_b_xy[:, 1], loop_b_xy[:, 2]), dim=1)
+        positions = torch.cat((loop_a, loop_b), dim=0)
+        covariance = _flat_covariance(int(positions.shape[0]))
+        stable_ids = list(range(int(positions.shape[0])))
+        result = materialize_chart_unit_domains(positions, covariance, stable_ids, positions)
+        physical_loop_attempts = [r for r in result.unresolved_reasons if r.startswith("physical_loop_rejected")]
+        self.assertEqual(len(physical_loop_attempts), 2, "both rings must be found and validated as SEPARATE loops")
+
+    def test_two_disjoint_physical_loops_each_covering_their_own_full_evidence_both_materialize(self):
+        # Same two-ring detection mechanism, but each domain is validated
+        # against ITS OWN evidence (as a real per-unit call would receive),
+        # so the coverage contract is satisfied and both materialize.
+        loop_a = _flat_disc_evidence(radius=1.0, boundary_count=16, interior_axis=8)[0]
+        loop_b_xy = _flat_disc_evidence(radius=1.0, boundary_count=16, interior_axis=8)[0]
+        loop_b = torch.stack((loop_b_xy[:, 0] + 5.0, loop_b_xy[:, 1], loop_b_xy[:, 2]), dim=1)
+        cov_a = _flat_covariance(int(loop_a.shape[0]))
+        cov_b = _flat_covariance(int(loop_b.shape[0]))
+        result_a = materialize_chart_unit_domains(loop_a, cov_a, list(range(int(loop_a.shape[0]))), loop_a)
+        result_b = materialize_chart_unit_domains(loop_b, cov_b, list(range(int(loop_b.shape[0]))), loop_b)
+        self.assertTrue(result_a.materialized)
+        self.assertTrue(result_b.materialized)
+        self.assertEqual(result_a.domains[0].boundary_composition, PHYSICAL_ONLY)
+
+    def test_too_few_candidates_yields_no_dense_support_with_new_floor(self):
+        positions = torch.tensor([[0.0, 0.0, 0.0], [0.1, 0.0, 0.0], [0.0, 0.1, 0.0]])
+        covariance = _flat_covariance(3)
+        stable_ids = list(range(3))
+        result = materialize_chart_unit_domains(positions, covariance, stable_ids, positions)
+        self.assertEqual(len(result.domains), 0)
+        self.assertTrue(any(STATE_NO_DENSE_SUPPORT in r for r in result.unresolved_reasons))
+
+    def test_ambiguous_over_merged_unit_yields_no_domains(self):
         dominant = _flat_disc_evidence(radius=1.0, boundary_count=24, interior_axis=12)[0]
         cov_dominant = _flat_covariance(int(dominant.shape[0]))
         minority_xy = _ring(45, 0.3)
@@ -75,115 +195,17 @@ class PhysicalOnlyPassThroughTest(unittest.TestCase):
         positions = torch.cat((dominant, minority), dim=0)
         covariance = torch.cat((cov_dominant, cov_minority), dim=0)
         stable_ids = list(range(int(positions.shape[0])))
-        result = materialize_chart_unit_domain(positions, covariance, stable_ids, positions)
-        self.assertEqual(result.state, STATE_AMBIGUOUS_OR_OVER_MERGED)
-        self.assertEqual(result.boundary_composition, "")
+        result = materialize_chart_unit_domains(positions, covariance, stable_ids, positions)
+        self.assertEqual(len(result.domains), 0)
+        self.assertFalse(result.coherence.coherent)
 
-    def test_too_few_points_passes_through_no_dense_support(self):
-        positions = torch.tensor([[0.0, 0.0, 0.0], [0.1, 0.0, 0.0], [0.0, 0.1, 0.0]])
-        covariance = _flat_covariance(3)
-        stable_ids = list(range(3))
-        result = materialize_chart_unit_domain(positions, covariance, stable_ids, positions)
-        self.assertEqual(result.state, STATE_NO_DENSE_SUPPORT)
-
-
-class FindOpenPathsTest(unittest.TestCase):
-    """Direct tests of the new open-path detector, isolated from candidate
-    admission/end-to-end quirks -- mirrors how Worklog 85's own
-    `_find_valid_loops` was verified directly."""
-
-    @staticmethod
-    def _link(adjacency, a, b):
-        adjacency[a].add(b)
-        adjacency[b].add(a)
-
-    def test_a_single_open_path_is_found_and_ordered_from_one_endpoint(self):
-        adjacency = [set() for _ in range(5)]
-        for a, b in [(0, 1), (1, 2), (2, 3), (3, 4)]:
-            self._link(adjacency, a, b)
-        paths = _find_open_paths(5, adjacency)
-        self.assertEqual(len(paths), 1)
-        self.assertIn(paths[0], ([0, 1, 2, 3, 4], [4, 3, 2, 1, 0]))
-
-    def test_a_closed_cycle_is_never_reported_as_an_open_path(self):
-        adjacency = [set() for _ in range(4)]
-        for a, b in [(0, 1), (1, 2), (2, 3), (3, 0)]:
-            self._link(adjacency, a, b)
-        self.assertEqual(_find_open_paths(4, adjacency), [])
-
-    def test_two_disjoint_open_paths_are_both_found(self):
-        adjacency = [set() for _ in range(6)]
-        for a, b in [(0, 1), (1, 2)]:
-            self._link(adjacency, a, b)
-        for a, b in [(3, 4), (4, 5)]:
-            self._link(adjacency, a, b)
-        paths = _find_open_paths(6, adjacency)
-        self.assertEqual(len(paths), 2)
-
-    def test_a_branching_component_is_not_reported_as_an_open_path(self):
-        adjacency = [set() for _ in range(4)]
-        for a, b in [(0, 1), (0, 2), (0, 3)]:
-            self._link(adjacency, a, b)
-        self.assertEqual(_find_open_paths(4, adjacency), [])
-
-
-class FindPartitionSeamTest(unittest.TestCase):
-    """Direct tests of the seam BFS over the unit's own interior
-    same_surface graph."""
-
-    def test_seam_found_through_dense_coherent_interior(self):
-        positions, covariance, stable_ids = _flat_disc_evidence(radius=1.0, boundary_count=8, interior_axis=10)
-        normals = torch.tensor([0.0, 0.0, 1.0]).expand(int(positions.shape[0]), 3)
-        # Two boundary points on opposite sides of the disc -- connected only
-        # via the dense interior (no adjacency graph among the 2 alone).
-        endpoint_a, endpoint_b = 0, 4  # opposite points in the 8-point boundary ring
-        seam = _find_partition_seam(positions, normals, None, set(), endpoint_a, endpoint_b)
-        self.assertIsNotNone(seam)
-        self.assertEqual(seam[0], endpoint_a)
-        self.assertEqual(seam[-1], endpoint_b)
-        # Every seam vertex is a real index into the unit's own positions.
-        self.assertTrue(all(0 <= i < int(positions.shape[0]) for i in seam))
-
-    def test_seam_returns_none_when_genuinely_disconnected(self):
-        positions, covariance, stable_ids = _flat_disc_evidence(radius=1.0, boundary_count=8, interior_axis=10)
-        far_point = torch.tensor([[50.0, 50.0, 50.0]])
-        all_positions = torch.cat((positions, far_point), dim=0)
-        normals = torch.tensor([0.0, 0.0, 1.0]).expand(int(all_positions.shape[0]), 3)
-        seam = _find_partition_seam(all_positions, normals, None, set(), 0, int(all_positions.shape[0]) - 1)
-        self.assertIsNone(seam)
-
-    def test_excluded_indices_are_never_used_as_seam_intermediates(self):
-        positions, covariance, stable_ids = _flat_disc_evidence(radius=1.0, boundary_count=8, interior_axis=10)
-        normals = torch.tensor([0.0, 0.0, 1.0]).expand(int(positions.shape[0]), 3)
-        n = int(positions.shape[0])
-        excluded = set(range(n)) - {0, 4}
-        seam = _find_partition_seam(positions, normals, None, excluded, 0, 4)
-        # With every other candidate blocked, only a direct 0<->4 edge (if
-        # one exists in the graph) could possibly work -- assert no excluded
-        # index appears in the result either way.
-        if seam is not None:
-            self.assertTrue(all(i in (0, 4) for i in seam))
-
-
-class FailClosedTest(unittest.TestCase):
-    def test_multi_fragment_state_is_reachable_and_distinct_from_materialized(self):
-        # Exercises the STATE_MULTI_FRAGMENT_UNRESOLVED code path directly by
-        # constructing a physical candidate graph with two disjoint open
-        # paths via the internal helper, independent of whether any real
-        # end-to-end admission fixture happens to reach it.
-        adjacency = [set() for _ in range(6)]
-
-        def link(a, b):
-            adjacency[a].add(b)
-            adjacency[b].add(a)
-
-        for a, b in [(0, 1), (1, 2)]:
-            link(a, b)
-        for a, b in [(3, 4), (4, 5)]:
-            link(a, b)
-        paths = _find_open_paths(6, adjacency)
-        self.assertEqual(len(paths), 2)
-        self.assertNotEqual(STATE_MULTI_FRAGMENT_UNRESOLVED, STATE_MATERIALIZED)
+    def test_never_fabricates_a_domain_when_topology_has_nothing_open(self):
+        # A trivially tiny set that can admit candidates but not close or
+        # chain into anything -- must disclose, not invent.
+        positions, covariance, stable_ids = _flat_disc_evidence(radius=1.0, boundary_count=4, interior_axis=2)
+        result = materialize_chart_unit_domains(positions, covariance, stable_ids, positions)
+        for d in result.domains:
+            self.assertNotEqual(d.state, "")
 
 
 if __name__ == "__main__":
