@@ -493,3 +493,10 @@ Initial Gaussians -> one-time density-adaptive voxel bootstrap -> initial patch 
 - Canonical materialization is fail-closed. Unsupported open, branched, or ambiguous topology must stop initialization/rebuild instead of synthesizing a placeholder NURBS or retaining an older patch registry.
 - O(N^2) canonical topology work is bounded by deterministic voxel-center sampling. The resulting covariance frames, patch ownership, and NURBS UV bindings are propagated to the complete Gaussian set.
 - Full arbitrary trained-scene coverage remains a canonical-constructor capability gap, not authorization to restore a retired fallback.
+## 2026-08-10 Chart-unit topology partition boundary 결정
+
+- Worklog 87의 candidate-anchored stable-ID daisy-chain과 Worklog 88의 global PCA rotation/induced largest outer-face 선택은 production architecture 판정 근거로 사용하지 않는다.
+- first-class partition seam의 올바른 실험 계약은 기존 local normal/tangent frame으로 full-region evidence-scale same-surface graph 전체의 observed face topology를 먼저 복원하고, 그 face incidence에 chart-unit membership을 적용하는 것이다. 양쪽 unit face인 edge는 interior, 한쪽만 unit face인 half-edge는 boundary이며, continuous full-surface incidence를 membership이 자르는 경우만 `partition_seam`이다. Worklog 77 candidate는 physical provenance/진단일 뿐 chart 생성 prerequisite가 아니다.
+- 모든 독립 boundary loop와 `outer_boundary`/`interior_boundary` role을 보존한다. open/branching/non-manifold 또는 현 untrimmed domain이 표현하지 못하는 interior loop는 fail-closed한다.
+- Worklog 89 실측에서 cut recoverable은 coherent evidence의 0.193%, valid_supported는 0%였고 mixed/seam-only 안전 domain은 없었다.
+- 최종 NO-GO에 따라 이 Region→Charts 계층은 canonical production path에 통합하지 않는다. 현재 구현 파이프라인은 변경되지 않으며 visible-constructor boundary redesign은 종료한다.

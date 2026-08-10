@@ -10,7 +10,7 @@
 
 ## 현재 상태
 
-**2026-08-04 기준 최신 요약은 [Urgent Work Master](Urgent_Work/OSN_GS_Urgent_Work_Master.md)를 단일 기준으로 본다.** 아래 항목은 이후 남겨둔 이력이며, canonical visible-NURBS 경로(§2)는 worklog 18(2026-07-30) 이후 `train.py`/benchmark의 유일한 production 경로다 — "isolated, dispatcher 미연결"이라는 아래 서술은 그 이전 상태다.
+**2026-08-10 기준 최신 요약은 [Urgent Work Master](Urgent_Work/OSN_GS_Urgent_Work_Master.md)를 단일 기준으로 본다.** 아래 항목은 이후 남겨둔 이력이며, canonical visible-NURBS 경로(§2)는 worklog 18(2026-07-30) 이후 `train.py`/benchmark의 유일한 production 경로다 — "isolated, dispatcher 미연결"이라는 아래 서술은 그 이전 상태다.
 
 - Uncertain Gaussian의 proposal/append/ownership model foundation. optimizer, trainer, renderer, checkpoint 및 global selection 통합은 범위 밖이다.
 - NURBS Construction benchmark는 depth-bearing 3D shell과 baseline-like flattened covariance를 기본 입력으로 사용한다. [Worklog 5](worklogs/5_nurbs_construction_synthetic_3d_gaussian_dataset.md)을 따른다.
@@ -106,3 +106,10 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - Region별 visible-boundary status를 5-state fail-closed 계약으로 분리하고, `eligible_closed_boundary` component만 canonical visible NURBS materialization과 downstream continuation bridge에 전달한다.
 - Real 5k의 region 130/141 두 surface만 continuation domain까지 연결되며 candidate는 0이다. 3k/10k는 eligible surface가 없어 downstream attempt가 없다.
 - 상세 계약·검증·한계는 [Worklog 54](worklogs/54_visible_boundary_eligibility_and_unsupported_state_contract.md), [Worklog 55](worklogs/55_eligible_boundary_downstream_integration.md), [Worklog 56](worklogs/56_eligible_visible_surface_occluded_candidate_production_bridge.md) [Worklog 57](worklogs/57_occluded_candidate_safe_uncertain_proposal_production_integration.md)는 continuation-domain candidate를 safe uncertain proposal artifact까지 연결한 현재 model-only 경계를 기록한다.를 따른다.
+
+## 2026-08-10 Full-region face membership-incidence 최종 판정
+
+- Worklog 87의 candidate-anchored stable-ID daisy-chain은 최종 architecture 판정 근거로 기각했다.
+- Worklog 88의 candidate-independent 방향은 유지하지만 global PCA rotation과 induced-subgraph largest outer-face 선택은 판정 근거에서 제거했다.
+- [Worklog 89](worklogs/89_full_region_face_membership_incidence_final_go_no_go.md)은 기존 local normal/tangent frame으로 full-region observed face를 먼저 복원한 뒤 unit-supported face incidence에서 모든 boundary loop를 계산한다.
+- 7-region 결과는 cut recoverable 0.170%(coherent 대비 0.193%), valid_supported 0%, mixed/seam-only 0%로 **실제 최종 NO-GO**다. Region→Charts canonical 통합은 하지 않았으며 visible-constructor boundary redesign은 종료한다.
