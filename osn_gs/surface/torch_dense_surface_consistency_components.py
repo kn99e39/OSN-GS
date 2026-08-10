@@ -65,6 +65,30 @@ DEFAULT_SAME_SURFACE_MAX_MUTUAL_RESIDUAL = 0.35
 DEFAULT_CANDIDATE_NEIGHBOR_COUNT = 8
 DEFAULT_MAX_CANDIDATE_COUNT_PER_NODE = 12
 
+# Worklog 84 reuses this exact bound at ASSEMBLED chart-unit scale (a unit is
+# many micro-components merged together) via `internal_normal_disagreement_fraction`
+# below -- same number, same formula, not a new/tuned threshold.
+NON_MANIFOLD_DISAGREEMENT_FRACTION_BOUND = 0.15
+
+
+def internal_normal_disagreement_fraction(normals: Any, member: Sequence[int]) -> float:
+    """Fraction of ``member``'s own (sign-aligned) normals that disagree with
+    the member set's own mean normal by more than 60 degrees (``|dot| < 0.5``).
+
+    Factored out of the per-micro-component non-manifold check below so
+    Worklog 84 can apply the IDENTICAL formula/threshold at assembled
+    chart-unit scale instead of duplicating it."""
+
+    torch = require_torch()
+    member_normals = normals[torch.tensor(list(member), dtype=torch.long, device=normals.device)]
+    reference = member_normals[0]
+    aligned = member_normals.clone()
+    flip = (aligned @ reference) < 0.0
+    aligned[flip] = -aligned[flip]
+    mean_normal = torch.nn.functional.normalize(aligned.mean(dim=0), dim=0)
+    dots = (member_normals @ mean_normal).abs()
+    return float((dots < 0.5).float().mean())
+
 
 @dataclass(frozen=True)
 class DenseConsistencyEdge:
@@ -244,15 +268,8 @@ def build_dense_surface_consistency_components(
         # accepted-edge chain folded back through near-orthogonal patches
         # (a bow-tie/self-crossing sheet), which same_surface's LOCAL
         # pairwise test alone cannot see -- disclosed, not silently accepted.
-        member_normals = normals[torch.tensor(member, dtype=torch.long, device=positions.device)]
-        reference = member_normals[0]
-        aligned = member_normals.clone()
-        flip = (aligned @ reference) < 0.0
-        aligned[flip] = -aligned[flip]
-        mean_normal = torch.nn.functional.normalize(aligned.mean(dim=0), dim=0)
-        dots = (member_normals @ mean_normal).abs()
-        disagreement_fraction = float((dots < 0.5).float().mean())
-        non_manifold_suspected = disagreement_fraction > 0.15
+        disagreement_fraction = internal_normal_disagreement_fraction(normals, member)
+        non_manifold_suspected = disagreement_fraction > NON_MANIFOLD_DISAGREEMENT_FRACTION_BOUND
 
         components.append(
             DenseSurfaceConsistencyComponent(tuple(member), non_manifold_suspected, disagreement_fraction)
