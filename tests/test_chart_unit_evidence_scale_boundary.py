@@ -13,6 +13,7 @@ from osn_gs.surface.torch_chart_unit_evidence_scale_boundary import (
     STATE_MATERIALIZED,
     STATE_NO_DENSE_SUPPORT,
     STATE_SELF_INTERSECTING,
+    _find_valid_loops,
     assess_chart_unit_coherence,
     materialize_chart_unit_boundary,
 )
@@ -132,10 +133,10 @@ class FailClosedTest(unittest.TestCase):
         self.assertEqual(result.state, STATE_NO_DENSE_SUPPORT)
 
     def test_never_bridges_to_close_an_open_fragment(self):
-        # A half-ring (not a full loop): angular ordering around the
-        # centroid still produces a SIMPLE (non-self-intersecting) polygon by
-        # closing the open end with a straight chord -- that chord crosses
-        # empty space, which the occupancy safety gate must catch.
+        # A half-ring (not a full loop) has no genuine degree-2-regular
+        # cycle in its own local adjacency graph -- it is a path (two
+        # degree-1 endpoints), correctly disclosed as an open fragment
+        # rather than force-closed by any chord.
         angles = torch.linspace(0.0, math.pi, 10)
         half_ring = torch.stack((torch.cos(angles), torch.sin(angles), torch.zeros(10)), dim=1)
         covariance = _flat_covariance(10)
@@ -143,15 +144,77 @@ class FailClosedTest(unittest.TestCase):
         result = materialize_chart_unit_boundary(half_ring, covariance, stable_ids, half_ring)
         self.assertNotEqual(result.state, STATE_MATERIALIZED)
 
-    def test_open_fragment_fails_with_unsupported_closure_specifically(self):
-        from osn_gs.surface.torch_chart_unit_evidence_scale_boundary import STATE_UNSUPPORTED_CLOSURE
+    def test_open_fragment_never_reports_a_fabricated_success_reason(self):
+        # With an unrestricted search pool, the open half-ring's two loose
+        # ends can sometimes still find a same_surface-compatible match
+        # across the gap (a topologically-closed but geometrically-unreal
+        # loop) -- the point of the two INDEPENDENT downstream safety checks
+        # is to catch exactly that, so any of several fail-closed states is
+        # an acceptable outcome; only MATERIALIZED is not.
+        from osn_gs.surface.torch_chart_unit_evidence_scale_boundary import (
+            STATE_NO_VALID_LOOP_TOPOLOGY,
+            STATE_SELF_INTERSECTING,
+            STATE_UNSUPPORTED_CLOSURE,
+        )
 
         angles = torch.linspace(0.0, math.pi, 10)
         half_ring = torch.stack((torch.cos(angles), torch.sin(angles), torch.zeros(10)), dim=1)
         covariance = _flat_covariance(10)
         stable_ids = list(range(10))
         result = materialize_chart_unit_boundary(half_ring, covariance, stable_ids, half_ring)
-        self.assertEqual(result.state, STATE_UNSUPPORTED_CLOSURE)
+        self.assertIn(
+            result.state, (STATE_NO_VALID_LOOP_TOPOLOGY, STATE_SELF_INTERSECTING, STATE_UNSUPPORTED_CLOSURE),
+        )
+
+
+class LocalTopologyLoopRecoveryTest(unittest.TestCase):
+    """Directly exercises the graph-theoretic loop recovery, Worklog 85's
+    actual redesign, independent of end-to-end candidate admission."""
+
+    @staticmethod
+    def _link(adjacency, a, b):
+        adjacency[a].add(b)
+        adjacency[b].add(a)
+
+    def test_two_disjoint_cycles_are_two_genuine_independent_loops(self):
+        adjacency = [set() for _ in range(8)]
+        for a, b in [(0, 1), (1, 2), (2, 3), (3, 0), (4, 5), (5, 6), (6, 7), (7, 4)]:
+            self._link(adjacency, a, b)
+        loops, branch, open_fragments = _find_valid_loops(8, adjacency)
+        self.assertEqual(len(loops), 2)
+        self.assertEqual(sorted(len(loop) for loop in loops), [4, 4])
+        self.assertEqual(branch, 0)
+        self.assertEqual(open_fragments, 0)
+
+    def test_a_degree_three_junction_is_disclosed_as_branch_not_forced(self):
+        # A 5-node component with one degree-3 hub: not a simple cycle.
+        adjacency = [set() for _ in range(5)]
+        for a, b in [(0, 1), (1, 2), (2, 0), (2, 3), (3, 4), (4, 2)]:
+            self._link(adjacency, a, b)
+        loops, branch, open_fragments = _find_valid_loops(5, adjacency)
+        self.assertEqual(loops, [])
+        self.assertEqual(branch, 1)
+        self.assertEqual(open_fragments, 0)
+
+    def test_a_path_is_disclosed_as_open_fragment_not_forced(self):
+        adjacency = [set() for _ in range(4)]
+        for a, b in [(0, 1), (1, 2), (2, 3)]:
+            self._link(adjacency, a, b)
+        loops, branch, open_fragments = _find_valid_loops(4, adjacency)
+        self.assertEqual(loops, [])
+        self.assertEqual(branch, 0)
+        self.assertEqual(open_fragments, 1)
+
+    def test_one_valid_cycle_plus_one_open_fragment_are_both_disclosed_separately(self):
+        adjacency = [set() for _ in range(7)]
+        for a, b in [(0, 1), (1, 2), (2, 0)]:
+            self._link(adjacency, a, b)
+        for a, b in [(3, 4), (4, 5), (5, 6)]:
+            self._link(adjacency, a, b)
+        loops, branch, open_fragments = _find_valid_loops(7, adjacency)
+        self.assertEqual(len(loops), 1)
+        self.assertEqual(len(loops[0]), 3)
+        self.assertEqual(open_fragments, 1)
 
 
 if __name__ == "__main__":

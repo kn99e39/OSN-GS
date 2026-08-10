@@ -154,45 +154,34 @@ def _nearest_arc_side(
     return best_kind
 
 
-def build_dense_surface_consistency_components(
-    region_id: int,
+def build_same_surface_adjacency(
     positions: Any,
+    normals: Any,
     *,
-    covariance: Any,
-    arc_starts: Any | None = None,
-    arc_ends: Any | None = None,
-    arc_kinds: Sequence[str] | None = None,
+    arc_side: Sequence[str] | None = None,
     candidate_neighbor_count: int = DEFAULT_CANDIDATE_NEIGHBOR_COUNT,
     max_candidate_count_per_node: int = DEFAULT_MAX_CANDIDATE_COUNT_PER_NODE,
     same_surface_min_normal_alignment: float = DEFAULT_SAME_SURFACE_MIN_NORMAL_ALIGNMENT,
     same_surface_max_mutual_residual: float = DEFAULT_SAME_SURFACE_MAX_MUTUAL_RESIDUAL,
-) -> DenseSurfaceConsistencyResult:
-    """Decompose one region's owned evidence into surface-consistency
-    components. ``covariance`` is the (N, 3, 3) per-point covariance already
-    used elsewhere (``covariance_from_scale_rotation``, unmodified). Typed
-    crease-arc veto is applied only when ``arc_starts``/``arc_ends``/``arc_kinds``
-    (worklog 80's own per-arc chart segments, in the SAME frame as
-    ``positions``) are supplied; omitting them runs normal/residual-only
-    classification (still never spatial proximity alone)."""
+) -> tuple[tuple[DenseConsistencyEdge, ...], list[set[int]], int]:
+    """Bounded-degree kNN candidate graph, classified into
+    same_surface/crease_vetoed/ambiguous edges. Factored out of
+    ``build_dense_surface_consistency_components`` (Worklog 85 reuses this
+    SAME graph-construction logic directly on an assembled chart unit's
+    boundary candidates to recover LOCAL 2-manifold neighborhood relations,
+    instead of duplicating it) -- behavior for existing callers is unchanged,
+    verified by the existing Worklog 82 test suite continuing to pass."""
 
     torch = require_torch()
     n = int(positions.shape[0])
     if n == 0:
-        return DenseSurfaceConsistencyResult(region_id, 0, (), (), (), 0)
+        return (), [], 0
 
-    frame = extract_covariance_frame(covariance)
-    normals = frame.normal_candidate
     scale = _residual_scale(positions, candidate_neighbor_count)
-
-    arc_side = None
-    if arc_starts is not None and arc_ends is not None and arc_kinds and int(arc_starts.shape[0]) > 0:
-        arc_side = _nearest_arc_side(positions, arc_starts, arc_ends, arc_kinds)
-
     k = min(candidate_neighbor_count, max(1, n - 1))
     d = torch.cdist(positions, positions)
     d.fill_diagonal_(float("inf"))
     knn_indices = d.topk(k, dim=1, largest=False).indices
-    knn_set = [set(row.tolist()) for row in knn_indices]
 
     seen: set[tuple[int, int]] = set()
     pending: list[tuple[int, int, float]] = []
@@ -243,6 +232,49 @@ def build_dense_surface_consistency_components(
             edges.append(DenseConsistencyEdge(a, b, RELATION_AMBIGUOUS, alignment, mutual_residual))
         per_node_count[a] += 1
         per_node_count[b] += 1
+
+    return tuple(edges), adjacency_same_surface, crease_vetoed
+
+
+def build_dense_surface_consistency_components(
+    region_id: int,
+    positions: Any,
+    *,
+    covariance: Any,
+    arc_starts: Any | None = None,
+    arc_ends: Any | None = None,
+    arc_kinds: Sequence[str] | None = None,
+    candidate_neighbor_count: int = DEFAULT_CANDIDATE_NEIGHBOR_COUNT,
+    max_candidate_count_per_node: int = DEFAULT_MAX_CANDIDATE_COUNT_PER_NODE,
+    same_surface_min_normal_alignment: float = DEFAULT_SAME_SURFACE_MIN_NORMAL_ALIGNMENT,
+    same_surface_max_mutual_residual: float = DEFAULT_SAME_SURFACE_MAX_MUTUAL_RESIDUAL,
+) -> DenseSurfaceConsistencyResult:
+    """Decompose one region's owned evidence into surface-consistency
+    components. ``covariance`` is the (N, 3, 3) per-point covariance already
+    used elsewhere (``covariance_from_scale_rotation``, unmodified). Typed
+    crease-arc veto is applied only when ``arc_starts``/``arc_ends``/``arc_kinds``
+    (worklog 80's own per-arc chart segments, in the SAME frame as
+    ``positions``) are supplied; omitting them runs normal/residual-only
+    classification (still never spatial proximity alone)."""
+
+    n = int(positions.shape[0])
+    if n == 0:
+        return DenseSurfaceConsistencyResult(region_id, 0, (), (), (), 0)
+
+    frame = extract_covariance_frame(covariance)
+    normals = frame.normal_candidate
+
+    arc_side = None
+    if arc_starts is not None and arc_ends is not None and arc_kinds and int(arc_starts.shape[0]) > 0:
+        arc_side = _nearest_arc_side(positions, arc_starts, arc_ends, arc_kinds)
+
+    edges, adjacency_same_surface, crease_vetoed = build_same_surface_adjacency(
+        positions, normals, arc_side=arc_side,
+        candidate_neighbor_count=candidate_neighbor_count,
+        max_candidate_count_per_node=max_candidate_count_per_node,
+        same_surface_min_normal_alignment=same_surface_min_normal_alignment,
+        same_surface_max_mutual_residual=same_surface_max_mutual_residual,
+    )
 
     # Connected components of same_surface edges ONLY (crease/ambiguous never merge).
     component_id = [-1] * n

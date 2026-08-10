@@ -55,7 +55,9 @@ import osn_gs.core.torch_pipeline  # noqa: F401
 from osn_gs.core.torch_pipeline import TorchOSNGSPipeline, TorchPipelineConfig
 from osn_gs.surface.torch_canonical_region_tangent_frame import construct_canonical_region_tangent_frames
 from osn_gs.surface.torch_chart_unit_evidence_scale_boundary import (
+    STATE_AMBIGUOUS_OR_OVER_MERGED as BOUNDARY_STATE_AMBIGUOUS,
     STATE_MATERIALIZED as BOUNDARY_STATE_MATERIALIZED,
+    STATE_NO_DENSE_SUPPORT as BOUNDARY_STATE_NO_DENSE_SUPPORT,
     materialize_chart_unit_boundary,
 )
 from osn_gs.surface.torch_dense_chart_unit_assembly import build_chart_unit_assembly
@@ -299,8 +301,17 @@ def analyze(checkpoint: Path, cap: int, device: str) -> dict:
         evidence_coherent = 0
         evidence_ambiguous = 0
         evidence_materialized = 0
+        # Worklog 85's required explicit 3-way split (evidence-weighted):
+        # (1) true lack of boundary-support evidence, (2) evidence present
+        # but no valid manifold boundary topology (branch/open/self-
+        # intersecting/unsupported-closure/coverage-failed -- topology was
+        # attempted and rejected), (3) successfully recovered perimeter.
+        evidence_no_boundary_support = 0
+        evidence_no_valid_topology = 0
         classification_evidence = {"valid_supported": 0, "extrapolative": 0, "unsafe_geometry": 0, "no_chart": 0}
         boundary_failure_reasons: dict[str, int] = {}
+        total_branch_detected_components = 0
+        total_open_fragment_components = 0
         was_valid_micro_now = {"still_valid": 0, "ambiguous_over_merged": 0, "boundary_failed_or_extrapolative": 0}
 
         for unit_idx, unit in enumerate(assembly.chart_units):
@@ -330,6 +341,11 @@ def analyze(checkpoint: Path, cap: int, device: str) -> dict:
             )
             unit_record["boundary_state"] = boundary.state
             unit_record["crease_inconsistent_segment_count"] = boundary.crease_inconsistent_segment_count
+            unit_record["additional_valid_loop_count"] = boundary.additional_valid_loop_count
+            unit_record["branch_detected_component_count"] = boundary.branch_detected_component_count
+            unit_record["open_fragment_component_count"] = boundary.open_fragment_component_count
+            total_branch_detected_components += boundary.branch_detected_component_count
+            total_open_fragment_components += boundary.open_fragment_component_count
 
             if boundary.coherence and boundary.coherence.coherent:
                 evidence_coherent += unit_size
@@ -341,8 +357,12 @@ def analyze(checkpoint: Path, cap: int, device: str) -> dict:
             if boundary.state != BOUNDARY_STATE_MATERIALIZED:
                 unit_record["classification"] = "no_chart"
                 classification_evidence["no_chart"] += unit_size
+                if boundary.state == BOUNDARY_STATE_NO_DENSE_SUPPORT:
+                    evidence_no_boundary_support += unit_size
+                elif boundary.state != BOUNDARY_STATE_AMBIGUOUS:
+                    evidence_no_valid_topology += unit_size
                 if unit_record["contains_previously_valid_micro"]:
-                    if boundary.state == "chart_unit_ambiguous_or_over_merged":
+                    if boundary.state == BOUNDARY_STATE_AMBIGUOUS:
                         was_valid_micro_now["ambiguous_over_merged"] += 1
                     else:
                         was_valid_micro_now["boundary_failed_or_extrapolative"] += 1
@@ -375,8 +395,16 @@ def analyze(checkpoint: Path, cap: int, device: str) -> dict:
             "extrapolative": classification_evidence["extrapolative"] / total_evidence,
             "unsafe_geometry": classification_evidence["unsafe_geometry"] / total_evidence,
             "no_chart": classification_evidence["no_chart"] / total_evidence,
+            # Worklog 85's required explicit 3-way split.
+            "true_lack_of_boundary_support_evidence": evidence_no_boundary_support / total_evidence,
+            "evidence_present_but_no_valid_topology": evidence_no_valid_topology / total_evidence,
+            "successfully_recovered_supported_perimeter": evidence_materialized / total_evidence,
         }
         row["boundary_failure_reasons"] = boundary_failure_reasons
+        row["topology_failure_component_totals"] = {
+            "branch_detected_component_count": total_branch_detected_components,
+            "open_fragment_component_count": total_open_fragment_components,
+        }
         row["valid_micro_attribution"] = was_valid_micro_now
         row["assembled_units"] = units
         rows.append(row)
@@ -387,7 +415,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cap", type=int, default=2048)
     parser.add_argument("--checkpoint", type=Path, default=Path("output/extent_ab/val64/baseline_compatible/2900"))
-    parser.add_argument("--out", type=Path, default=Path("output/extent_ab/val84/dense_chart_unit_boundary_replay.json"))
+    parser.add_argument("--out", type=Path, default=Path("output/extent_ab/val85/dense_chart_unit_boundary_replay.json"))
     args = parser.parse_args()
     report = analyze(args.checkpoint, args.cap, "cuda")
     args.out.parent.mkdir(parents=True, exist_ok=True)
@@ -395,19 +423,20 @@ def main() -> None:
         json.dump(report, handle, indent=2, default=str)
     print(f"wrote {args.out}\n", flush=True)
 
-    print(f"{'reg':>3} {'evid':>5} {'units':>5} | evid% assembled/coherent/materialized | evid% valid/extrap/unsafe/no_chart | attribution")
+    print(f"{'reg':>3} {'evid':>5} {'units':>5} | evid% assembled/coherent/materialized | evid% valid/extrap/unsafe/no_chart | evid% 3-way(nosupport/notopology/perimeter) | branch/open")
     for row in report["regions"]:
         if "skip_reason" in row:
             print(f"{row['region']:>3} {row['total_evidence']:>5} skipped: {row['skip_reason']}")
             continue
         asm = row.get("assembly", {})
         ef = row.get("evidence_fractions", {})
-        attr = row.get("valid_micro_attribution", {})
+        tft = row.get("topology_failure_component_totals", {})
         print(
             f"{row['region']:>3} {row['total_evidence']:>5} {asm.get('chart_unit_count', 0):>5} | "
             f"{ef.get('entering_assembled_units', 0)*100:>5.1f}/{ef.get('coherent', 0)*100:>5.1f}/{ef.get('reaching_materialized_chart', 0)*100:>5.1f} | "
             f"{ef.get('valid_supported', 0)*100:>5.1f}/{ef.get('extrapolative', 0)*100:>5.1f}/{ef.get('unsafe_geometry', 0)*100:>5.1f}/{ef.get('no_chart', 0)*100:>5.1f} | "
-            f"{attr}"
+            f"{ef.get('true_lack_of_boundary_support_evidence', 0)*100:>5.1f}/{ef.get('evidence_present_but_no_valid_topology', 0)*100:>5.1f}/{ef.get('successfully_recovered_supported_perimeter', 0)*100:>5.1f} | "
+            f"{tft.get('branch_detected_component_count', 0)}/{tft.get('open_fragment_component_count', 0)}"
         )
 
     all_units = [u for row in report["regions"] for u in row.get("assembled_units", [])]
@@ -420,7 +449,24 @@ def main() -> None:
     for row in report["regions"]:
         for k, v in row.get("valid_micro_attribution", {}).items():
             total_attr[k] = total_attr.get(k, 0) + v
-    print(f"16->4 valid-chart-loss attribution (units containing a previously-valid micro-component): {total_attr}")
+    print(f"valid-chart-loss attribution (units containing a previously-valid micro-component): {total_attr}")
+
+    total_evid = sum(r.get("total_evidence", 0) for r in report["regions"])
+    tot = {"no_support": 0.0, "no_topology": 0.0, "perimeter": 0.0}
+    for row in report["regions"]:
+        ef = row.get("evidence_fractions")
+        if not ef:
+            continue
+        te = row["total_evidence"]
+        tot["no_support"] += ef["true_lack_of_boundary_support_evidence"] * te
+        tot["no_topology"] += ef["evidence_present_but_no_valid_topology"] * te
+        tot["perimeter"] += ef["successfully_recovered_supported_perimeter"] * te
+    print(
+        f"\nEvidence-weighted 3-way split across all regions (total evidence {total_evid}): "
+        f"no_boundary_support={tot['no_support']/total_evid*100:.1f}% "
+        f"no_valid_topology={tot['no_topology']/total_evid*100:.1f}% "
+        f"recovered_perimeter={tot['perimeter']/total_evid*100:.1f}%"
+    )
 
 
 if __name__ == "__main__":
