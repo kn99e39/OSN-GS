@@ -71,4 +71,5 @@
 - [Full-region face membership-incidence final verdict](project_full_region_face_membership_incidence_final_verdict.md) — worklog 89 actual final: local-frame full faces first, membership incidence second, 0.193% coherent recovery and 0 safe domains, final NO-GO
 
 - [Surface-topology root-cause attribution](project_surface_topology_root_cause_attribution.md) — worklog 90: read-only footprint diagnosis; multilayer/volumetric 91.44% dominates; Decision C, inspect upstream training/ADC distribution, no boundary rewrite
-- [Surface-topology temporal + lineage attribution](project_surface_topology_temporal_lineage_attribution.md) — worklog 91: true-center-multilayer 92.5-95.9% stable across 5 checkpoints; Decision A, next target is ADC/densification/pruning, not boundary
+- [Surface-topology temporal + lineage attribution](project_surface_topology_temporal_lineage_attribution.md) — worklog 91 HISTORICAL, Decision A superseded by [[project_local_center_geometry_attribution]] (global-SVD confound)
+- [Local center-geometry attribution](project_local_center_geometry_attribution.md) — worklog 92: local persistence-gated reclassification, true persistent layers only 1-2% (not 92-96%); Decision E, do not adopt ADC as target based on worklog 91

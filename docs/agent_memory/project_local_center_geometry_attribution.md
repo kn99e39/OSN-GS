@@ -1,0 +1,16 @@
+---
+name: project_local_center_geometry_attribution
+description: worklog 92 -- removes worklog 91's global-SVD confound; Decision E supersedes worklog 91 Decision A
+metadata:
+  node_type: memory
+  type: project
+  modified: 2026-08-17
+---
+
+Worklog 92 is the final read-only center-geometry attribution, not a new boundary method. Worklog 89's boundary constructor, Worklog 82 relation thresholds, NURBS fitting, visible Gaussian training, and ADC are all fixed and unmodified.
+
+Worklog 91 fit ONE SVD plane to an entire chart unit's member centers and gap-clustered signed offsets from that single plane into "layers" -- a curved single sheet can trivially look like several depth bands relative to one global plane. New module `osn_gs/surface/torch_chart_unit_local_center_geometry_attribution.py` removes this confound: each node's own local kNN (k=8, Worklog 82's existing constant) neighborhood gets its own diagnostic-only local plane fit, and a gap is only accepted as a mode boundary if it also dominates the internal spread of both sides it separates (a silhouette-style tightness check added after confirming across 5 seeds that bare gap-ratio alone spuriously splits smooth unimodal noise at k~8 sample sizes). Multi-modality is only "persistent" (TRUE_PERSISTENT_TWO_LAYER / TRUE_PERSISTENT_MULTI_LAYER) if it recurs in spatially neighboring local neighborhoods, not an isolated single-neighborhood artifact (LOCALLY_SINGLE_CURVED_SHEET). Thick single sheets get LOCALLY_THICK_UNIMODAL_SHEET. Sparse/small neighborhoods get SPARSE_SATELLITE_OR_OUTLIER. Never reads any Gaussian's covariance normal/tangent/scale (verified by AST inspection of imports and function signatures).
+
+Real replay (`baseline_compatible` checkpoints 2900/3000/3100/final, reclassifying all of Worklog 90's `MULTILAYER_OR_VOLUMETRIC` evidence): TRUE_PERSISTENT_TWO_LAYER is 2.06%/1.74%/1.08%/1.50% across all 4 checkpoints, TRUE_PERSISTENT_MULTI_LAYER is 0% throughout. LOCALLY_THICK_UNIMODAL_SHEET dominates at 62.2-70.2%, LOCALLY_SINGLE_CURVED_SHEET is 25.1-31.7%. Persistent-layer detail (2900/final, 17/22 layers): population always 2-7 evidence points, mean opacity 0.57-0.59, visible in all 20 sampled cameras (non-negligible rendered contribution), but nothing resembling Worklog 91's reported 1378-vs-3 dominant split reproduces.
+
+Decision E: Worklog 91's global-single-plane diagnostic was over-attributing curvature and thick-sheet geometry as multilayer. Do NOT adopt ADC/densification/pruning as the next architecture target based on Worklog 91 (its Decision A is superseded). This does not invalidate Worklog 90's covariance-footprint `MULTILAYER_OR_VOLUMETRIC` primary-cause classification itself (covariance-based overlap is still real) -- it means the "multilayer" causal interpretation was mostly curvature/thickness when measured from centers alone, not genuinely separate depth layers. Whether this points toward Worklog 90/91's B hypothesis (covariance frame unsuitable as surface-normal representation) is a further decision explicitly out of this batch's scope. See [[project_surface_topology_temporal_lineage_attribution]] for the worklog 91 result this supersedes, and [[project_surface_topology_root_cause_attribution]] for the worklog 90 baseline both extend.

@@ -511,4 +511,10 @@ Initial Gaussians -> one-time density-adaptive voxel bootstrap -> initial patch 
 
 - Worklog 91은 Worklog 90의 covariance-footprint attribution을 재사용해, `MULTILAYER_OR_VOLUMETRIC` evidence를 center-only PCA depth clustering(각 Gaussian 자신의 covariance orientation과 독립)과 covariance-only ambiguity로 분리하는 read-only 진단이다. Worklog 89 boundary algorithm, Worklog 82 relation threshold는 미변경이다.
 - `baseline_compatible` checkpoint 5개(600/2900/3000/3100/final) 전체 재생 결과, true-center multilayer 비율은 92.5%~95.9%로 checkpoint 전 구간에서 안정적이었다. stable-Gaussian-ID lineage는 dominant competing-layer 구조 대부분이 초기 densification 파동에서 형성되고 이후 pruning에서도 유지됨을 보였고, 실제 train camera 161개 기준 visibility 분석은 dominant 두 layer가 14개 카메라에서 동시에 보이는 실제 competing-depth 구조임을 확인했다.
-- **Decision A**: covariance frame이 부적합한 표현이라는 가설은 기각되고, 다음 조사 대상은 boundary가 아니라 ADC/densification/pruning 동작이다.
+- **Decision A**(당시 판정, Worklog 92가 재판정): covariance frame이 부적합한 표현이라는 가설은 기각되고, 다음 조사 대상은 boundary가 아니라 ADC/densification/pruning 동작이다.
+
+## 2026-08-17 Global-SVD confound 제거 후 최종 center-geometry 귀속
+
+- Worklog 92는 Worklog 91이 chart unit 전체 member center에 SVD 평면 하나를 적합해 곡률 있는 단일 표면을 여러 depth band로 오판할 수 있다는 confound를 제거한 read-only 재판정이다. 각 node의 local kNN 이웃만으로 diagnostic-only 평면을 적합하고, gap이 양쪽 side 내부 spread보다 1.5배 이상 커야 하는 silhouette 스타일 검증과 공간적 persistence gate(고립된 단일 neighborhood 분리는 제외)를 추가했다. Covariance normal/tangent/scale은 어디에서도 읽지 않는다.
+- checkpoint 2900/3000/3100/final 전부에서 `TRUE_PERSISTENT_TWO_LAYER`는 1.08%~2.06%, `TRUE_PERSISTENT_MULTI_LAYER`는 0%로 소수였고, `LOCALLY_THICK_UNIMODAL_SHEET`(62~70%)와 `LOCALLY_SINGLE_CURVED_SHEET`(25~32%)가 대부분이었다. Persistent layer는 population 2~7개의 소규모 구조뿐이었다.
+- **Decision E**: Worklog 91의 global-SVD 진단이 multilayer를 과다 귀속했으므로, Worklog 91 근거로 ADC/densification/pruning을 architecture target으로 채택하지 않는다.

@@ -124,4 +124,10 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 
 - [Worklog 91](worklogs/91_surface_topology_temporal_lineage_attribution.md)은 Worklog 90의 `MULTILAYER_OR_VOLUMETRIC` evidence를 center-only PCA depth clustering(각 Gaussian 자신의 covariance orientation과 독립)과 covariance-only ambiguity로 분리하고, `baseline_compatible` checkpoint 5개(600/2900/3000/3100/final)에 걸친 ADC lineage(stable-ID 신규/소멸)와 실제 train camera 161개 기준 가시성/depth 분리를 측정했다.
 - true-center multilayer 비율은 checkpoint 2900~final 4개 시점 전부에서 92.5%~95.9%로 안정적이었고, dominant competing-layer 구조 대부분은 초기 densification 파동에서 형성돼 이후 pruning에서도 유지됐다. 두 dominant layer는 161개 중 14개 카메라에서 동시에 보이며 평균 depth 분리 0.277이다.
-- **Decision A**: true center-distribution multilayer가 압도적이고 안정적이므로, covariance frame이 부적합한 표현이라는 가설(B)은 기각한다. 다음 조사 대상은 boundary가 아니라 ADC/densification/pruning이 이 구조를 왜 만들고 유지하는지다.
+- **Decision A**(당시 판정, Worklog 92가 재판정): true center-distribution multilayer가 압도적이고 안정적이므로, covariance frame이 부적합한 표현이라는 가설(B)은 기각한다. 다음 조사 대상은 boundary가 아니라 ADC/densification/pruning이 이 구조를 왜 만들고 유지하는지다.
+
+## 2026-08-17 Global-SVD confound 제거 후 최종 center-geometry 귀속
+
+- [Worklog 92](worklogs/92_local_center_geometry_attribution.md)는 Worklog 91이 chart unit 전체에 SVD 평면 하나를 적합해 곡률 있는 단일 표면을 여러 depth band로 오판할 수 있다는 confound를 제거했다. 각 node의 local kNN 이웃만으로 diagnostic-only 평면을 적합하고, gap이 양쪽 side 내부 spread보다 1.5배 이상 커야 하는 silhouette 검증과 공간적 persistence gate를 추가해 `LOCALLY_SINGLE_CURVED_SHEET`/`LOCALLY_THICK_UNIMODAL_SHEET`/`TRUE_PERSISTENT_TWO_LAYER`/`TRUE_PERSISTENT_MULTI_LAYER`/`SPARSE_SATELLITE_OR_OUTLIER`로 재분류했다.
+- 실측 결과 `TRUE_PERSISTENT_TWO_LAYER`는 checkpoint 4개 전부에서 1.08%~2.06%, `TRUE_PERSISTENT_MULTI_LAYER`는 0%로 소수였고, `LOCALLY_THICK_UNIMODAL_SHEET`(62~70%)와 `LOCALLY_SINGLE_CURVED_SHEET`(25~32%)가 대부분을 차지했다. Persistent layer는 population 2~7개의 소규모 구조뿐, Worklog 91의 1378-vs-3 같은 대규모 split은 재현되지 않았다.
+- **Decision E**: Worklog 91의 global-SVD 진단이 multilayer를 과다 귀속했으므로 Worklog 91 근거로 ADC를 architecture target으로 채택하지 않는다.

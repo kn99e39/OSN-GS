@@ -1,11 +1,13 @@
 ---
 name: project_surface_topology_temporal_lineage_attribution
-description: worklog 91 -- temporal + ADC-lineage split of worklog 90's MULTILAYER_OR_VOLUMETRIC; Decision A
+description: worklog 91 -- temporal + ADC-lineage split of worklog 90's MULTILAYER_OR_VOLUMETRIC; Decision A HISTORICAL, superseded by [[project_local_center_geometry_attribution]]
 metadata:
   node_type: memory
   type: project
   modified: 2026-08-17
 ---
+
+**SUPERSEDED by Worklog 92** ([[project_local_center_geometry_attribution]]): this worklog's global-single-SVD-plane layer diagnostic over-attributed curvature and thick-sheet geometry as multilayer. Decision A below did not hold once the confound was removed -- Worklog 92's Decision E is the current verdict. Kept for historical record only.
 
 Worklog 91 is a temporal + lineage attribution batch, not a new boundary method. Worklog 89's boundary constructor, Worklog 82 relation thresholds, NURBS fitting, and visible Gaussian training are all fixed and unmodified, as is Worklog 90's own covariance-footprint attribution logic (reused, not reimplemented).
 
