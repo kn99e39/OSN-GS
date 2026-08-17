@@ -234,6 +234,11 @@ Fix 후 lockstep 재검증: step 1은 float32 noise 수준까지 일치, step 60
 
 **실제 최종 판정: NO-GO.** coherent evidence의 99.807%가 정확한 full-region-face→membership-incidence 계약에서도 closed coverage-valid domain에 도달하지 못했고 나머지도 전부 unsafe였다. Region→Charts canonical 통합은 하지 않으며 visible-constructor boundary redesign을 종료한다. 이 결과 뒤에 다른 boundary 실험을 시작하지 않는다. 자세한 내용은 `docs/worklogs/89_full_region_face_membership_incidence_final_go_no_go.md` 참고.
 
+**Worklog 90 addendum(upstream root-cause attribution — boundary algorithm 고정)**: Worklog 89의 full-region local-frame face→membership-incidence algorithm, Worklogs 82~84, region ownership, visible Gaussian training, PCA-UV, 6×6 NURBS는 전부 고정했다. 새 `torch_chart_unit_surface_topology_attribution.py`는 center graph와 기존 covariance 1σ tangent footprint/normal thickness를 읽기 전용 비교할 뿐 edge/relation/face/loop/closure를 만들지 않는다.
+
+**7-region 실측(3526 evidence)**: Worklog 89 `chart_unit_cut_non_manifold` coherent unit 전부인 167 unit/3073 evidence를 귀속했다. primary evidence는 `MULTILAYER_OR_VOLUMETRIC` 2810(91.44%), `CENTER_UNDERSAMPLING` 141(4.59%), `TRUE_SUPPORT_GAP` 95(3.09%), `GRAPH_TO_SURFACE_TOPOLOGY_MISMATCH` 27(0.88%), `RELATION_FALSE_NEGATIVE` 0이다. center spacing/equivalent tangent scale 1.247, compatible footprint coverage 49.20%, footprint continuation인데 missing same-surface edge 11.60%, relation-FN node fraction 6.87%, layer ambiguity 82.88%, footprint representation에서 local complex 추가 조사가 plausible한 evidence는 168(5.47%)뿐이다.
+
+**Decision C.** covariance footprint를 포함해도 normal-depth multilayer/volumetric ambiguity와 일부 true gap이 압도적이다. production을 footprint graph로 교체하거나 Worklog 82 relation threshold를 조정하지 않는다. 다음 upstream 조사는 depth/visibility ordering, ADC clone/split/prune 전후 covariance·spacing, local normal-depth layer multiplicity와 confidence/ownership, conflict 위치의 gradient/opacity/radius/birth lineage를 추적한다. boundary topology heuristic은 재개하지 않는다. 자세한 내용은 `docs/worklogs/90_surface_topology_root_cause_attribution.md` 참고.
 ## 7. 현재 검증 상태와 알려진 위험
 
 Repository-wide pytest 최신 기준선(worklog 88 구현 전 재확인): 931 passed, 1 skipped, 1 warning, 18 subtests passed in 250.18s.
@@ -246,4 +251,4 @@ Repository-wide pytest 최신 기준선(worklog 88 구현 전 재확인): 931 pa
 - worklog 61에서 real 3k(cap 2048)가 `torch_gaussian_surface_region_formation.py`(2026-07-30, worklog 111-123)의 사전 존재 `KeyError`(`bridge_by_pair[(a, b)]`가 `consensus_by_pair`에는 있는 pair를 못 찾음)로 crash함을 발견했다 — 새 checkpoint 내용이 노출한 latent 결함이며 이번 작업 범위 밖이라 미수정. 3k(cap 1024)는 정상 동작한다. Region formation을 다루는 다음 작업자는 이 결함을 먼저 재현·수정 여부를 판단한다.
 - **Known issue (worklog 64, 미수정)**: `gaussian_initialization_mode="baseline_compatible"`은 `_initialize_canonical`(production 기본 "initialize" 스케줄)에만 적용되고, `initialize_deferred`(`adc_post_commit`/`disabled` 스케줄)는 의도적으로 이 플래그를 무시하고 항상 `covariance_knn` 방식의 planar-surfel 초기값을 쓴다 — 그 경로의 첫 post-ADC surface 재구성이 모델 자신의 scale/rotation을 유일한 orientation evidence로 재사용하기 때문이다. 즉 `visible_nurbs_update_schedule=adc_post_commit`이나 `disabled`로 학습하면, `gaussian_initialization_mode=baseline_compatible`을 지정해도 실제로는 covariance-KNN 초기화가 적용되는 **의미 불일치**가 있다. Production 기본 스케줄("initialize")에는 영향 없음. deferred 스케줄을 실제로 쓰는 작업이 생기면 이 불일치를 먼저 해소해야 한다(현재는 미수정, 미착수).
 
-다음 작업자는 먼저 이 문서와 docs/worklogs/README.md의 최신 인덱스, 그리고 가장 최근 작업로그 docs/worklogs/89_full_region_face_membership_incidence_final_go_no_go.md를 읽고 이어서 작업한다. 과거 방향의 세부 기록은 필요할 때 Git history로만 조회한다.
+다음 작업자는 먼저 이 문서와 docs/worklogs/README.md의 최신 인덱스, 그리고 가장 최근 작업로그 docs/worklogs/90_surface_topology_root_cause_attribution.md를 읽고 이어서 작업한다. 과거 방향의 세부 기록은 필요할 때 Git history로만 조회한다.

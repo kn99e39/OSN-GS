@@ -113,3 +113,9 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - Worklog 88의 candidate-independent 방향은 유지하지만 global PCA rotation과 induced-subgraph largest outer-face 선택은 판정 근거에서 제거했다.
 - [Worklog 89](worklogs/89_full_region_face_membership_incidence_final_go_no_go.md)은 기존 local normal/tangent frame으로 full-region observed face를 먼저 복원한 뒤 unit-supported face incidence에서 모든 boundary loop를 계산한다.
 - 7-region 결과는 cut recoverable 0.170%(coherent 대비 0.193%), valid_supported 0%, mixed/seam-only 0%로 **실제 최종 NO-GO**다. Region→Charts canonical 통합은 하지 않았으며 visible-constructor boundary redesign은 종료한다.
+
+## 2026-08-10 Surface-topology root-cause attribution
+
+- [Worklog 90](worklogs/90_surface_topology_root_cause_attribution.md)은 Worklog 89가 full-region face topology를 만들지 못한 167 coherent unit을 center graph와 기존 covariance footprint로 읽기 전용 분류했다.
+- primary evidence 91.44%가 `MULTILAYER_OR_VOLUMETRIC`, center undersampling은 4.59%, relation false negative는 0%였다. footprint representation으로 valid local complex를 추가 조사할 근거도 5.47%에 그쳤다.
+- 따라서 production constructor나 Worklog 82 relation을 바꾸지 않는다. 다음 원인 조사는 training/ADC의 depth·visibility·covariance·layer distribution을 대상으로 하며 boundary heuristic을 재개하지 않는다.

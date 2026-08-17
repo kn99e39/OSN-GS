@@ -500,3 +500,9 @@ Initial Gaussians -> one-time density-adaptive voxel bootstrap -> initial patch 
 - 모든 독립 boundary loop와 `outer_boundary`/`interior_boundary` role을 보존한다. open/branching/non-manifold 또는 현 untrimmed domain이 표현하지 못하는 interior loop는 fail-closed한다.
 - Worklog 89 실측에서 cut recoverable은 coherent evidence의 0.193%, valid_supported는 0%였고 mixed/seam-only 안전 domain은 없었다.
 - 최종 NO-GO에 따라 이 Region→Charts 계층은 canonical production path에 통합하지 않는다. 현재 구현 파이프라인은 변경되지 않으며 visible-constructor boundary redesign은 종료한다.
+
+## 2026-08-10 Surface-topology failure attribution
+
+- Worklog 90은 Worklog 89 boundary algorithm을 변경하지 않는 read-only diagnosis다. Gaussian center graph와 기존 covariance local tangent footprint/normal thickness를 비교하지만 edge, relation, face, loop, closure를 추가하지 않는다.
+- baseline_compatible@2900의 167 failed coherent unit/3073 evidence에서 primary `MULTILAYER_OR_VOLUMETRIC`은 91.44%, `CENTER_UNDERSAMPLING`은 4.59%, `TRUE_SUPPORT_GAP`은 3.09%, `GRAPH_TO_SURFACE_TOPOLOGY_MISMATCH`는 0.88%, `RELATION_FALSE_NEGATIVE`는 0%다.
+- 그러므로 footprint/surfel graph production replacement나 Worklog 82 threshold tuning은 승인되지 않는다. 병목은 trained Gaussian의 normal-depth multilayer/volumetric distribution이며, boundary construction은 종료 상태를 유지한다.

@@ -69,3 +69,5 @@
 - [General partition-seam historical verdict](project_general_partition_seam_final_verdict.md) — worklog 87 implementation accepted; candidate-anchor/stable-ID-chain verdict superseded
 - [Chart-unit topology partition boundary historical verdict](project_chart_unit_topology_partition_boundary_final_verdict.md) — worklog 88 candidate-independent direction, but wrong global-PCA/induced-largest-face construction; superseded
 - [Full-region face membership-incidence final verdict](project_full_region_face_membership_incidence_final_verdict.md) — worklog 89 actual final: local-frame full faces first, membership incidence second, 0.193% coherent recovery and 0 safe domains, final NO-GO
+
+- [Surface-topology root-cause attribution](project_surface_topology_root_cause_attribution.md) — worklog 90: read-only footprint diagnosis; multilayer/volumetric 91.44% dominates; Decision C, inspect upstream training/ADC distribution, no boundary rewrite
