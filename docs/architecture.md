@@ -506,3 +506,9 @@ Initial Gaussians -> one-time density-adaptive voxel bootstrap -> initial patch 
 - Worklog 90은 Worklog 89 boundary algorithm을 변경하지 않는 read-only diagnosis다. Gaussian center graph와 기존 covariance local tangent footprint/normal thickness를 비교하지만 edge, relation, face, loop, closure를 추가하지 않는다.
 - baseline_compatible@2900의 167 failed coherent unit/3073 evidence에서 primary `MULTILAYER_OR_VOLUMETRIC`은 91.44%, `CENTER_UNDERSAMPLING`은 4.59%, `TRUE_SUPPORT_GAP`은 3.09%, `GRAPH_TO_SURFACE_TOPOLOGY_MISMATCH`는 0.88%, `RELATION_FALSE_NEGATIVE`는 0%다.
 - 그러므로 footprint/surfel graph production replacement나 Worklog 82 threshold tuning은 승인되지 않는다. 병목은 trained Gaussian의 normal-depth multilayer/volumetric distribution이며, boundary construction은 종료 상태를 유지한다.
+
+## 2026-08-17 Surface-topology temporal + lineage attribution
+
+- Worklog 91은 Worklog 90의 covariance-footprint attribution을 재사용해, `MULTILAYER_OR_VOLUMETRIC` evidence를 center-only PCA depth clustering(각 Gaussian 자신의 covariance orientation과 독립)과 covariance-only ambiguity로 분리하는 read-only 진단이다. Worklog 89 boundary algorithm, Worklog 82 relation threshold는 미변경이다.
+- `baseline_compatible` checkpoint 5개(600/2900/3000/3100/final) 전체 재생 결과, true-center multilayer 비율은 92.5%~95.9%로 checkpoint 전 구간에서 안정적이었다. stable-Gaussian-ID lineage는 dominant competing-layer 구조 대부분이 초기 densification 파동에서 형성되고 이후 pruning에서도 유지됨을 보였고, 실제 train camera 161개 기준 visibility 분석은 dominant 두 layer가 14개 카메라에서 동시에 보이는 실제 competing-depth 구조임을 확인했다.
+- **Decision A**: covariance frame이 부적합한 표현이라는 가설은 기각되고, 다음 조사 대상은 boundary가 아니라 ADC/densification/pruning 동작이다.

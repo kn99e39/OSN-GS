@@ -119,3 +119,9 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - [Worklog 90](worklogs/90_surface_topology_root_cause_attribution.md)은 Worklog 89가 full-region face topology를 만들지 못한 167 coherent unit을 center graph와 기존 covariance footprint로 읽기 전용 분류했다.
 - primary evidence 91.44%가 `MULTILAYER_OR_VOLUMETRIC`, center undersampling은 4.59%, relation false negative는 0%였다. footprint representation으로 valid local complex를 추가 조사할 근거도 5.47%에 그쳤다.
 - 따라서 production constructor나 Worklog 82 relation을 바꾸지 않는다. 다음 원인 조사는 training/ADC의 depth·visibility·covariance·layer distribution을 대상으로 하며 boundary heuristic을 재개하지 않는다.
+
+## 2026-08-17 Surface-topology temporal + lineage attribution
+
+- [Worklog 91](worklogs/91_surface_topology_temporal_lineage_attribution.md)은 Worklog 90의 `MULTILAYER_OR_VOLUMETRIC` evidence를 center-only PCA depth clustering(각 Gaussian 자신의 covariance orientation과 독립)과 covariance-only ambiguity로 분리하고, `baseline_compatible` checkpoint 5개(600/2900/3000/3100/final)에 걸친 ADC lineage(stable-ID 신규/소멸)와 실제 train camera 161개 기준 가시성/depth 분리를 측정했다.
+- true-center multilayer 비율은 checkpoint 2900~final 4개 시점 전부에서 92.5%~95.9%로 안정적이었고, dominant competing-layer 구조 대부분은 초기 densification 파동에서 형성돼 이후 pruning에서도 유지됐다. 두 dominant layer는 161개 중 14개 카메라에서 동시에 보이며 평균 depth 분리 0.277이다.
+- **Decision A**: true center-distribution multilayer가 압도적이고 안정적이므로, covariance frame이 부적합한 표현이라는 가설(B)은 기각한다. 다음 조사 대상은 boundary가 아니라 ADC/densification/pruning이 이 구조를 왜 만들고 유지하는지다.
