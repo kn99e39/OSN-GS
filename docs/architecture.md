@@ -518,3 +518,9 @@ Initial Gaussians -> one-time density-adaptive voxel bootstrap -> initial patch 
 - Worklog 92는 Worklog 91이 chart unit 전체 member center에 SVD 평면 하나를 적합해 곡률 있는 단일 표면을 여러 depth band로 오판할 수 있다는 confound를 제거한 read-only 재판정이다. 각 node의 local kNN 이웃만으로 diagnostic-only 평면을 적합하고, gap이 양쪽 side 내부 spread보다 1.5배 이상 커야 하는 silhouette 스타일 검증과 공간적 persistence gate(고립된 단일 neighborhood 분리는 제외)를 추가했다. Covariance normal/tangent/scale은 어디에서도 읽지 않는다.
 - checkpoint 2900/3000/3100/final 전부에서 `TRUE_PERSISTENT_TWO_LAYER`는 1.08%~2.06%, `TRUE_PERSISTENT_MULTI_LAYER`는 0%로 소수였고, `LOCALLY_THICK_UNIMODAL_SHEET`(62~70%)와 `LOCALLY_SINGLE_CURVED_SHEET`(25~32%)가 대부분이었다. Persistent layer는 population 2~7개의 소규모 구조뿐이었다.
 - **Decision E**: Worklog 91의 global-SVD 진단이 multilayer를 과다 귀속했으므로, Worklog 91 근거로 ADC/densification/pruning을 architecture target으로 채택하지 않는다.
+
+## 2026-08-18 Latent midsurface 회수 가능성 귀속
+
+- Worklog 93은 Worklog 92의 thick/curved 대다수 evidence가 recoverable latent 2D midsurface를 갖는지 center position만으로 측정한 read-only 진단이다. Local kNN diagnostic 평면에 quadratic curvature 추정을 추가하고, raw 대 diagnostic-projected position-only adjacency 비교로 manifold topology 개선을 측정했다. Covariance는 어디에서도 읽지 않고, Gaussian xyz는 수정하지 않는다.
+- checkpoint 2900/3000/3100/final 전부에서 manifold 개선 비율 99.8~100%, curvature 보존 비율 86.6~91.9%, valid face incidence 거의 2배 증가, support band fidelity 86.0~91.5%였다.
+- **Decision A: LATENT_SURFACE_RECOVERABLE** — raw Gaussian center가 잘못된 geometry representation이며, 다음 architecture target은 boundary 추출 이전의 명시적 latent-surface evidence representation이다.

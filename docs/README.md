@@ -131,3 +131,9 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - [Worklog 92](worklogs/92_local_center_geometry_attribution.md)는 Worklog 91이 chart unit 전체에 SVD 평면 하나를 적합해 곡률 있는 단일 표면을 여러 depth band로 오판할 수 있다는 confound를 제거했다. 각 node의 local kNN 이웃만으로 diagnostic-only 평면을 적합하고, gap이 양쪽 side 내부 spread보다 1.5배 이상 커야 하는 silhouette 검증과 공간적 persistence gate를 추가해 `LOCALLY_SINGLE_CURVED_SHEET`/`LOCALLY_THICK_UNIMODAL_SHEET`/`TRUE_PERSISTENT_TWO_LAYER`/`TRUE_PERSISTENT_MULTI_LAYER`/`SPARSE_SATELLITE_OR_OUTLIER`로 재분류했다.
 - 실측 결과 `TRUE_PERSISTENT_TWO_LAYER`는 checkpoint 4개 전부에서 1.08%~2.06%, `TRUE_PERSISTENT_MULTI_LAYER`는 0%로 소수였고, `LOCALLY_THICK_UNIMODAL_SHEET`(62~70%)와 `LOCALLY_SINGLE_CURVED_SHEET`(25~32%)가 대부분을 차지했다. Persistent layer는 population 2~7개의 소규모 구조뿐, Worklog 91의 1378-vs-3 같은 대규모 split은 재현되지 않았다.
 - **Decision E**: Worklog 91의 global-SVD 진단이 multilayer를 과다 귀속했으므로 Worklog 91 근거로 ADC를 architecture target으로 채택하지 않는다.
+
+## 2026-08-18 Latent midsurface 회수 가능성 귀속
+
+- [Worklog 93](worklogs/93_latent_midsurface_recoverability_attribution.md)은 Worklog 92의 `LOCALLY_THICK_UNIMODAL_SHEET`/`LOCALLY_SINGLE_CURVED_SHEET`(Worklog 90 `MULTILAYER_OR_VOLUMETRIC` evidence 대부분)가 recoverable latent 2D midsurface를 갖는지 center position만으로 측정했다. Local kNN diagnostic 평면에 quadratic curvature 추정을 추가하고, raw 대 diagnostic-projected position-only adjacency로 manifold topology를 비교했다.
+- 4개 checkpoint(2900/3000/3100/final) 전부에서 manifold 개선 비율 99.8~100%, curvature 보존 비율 86.6~91.9%, valid face incidence가 거의 2배(30.5~36.3%→63.0~72.7%)로 늘고, support band fidelity 86.0~91.5%로 회수된 표면이 관측 evidence를 벗어나지 않았다.
+- **Decision A: LATENT_SURFACE_RECOVERABLE** — raw Gaussian center 자체가 잘못된 geometry representation이며, 다음 architecture target은 boundary 추출 이전의 명시적 latent-surface evidence representation이다.
