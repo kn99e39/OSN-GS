@@ -524,3 +524,9 @@ Initial Gaussians -> one-time density-adaptive voxel bootstrap -> initial patch 
 - Worklog 93은 Worklog 92의 thick/curved 대다수 evidence가 recoverable latent 2D midsurface를 갖는지 center position만으로 측정한 read-only 진단이다. Local kNN diagnostic 평면에 quadratic curvature 추정을 추가하고, raw 대 diagnostic-projected position-only adjacency 비교로 manifold topology 개선을 측정했다. Covariance는 어디에서도 읽지 않고, Gaussian xyz는 수정하지 않는다.
 - checkpoint 2900/3000/3100/final 전부에서 manifold 개선 비율 99.8~100%, curvature 보존 비율 86.6~91.9%, valid face incidence 거의 2배 증가, support band fidelity 86.0~91.5%였다.
 - **Decision A: LATENT_SURFACE_RECOVERABLE** — raw Gaussian center가 잘못된 geometry representation이며, 다음 architecture target은 boundary 추출 이전의 명시적 latent-surface evidence representation이다.
+
+## 2026-08-18 Bounded surface-evidence representation architecture gate
+
+- Worklog 94는 4개 고정 surface-evidence representation(RAW_CENTER_BASELINE/CENTER_LATENT_SURFACE/COVARIANCE_SURFEL_SUPPORT/HYBRID_LATENT_PLUS_SUPPORT)을 같은 7개 real region·같은 unmodified Worklog 89 constructor 체인(`materialize_chart_unit_cut_boundaries`/`evaluate_fit` 그대로 재사용)으로 fallback 없이 비교한 단일 architecture-decision 배치다. Region ownership/ADC/training/Worklog 82 threshold/NURBS capacity/PCA-UV는 모두 미변경이다.
+- Checkpoint 2900/final 실측: COVARIANCE_SURFEL_SUPPORT는 RAW_CENTER_BASELINE과 수치가 정확히 동일했고(constructor가 covariance normal만 읽음을 확인), HYBRID는 CENTER_LATENT_SURFACE와 거의 동일했다(position이 topology를 지배). Latent 기반 두 representation은 recoverable evidence를 2.8~5.1배 늘렸지만 valid_supported는 네 representation 전부 0.2% 미만, unresolved는 83.7~88.0%로 여전히 압도적이었다.
+- **Decision 3**: 네 representation 모두 coherent evidence 대다수를 unresolved/unsafe로 남긴다. Constructor-level 재설계를 중단하고, 다음 architecture target은 training 중 visible geometric evidence 생성 자체(upstream)로 옮긴다.

@@ -137,3 +137,9 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - [Worklog 93](worklogs/93_latent_midsurface_recoverability_attribution.md)은 Worklog 92의 `LOCALLY_THICK_UNIMODAL_SHEET`/`LOCALLY_SINGLE_CURVED_SHEET`(Worklog 90 `MULTILAYER_OR_VOLUMETRIC` evidence 대부분)가 recoverable latent 2D midsurface를 갖는지 center position만으로 측정했다. Local kNN diagnostic 평면에 quadratic curvature 추정을 추가하고, raw 대 diagnostic-projected position-only adjacency로 manifold topology를 비교했다.
 - 4개 checkpoint(2900/3000/3100/final) 전부에서 manifold 개선 비율 99.8~100%, curvature 보존 비율 86.6~91.9%, valid face incidence가 거의 2배(30.5~36.3%→63.0~72.7%)로 늘고, support band fidelity 86.0~91.5%로 회수된 표면이 관측 evidence를 벗어나지 않았다.
 - **Decision A: LATENT_SURFACE_RECOVERABLE** — raw Gaussian center 자체가 잘못된 geometry representation이며, 다음 architecture target은 boundary 추출 이전의 명시적 latent-surface evidence representation이다.
+
+## 2026-08-18 Bounded surface-evidence representation architecture gate
+
+- [Worklog 94](worklogs/94_surface_evidence_representation_gate.md)는 root-cause 진단에서 architecture 결정으로 전환하는 단일 배치다. RAW_CENTER_BASELINE/CENTER_LATENT_SURFACE/COVARIANCE_SURFEL_SUPPORT/HYBRID_LATENT_PLUS_SUPPORT 4개 representation을 같은 7개 real region·같은 unmodified Worklog 89 constructor 체인으로 fallback 없이 비교했다.
+- Checkpoint 2900/final 실측: COVARIANCE_SURFEL_SUPPORT는 RAW_CENTER_BASELINE과 수치가 정확히 동일했고, HYBRID는 CENTER_LATENT_SURFACE와 거의 동일했다. Latent 기반 두 representation은 recoverable evidence를 2.8~5.1배 늘렸지만 valid_supported는 네 representation 전부 0.2% 미만이었고 unresolved는 83.7~88.0%로 여전히 압도적이었다. Latent representation은 held-out p95도 2~6.9배 악화시켰다.
+- **Decision 3**: 네 representation 모두 coherent evidence 대다수를 unresolved/unsafe로 남긴다. Constructor-level 재설계를 중단하고, 다음 architecture target은 training 중 visible geometric evidence 생성 자체(upstream)로 옮긴다.

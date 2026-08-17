@@ -1,0 +1,18 @@
+---
+name: project_surface_evidence_representation_gate
+description: worklog 94 -- bounded 4-representation architecture gate; Decision 3, stop constructor-level redesign, next target is upstream training evidence production
+metadata:
+  node_type: memory
+  type: project
+  modified: 2026-08-18
+---
+
+Worklog 94 is the single bounded architecture-decision batch that follows the worklog 90-93 root-cause attribution chain (see [[project_latent_midsurface_recoverability_attribution]]). It is explicitly NOT another isolated representation diagnostic. Visible Gaussian training, ADC, region ownership, Worklog 79 coverage, PCA-UV, 6x6 NURBS fitting, held-out evaluation, and existing safety criteria are all fixed and unmodified.
+
+New module `osn_gs/surface/torch_surface_evidence_representation_gate.py`: each representation is a function `(raw_positions, raw_covariance) -> (adapted_positions, adapted_covariance)`. Confirmed `build_chart_unit_face_topology_context` and `build_full_region_surface_face_topology` (Worklog 89) only ever consume `extract_covariance_frame(covariance)` as geometric input, so swapping just that pair lets every downstream function (`materialize_chart_unit_cut_boundaries`, `evaluate_fit` -- Worklog 79 coverage, PCA-UV, 6x6 NURBS, held-out, valid_supported/extrapolative/unsafe/unresolved classification) run completely unmodified. Region formation/ownership is computed once on raw evidence and shared across all four representations -- only the region-owned `(evidence, evidence_covariance)` pair is swapped right before the constructor.
+
+Four representations: A RAW_CENTER_BASELINE (pure pass-through); B CENTER_LATENT_SURFACE (Worklog 92/93's own local kNN k=8 diagnostic-plane independent projection, THEN a Jacobi-style 1-pass cross-neighborhood consensus average -- never an independent per-point projection alone -- covariance rebuilt from the latent tangent frame, raw orientation discarded); C COVARIANCE_SURFEL_SUPPORT (positions/orientation unchanged, covariance normal never assumed ground-truth, only discloses footprint reach as `support_radius_scale`); D HYBRID_LATENT_PLUS_SUPPORT (B's latent positions + raw covariance's in-plane magnitude as support extent only, still B's tangent orientation). No fallback chain: each representation runs the full pipeline independently from raw region context: a failed unit never retries under a different representation.
+
+Real 7-region replay (baseline_compatible checkpoints 2900 and final): C is numerically IDENTICAL to A at both checkpoints (confirms the constructor only reads the covariance normal, footprint magnitude is not yet consumed anywhere downstream). D is nearly identical to B (position dominates topology/coverage decisions; covariance in-plane-scale differences don't change structure). B/D raise recoverable evidence 2.8-5.1x over A/C (0.170%->0.482%, 0.090%->0.463%) but valid_supported stays under 0.2% for ALL FOUR representations (2900: all 0%; final: A/C 0.051%, B/D 0.154%), and unresolved stays dominant everywhere (A/C 83.7-88.0%, B/D 83.7-86.2%). B/D also worsen held-out p95 by 2.0-6.9x (2900: 2.67->18.54) and displace geometry by 0.59x local spacing -- the small recoverable gain costs real fit-quality degradation. B/D runtime is 20-33% higher; peak memory up to 4.4x higher at 2900.
+
+Decision 3: all four representation candidates leave the large majority of coherent evidence unresolved or unsafe. STOP constructor-level redesign -- do not propose a fifth representation or another isolated representation diagnostic. The next architecture target moves upstream to how visible geometric evidence is produced during training, not to boundary/representation engineering.
