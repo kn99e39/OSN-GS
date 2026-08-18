@@ -20,6 +20,14 @@ def save_torch_checkpoint(path: str | Path, state: TorchPipelineState, extra: di
     model = state.model
     payload = {
         "format_version": 2,
+        # Primitive identity. A 2DGS surfel checkpoint stores a two-column
+        # `scaling`; a 3D Gaussian checkpoint stores three. Loading one into
+        # the other is a hard error rather than something to paper over by
+        # fabricating or discarding a normal-direction scale, so the class
+        # name is recorded explicitly and checked on restore. Absent on
+        # pre-2DGS checkpoints, which are always volumetric.
+        "primitive_class": type(state.model).__name__,
+        "scale_dim": int(getattr(state.model, "scale_dim", 3)),
         "iteration": state.iteration,
         "last_loss": state.last_loss,
         "last_psnr": state.last_psnr,
@@ -90,6 +98,21 @@ def load_torch_checkpoint(
     if int(payload.get("format_version", 0)) != 2:
         raise ValueError("Only OSN-GS checkpoint format_version=2 supports resume.")
     raw = payload["model_raw"]
+    # Fail closed on a primitive mismatch. Silently reshaping between a
+    # 2-column surfel scaling and a 3-column volumetric one would either
+    # invent normal-direction thickness a 2DGS surfel does not have or throw
+    # away a real trained axis; neither is an acceptable recovery.
+    saved_scale_dim = int(payload.get("scale_dim", 3))
+    model_scale_dim = int(getattr(state.model, "scale_dim", 3))
+    if saved_scale_dim != model_scale_dim:
+        raise ValueError(
+            "Checkpoint primitive mismatch: checkpoint was written by "
+            f"{payload.get('primitive_class', 'TorchGaussianModel')!r} with "
+            f"scale_dim={saved_scale_dim}, but this run's model is "
+            f"{type(state.model).__name__!r} with scale_dim={model_scale_dim}. "
+            "Set TorchPipelineConfig.primitive to match the checkpoint; a 2DGS "
+            "surfel and a volumetric 3D Gaussian are not interconvertible."
+        )
     state.model.replace_tensors(
         xyz=raw["xyz"], features_dc=raw["features_dc"], features_rest=raw["features_rest"],
         opacity=raw["opacity"], scaling=raw["scaling"], rotation=raw["rotation"],

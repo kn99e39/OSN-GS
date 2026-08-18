@@ -27,8 +27,10 @@ from osn_gs.interop.colab_args import (
     save_iterations_from_args,
     surface_fit_config_kwargs,
 )
+from osn_gs.losses.torch_surfel_losses import SurfelRegularizationSchedule
 from osn_gs.render.diff_gaussian_loader import validate_diff_gaussian_build_environment
 from osn_gs.render.gaussian_rasterizer import GaussianRasterizerConfig
+from osn_gs.render.surfel_rasterizer import SurfelRasterizerConfig
 from osn_gs.utils.torch_ops import default_device
 
 
@@ -40,7 +42,16 @@ def main() -> None:
         image_device = "cpu"
     output_dir = output_dir_from_args(args)
     print(f"OSN-GS device: train={device}, images={image_device}", flush=True)
-    if not args.disable_cuda_rasterizer and not args.skip_cuda_build_preflight:
+    if (
+        not args.disable_cuda_rasterizer
+        and not args.skip_cuda_build_preflight
+        and str(args.primitive) != "surfel_2d"
+    ):
+        # `validate_diff_gaussian_build_environment` validates the 3DGS
+        # extension's toolchain specifically. The surfel_2d arm builds a
+        # different extension through `osn_gs.render.diff_surfel_loader`,
+        # which reports its own load/build failures, so this preflight is
+        # neither necessary nor meaningful for it.
         preflight = validate_diff_gaussian_build_environment()
         print(
             "OSN-GS CUDA build preflight: "
@@ -80,7 +91,17 @@ def main() -> None:
         preserve_adc_gradients=not bool(args.adc_drop_survivor_gradients),
     )
 
+    if str(args.primitive) == "surfel_2d":
+        print(
+            "OSN-GS primitive=surfel_2d: rendering through the vendored 2DGS "
+            "diff-surfel rasterizer (osn_gs/render/vendor/diff_surfel_rasterization); "
+            f"lambda_dist={args.lambda_dist} from iter {args.dist_from_iter}, "
+            f"lambda_normal={args.lambda_normal} from iter {args.normal_from_iter}, "
+            f"depth_ratio={args.depth_ratio}",
+            flush=True,
+        )
     pipeline_config = TorchPipelineConfig(
+        primitive=str(args.primitive),
         gaussian_initialization_mode=str(args.gaussian_initialization_mode),
         canonical_covariance_knn=max(3, int(args.canonical_covariance_knn)),
         canonical_construction_max_points=max(
@@ -119,6 +140,12 @@ def main() -> None:
         train_resolution_scale=train_resolution_scale,
         position_lr_extent_mode=args.position_lr_extent_mode,
         density_control=density_control_config,
+        surfel_regularization=SurfelRegularizationSchedule(
+            lambda_dist=float(args.lambda_dist),
+            lambda_normal=float(args.lambda_normal),
+            dist_from_iter=int(args.dist_from_iter),
+            normal_from_iter=int(args.normal_from_iter),
+        ),
     )
     print(
         "OSN-GS surface loss: "
@@ -131,6 +158,7 @@ def main() -> None:
         training_config=training_config,
         rasterizer_config=rasterizer_config,
         device=device,
+        surfel_rasterizer_config=SurfelRasterizerConfig(depth_ratio=float(args.depth_ratio)),
     )
 
     if not args.source_path:

@@ -108,6 +108,61 @@ def build_osn_gs_train_parser() -> argparse.ArgumentParser:
             "surface construction/reliability."
         ),
     )
+    parser.add_argument(
+        "--primitive",
+        type=str,
+        default="gaussian_3d",
+        choices=("gaussian_3d", "surfel_2d"),
+        help=(
+            "Trainable primitive. gaussian_3d (default) is the volumetric 3D "
+            "Gaussian. surfel_2d is the 2DGS planar surface element "
+            "(arXiv:2403.17888v3 sec. 4.1): two tangent scales, no "
+            "normal-direction scale, rendered through the official "
+            "perspective-correct diff-surfel rasterizer, trained with the 2DGS "
+            "depth-distortion and normal-consistency regularizers. Selecting "
+            "it makes --gaussian_initialization_mode inapplicable (a surfel "
+            "has no third scale to initialize)."
+        ),
+    )
+    parser.add_argument(
+        "--lambda_dist",
+        type=float,
+        default=0.0,
+        help=(
+            "[surfel_2d] Depth-distortion weight (paper eq. 16 alpha). Official "
+            "OptimizationParams default is 0.0; the official eval scripts pass "
+            "1000 for bounded scenes (DTU) and 100/10 for Tanks and Temples, "
+            "matching the paper's alpha=1000 bounded / alpha=100 unbounded."
+        ),
+    )
+    parser.add_argument(
+        "--lambda_normal",
+        type=float,
+        default=0.05,
+        help="[surfel_2d] Normal-consistency weight (paper eq. 16 beta). Official default 0.05.",
+    )
+    parser.add_argument(
+        "--dist_from_iter",
+        type=int,
+        default=3000,
+        help="[surfel_2d] Activate depth distortion after this iteration. Official train.py uses 3000.",
+    )
+    parser.add_argument(
+        "--normal_from_iter",
+        type=int,
+        default=7000,
+        help="[surfel_2d] Activate normal consistency after this iteration. Official train.py uses 7000.",
+    )
+    parser.add_argument(
+        "--depth_ratio",
+        type=float,
+        default=0.0,
+        help=(
+            "[surfel_2d] Surface-depth mix: 0 uses mean (expected) depth, 1 uses "
+            "median depth. Official PipelineParams default 0; the official "
+            "bounded-scene eval scripts pass 1.0."
+        ),
+    )
     parser.add_argument("--canonical_covariance_knn", type=int, default=8, help="Neighbor count for canonical local-PCA planar covariance initialization.")
     parser.add_argument("--canonical_construction_max_points", type=int, default=2048, help="Maximum deterministic voxel-center samples used by canonical O(N^2) topology construction.")
     parser.add_argument("--covariance_knn_chunk_size", type=int, default=0, help="KNN chunk for canonical covariance initialization. 0 auto-selects from VRAM.")

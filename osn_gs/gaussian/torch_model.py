@@ -41,6 +41,18 @@ class GaussianParameterGroups:
 class TorchGaussianModel:
     """Holds certain/uncertain Gaussians as a single bundle of parameter tensors."""
 
+    # Number of trainable scale axes per primitive. 3 for a volumetric 3D
+    # Gaussian. `TorchGaussianSurfelModel` (osn_gs/gaussian/torch_surfel_model.py)
+    # overrides it to 2, because a 2DGS surfel has NO trainable normal-direction
+    # scale at all -- see that class's docstring. Every `_scaling`-shaped tensor
+    # in this class is sized from this attribute rather than a literal 3 so the
+    # two primitives can share checkpointing, ADC transactions, stable-ID
+    # bookkeeping and optimizer-state preservation without either pretending to
+    # be the other.
+    scale_dim: int = 3
+    # PLY scale property names emitted by `save_ply`, one per scale axis.
+    ply_scale_properties: tuple[str, ...] = ("scale_0", "scale_1", "scale_2")
+
     def __init__(self, sh_degree: int = 3, device: str = "cuda") -> None:
         torch = require_torch()
         self.torch = torch
@@ -56,7 +68,7 @@ class TorchGaussianModel:
         self._features_rest = torch.nn.Parameter(
             torch.empty((0, (sh_degree + 1) ** 2 - 1, 3), dtype=torch.float32, device=device)
         )
-        self._scaling = torch.nn.Parameter(torch.empty((0, 3), dtype=torch.float32, device=device))
+        self._scaling = torch.nn.Parameter(torch.empty((0, self.scale_dim), dtype=torch.float32, device=device))
         self._rotation = torch.nn.Parameter(torch.empty((0, 4), dtype=torch.float32, device=device))
         self._opacity = torch.nn.Parameter(torch.empty((0, 1), dtype=torch.float32, device=device))
         self._uncertain_confidence = torch.nn.Parameter(torch.empty((0, 1), dtype=torch.float32, device=device))
@@ -202,9 +214,9 @@ class TorchGaussianModel:
         else:
             opacities = torch.as_tensor(opacities, dtype=self.torch.float32, device=self.device).reshape(count, 1)
         if scales is None:
-            scales = torch.full((count, 3), 0.02, dtype=self.torch.float32, device=self.device)
+            scales = torch.full((count, self.scale_dim), 0.02, dtype=self.torch.float32, device=self.device)
         else:
-            scales = torch.as_tensor(scales, dtype=self.torch.float32, device=self.device).reshape(count, 3)
+            scales = torch.as_tensor(scales, dtype=self.torch.float32, device=self.device).reshape(count, self.scale_dim)
 
         # A caller that owns observed covariance must not be reset to an
         # identity orientation. Rotations are normalized wxyz quaternions.
@@ -369,7 +381,7 @@ class TorchGaussianModel:
         self._features_dc = torch.nn.Parameter(torch.as_tensor(features_dc, dtype=self.torch.float32, device=self.device).reshape(count, 1, 3).detach().clone().requires_grad_(True))
         self._features_rest = torch.nn.Parameter(torch.as_tensor(features_rest, dtype=self.torch.float32, device=self.device).reshape(count, rest_dim, 3).detach().clone().requires_grad_(True))
         self._opacity = torch.nn.Parameter(torch.as_tensor(opacity, dtype=self.torch.float32, device=self.device).reshape(count, 1).detach().clone().requires_grad_(True))
-        self._scaling = torch.nn.Parameter(torch.as_tensor(scaling, dtype=self.torch.float32, device=self.device).reshape(count, 3).detach().clone().requires_grad_(True))
+        self._scaling = torch.nn.Parameter(torch.as_tensor(scaling, dtype=self.torch.float32, device=self.device).reshape(count, self.scale_dim).detach().clone().requires_grad_(True))
         self._rotation = torch.nn.Parameter(torch.as_tensor(rotation, dtype=self.torch.float32, device=self.device).reshape(count, 4).detach().clone().requires_grad_(True))
         self._uncertain_confidence = torch.nn.Parameter(torch.as_tensor(uncertain_confidence, dtype=self.torch.float32, device=self.device).reshape(count, 1).detach().clone().requires_grad_(True))
         self.is_uncertain = torch.as_tensor(uncertain_mask, dtype=torch.bool, device=self.device).reshape(count)
@@ -499,7 +511,7 @@ class TorchGaussianModel:
             features_dc=torch.cat([self._features_dc.detach(), torch.as_tensor(features_dc, dtype=self.torch.float32, device=self.device).reshape(count, 1, 3).detach()], dim=0),
             features_rest=torch.cat([self._features_rest.detach(), torch.as_tensor(features_rest, dtype=self.torch.float32, device=self.device).reshape(count, (self.max_sh_degree + 1) ** 2 - 1, 3).detach()], dim=0),
             opacity=torch.cat([self._opacity.detach(), torch.as_tensor(opacity, dtype=self.torch.float32, device=self.device).reshape(count, 1).detach()], dim=0),
-            scaling=torch.cat([self._scaling.detach(), torch.as_tensor(scaling, dtype=self.torch.float32, device=self.device).reshape(count, 3).detach()], dim=0),
+            scaling=torch.cat([self._scaling.detach(), torch.as_tensor(scaling, dtype=self.torch.float32, device=self.device).reshape(count, self.scale_dim).detach()], dim=0),
             rotation=torch.cat([self._rotation.detach(), torch.as_tensor(rotation, dtype=self.torch.float32, device=self.device).reshape(count, 4).detach()], dim=0),
             uncertain_confidence=torch.cat([self._uncertain_confidence.detach(), torch.as_tensor(uncertain_confidence, dtype=self.torch.float32, device=self.device).reshape(count, 1).detach()], dim=0),
             uncertain_mask=torch.cat([self.is_uncertain, torch.as_tensor(uncertain_mask, dtype=torch.bool, device=self.device).reshape(count)], dim=0),
@@ -546,7 +558,7 @@ class TorchGaussianModel:
             "features_dc": torch.as_tensor(features_dc, dtype=torch.float32, device=self.device).reshape(count, 1, 3),
             "features_rest": torch.as_tensor(features_rest, dtype=torch.float32, device=self.device).reshape(count, rest_dim, 3),
             "opacity": torch.as_tensor(opacity, dtype=torch.float32, device=self.device).reshape(count, 1),
-            "scaling": torch.as_tensor(scaling, dtype=torch.float32, device=self.device).reshape(count, 3),
+            "scaling": torch.as_tensor(scaling, dtype=torch.float32, device=self.device).reshape(count, self.scale_dim),
             "rotation": torch.as_tensor(rotation, dtype=torch.float32, device=self.device).reshape(count, 4),
             "uncertain_confidence": torch.as_tensor(uncertain_confidence, dtype=torch.float32, device=self.device).reshape(count, 1),
             "uncertain_mask": torch.as_tensor(uncertain_mask, dtype=torch.bool, device=self.device).reshape(count),
@@ -683,7 +695,7 @@ class TorchGaussianModel:
                 [self.get_opacity.detach(), torch.full((count, 1), opacity, device=self.device)], dim=0
             ),
             scales=torch.cat(
-                [self.get_scaling.detach(), torch.full((count, 3), scale, device=self.device)], dim=0
+                [self.get_scaling.detach(), torch.full((count, self.scale_dim), scale, device=self.device)], dim=0
             ),
             uncertain_mask=torch.cat([self.is_uncertain, torch.ones((count,), dtype=torch.bool, device=self.device)]),
             surface_uv=torch.cat([self.surface_uv, surface_uv], dim=0),
@@ -760,13 +772,13 @@ class TorchGaussianModel:
             "property float x\nproperty float y\nproperty float z\n"
             "property float f_dc_0\nproperty float f_dc_1\nproperty float f_dc_2\n"
             "property float opacity\n"
-            "property float scale_0\nproperty float scale_1\nproperty float scale_2\n"
-            "property float rot_0\nproperty float rot_1\nproperty float rot_2\nproperty float rot_3\n"
+            + "".join(f"property float {name}\n" for name in self.ply_scale_properties)
+            + "property float rot_0\nproperty float rot_1\nproperty float rot_2\nproperty float rot_3\n"
             "property int uncertain\nproperty float uncertain_confidence\n"
             "property float surface_u\nproperty float surface_v\n"
             "property long cluster_id\nproperty long surface_owner_kind\n"
             "property long surface_owner_id\nproperty long stable_gaussian_id\n"
             "property float surface_confidence\nend_header"
         )
-        formats = ["%.9g"] * 14 + ["%d", "%.9g", "%.9g", "%.9g", "%d", "%d", "%d", "%d", "%.9g"]
+        formats = ["%.9g"] * (11 + len(self.ply_scale_properties)) + ["%d", "%.9g", "%.9g", "%.9g", "%d", "%d", "%d", "%d", "%.9g"]
         np.savetxt(path, columns, fmt=formats, header=header, comments="", encoding="utf-8")

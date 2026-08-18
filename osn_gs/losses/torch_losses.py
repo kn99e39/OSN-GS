@@ -7,10 +7,17 @@ from __future__ import annotations
 직접 수식을 쓰지 않고 함수로 분리했다.
 """
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from osn_gs.core.torch_pipeline import TorchPipelineState
 from osn_gs.utils.torch_ops import require_torch
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    # Import-time only under a type checker. At runtime this would close the
+    # cycle osn_gs.losses -> osn_gs.core -> osn_gs.core.torch_trainer ->
+    # osn_gs.losses, which breaks whenever `osn_gs.losses` is imported first
+    # (e.g. `import osn_gs.losses.torch_surfel_losses`). Annotations in this
+    # module are already strings via `from __future__ import annotations`.
+    from osn_gs.core.torch_pipeline import TorchPipelineState
 
 
 _SSIM_WINDOW_CACHE: dict[Any, Any] = {}

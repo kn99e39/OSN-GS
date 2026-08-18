@@ -280,7 +280,23 @@ def _shape_transaction_candidates(model: TorchGaussianModel, clone_idx, split_id
     if split_idx.numel() > 0:
         parent_scale = model.get_scaling.detach()[split_idx]
         repeated_scale = parent_scale.repeat_interleave(samples, dim=0)
-        offsets = torch.randn_like(repeated_scale) * repeated_scale
+        # 2DGS split sampling (official `GaussianModel.densify_and_split`):
+        #     stds = get_scaling[mask].repeat(N, 1)                  # (M*N, 2)
+        #     stds = cat([stds, 0 * ones_like(stds[:, :1])], dim=-1) # (M*N, 3)
+        #     samples = normal(mean=0, std=stds)
+        # The third standard deviation is exactly ZERO, so a planar surfel's
+        # children are sampled strictly inside its own tangent plane and can
+        # never acquire normal-direction extent. A volumetric 3D Gaussian
+        # (`scale_dim == 3`) keeps the 3DGS behaviour of sampling in all three
+        # axes. Both then rotate the local offset by the parent's quaternion,
+        # which is the quaternion form of the official `build_rotation(q) @ s`.
+        if int(getattr(model, "scale_dim", 3)) == 3:
+            sampling_std = repeated_scale
+        else:
+            sampling_std = torch.cat(
+                [repeated_scale, torch.zeros_like(repeated_scale[:, :1])], dim=1
+            )
+        offsets = torch.randn_like(sampling_std) * sampling_std
         parent_rotation = model.get_rotation.detach()[split_idx].repeat_interleave(samples, dim=0)
         vector = parent_rotation[:, 1:]
         cross = 2.0 * torch.cross(vector, offsets, dim=1)

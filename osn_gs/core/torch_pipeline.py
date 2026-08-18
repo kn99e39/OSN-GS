@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from osn_gs.gaussian.torch_model import TorchGaussianModel
+from osn_gs.gaussian.torch_surfel_model import TorchGaussianSurfelModel
 from osn_gs.gaussian.torch_surface_ownership import (
     SURFACE_OWNER_OCCLUDED_CHART,
     SURFACE_OWNER_UNASSIGNED,
@@ -147,6 +148,18 @@ class TorchPipelineConfig:
     # below) -- that is surface-reconstruction geometry, not Gaussian
     # training init, and this flag intentionally does not reach it.
     gaussian_initialization_mode: str = "baseline_compatible"
+    # Which PRIMITIVE the trainable model uses.
+    #   "gaussian_3d" (default) -- volumetric 3D Gaussian, unchanged OSN-GS.
+    #   "surfel_2d"             -- 2DGS planar surface element
+    #                              (arXiv:2403.17888v3 sec. 4.1). Selects
+    #                              `TorchGaussianSurfelModel` (two tangent
+    #                              scales, no normal-direction scale) and the
+    #                              official `create_from_pcd` initialization
+    #                              (`_surfel_compatible_scale_rotation`).
+    # `gaussian_initialization_mode` does not apply to "surfel_2d": a surfel
+    # has no third scale for either of that flag's modes to fill in, so the
+    # 2DGS branch always uses the official 2DGS initialization instead.
+    primitive: str = "gaussian_3d"
     canonical_covariance_knn: int = 8
     canonical_construction_max_points: int = 2048
     covariance_knn_chunk_size: int = 0
@@ -199,8 +212,26 @@ class TorchOSNGSPipeline:
                 f"got {config.gaussian_initialization_mode!r}"
             )
         config.gaussian_initialization_mode = mode
+        primitive = str(config.primitive).strip().lower()
+        if primitive not in {"gaussian_3d", "surfel_2d"}:
+            raise ValueError(
+                f"primitive must be gaussian_3d or surfel_2d, got {config.primitive!r}"
+            )
+        config.primitive = primitive
         self.config = config
         self.device = device
+
+    @property
+    def is_surfel(self) -> bool:
+        """True when this pipeline builds 2DGS planar surface elements."""
+
+        return self.config.primitive == "surfel_2d"
+
+    def _new_model(self) -> TorchGaussianModel:
+        """Construct the primitive container this pipeline is configured for."""
+
+        model_cls = TorchGaussianSurfelModel if self.is_surfel else TorchGaussianModel
+        return model_cls(sh_degree=self.config.sh_degree, device=self.device)
 
     @staticmethod
     def _patch_confidence_from_regions(
@@ -301,8 +332,15 @@ class TorchOSNGSPipeline:
             else:
                 scales = sample_scales
                 rotations = sample_rotations
+        if self.is_surfel:
+            # Same reasoning as `_initialize_canonical`: the local-PCA
+            # planar-surfel frame above describes a 3D covariance and cannot
+            # seed a two-scale surfel. The deferred schedule's own surface
+            # bootstrap is not applicable to this branch either, since the
+            # 2DGS arm is run with the `initialize` schedule.
+            scales, rotations = self._surfel_compatible_scale_rotation(points)
         count = int(points.shape[0])
-        model = TorchGaussianModel(sh_degree=self.config.sh_degree, device=self.device)
+        model = self._new_model()
         model.initialize(
             positions=points,
             colors=colors,
@@ -440,14 +478,20 @@ class TorchOSNGSPipeline:
         # reusing that same planar-surfel frame ("covariance_knn",
         # experimental) or Graphdeco-equivalent isotropic init
         # ("baseline_compatible", default).
-        if covariance_scales is not None or covariance_rotations is not None:
+        if self.is_surfel:
+            # 2DGS has no third scale, so neither an explicit 3D covariance
+            # override nor `gaussian_initialization_mode` can describe its
+            # trainable init. The official `create_from_pcd` is used instead
+            # -- see `_surfel_compatible_scale_rotation`.
+            model_scales, model_rotations = self._surfel_compatible_scale_rotation(points)
+        elif covariance_scales is not None or covariance_rotations is not None:
             model_scales, model_rotations = scales, rotations
         elif self.config.gaussian_initialization_mode == "covariance_knn":
             model_scales, model_rotations = scales, rotations
         else:
             model_scales, model_rotations = self._baseline_compatible_scale_rotation(points)
 
-        model = TorchGaussianModel(sh_degree=self.config.sh_degree, device=self.device)
+        model = self._new_model()
         model.initialize(
             positions=points,
             colors=colors,
@@ -880,6 +924,46 @@ class TorchOSNGSPipeline:
         scales = iso_scale.reshape(count, 1).repeat(1, 3)
         rotations = torch.zeros((count, 4), dtype=torch.float32, device=points.device)
         rotations[:, 0] = 1.0
+        return scales, rotations
+
+    def _surfel_compatible_scale_rotation(self, points: Any) -> tuple[Any, Any]:
+        """Official 2DGS `create_from_pcd` initialization, tensor for tensor.
+
+        From `hbb1/2d-gaussian-splatting` @ 335ad61,
+        `scene/gaussian_model.py::create_from_pcd`::
+
+            dist2  = clamp_min(distCUDA2(points), 1e-7)
+            scales = log(sqrt(dist2))[..., None].repeat(1, 2)
+            rots   = torch.rand((N, 4))
+
+        Two points of substance:
+
+        * the isotropic nearest-neighbor spacing seeds BOTH tangent scales and
+          there is no third column to seed -- the OSN-GS covariance-derived
+          "normal thickness" that `covariance_knn` would supply has no slot in
+          a 2DGS primitive and is deliberately not reconstructed;
+        * the rotation is RANDOM (`torch.rand`), not the identity quaternion
+          3DGS/`baseline_compatible` uses. That is upstream's choice and it is
+          load-bearing: identity quaternions would start every surfel's tangent
+          plane world-axis-aligned, giving the normal-consistency term a
+          degenerate, globally correlated starting orientation. Reproduced as
+          upstream has it, including drawing from `torch.rand` (components in
+          [0, 1), normalized to a unit quaternion by `initialize`) rather than
+          a uniform rotation distribution.
+
+        `_graphdeco_neighbor_mean_dist2` is the same mean-squared-distance-to-
+        3-nearest-neighbors definition `distCUDA2` computes, reused verbatim
+        from `_baseline_compatible_scale_rotation`; the log activation is
+        applied by `TorchGaussianModel.initialize`, so linear scales are
+        returned here.
+        """
+
+        torch = require_torch()
+        count = int(points.shape[0])
+        dist2 = self._graphdeco_neighbor_mean_dist2(points.detach()).clamp_min(1e-7)
+        iso_scale = torch.sqrt(dist2)
+        scales = iso_scale.reshape(count, 1).repeat(1, 2)
+        rotations = torch.rand((count, 4), dtype=torch.float32, device=points.device)
         return scales, rotations
 
     @staticmethod

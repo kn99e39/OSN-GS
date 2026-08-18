@@ -34,7 +34,12 @@ from osn_gs.losses.torch_losses import (
     uncertain_anchor_loss,
     uncertain_confidence_loss,
 )
+from osn_gs.losses.torch_surfel_losses import (
+    SurfelRegularizationSchedule,
+    surfel_regularization_terms,
+)
 from osn_gs.render.gaussian_rasterizer import GaussianRasterizerConfig, OSNGaussianRasterizer
+from osn_gs.render.surfel_rasterizer import OSNSurfelRasterizer, SurfelRasterizerConfig
 from osn_gs.utils.torch_checkpoint import load_torch_checkpoint, save_torch_checkpoint
 from osn_gs.utils.torch_ops import default_device, psnr_from_mse, require_torch, sh_dc_to_rgb
 from tqdm import tqdm
@@ -70,6 +75,13 @@ class TorchTrainingConfig:
     # deferred canonical rebuilds; disabled: Gaussian-only control arm.
     visible_nurbs_update_schedule: str = "initialize"
     density_control_interval: int = 500
+    # 2DGS geometric regularization (arXiv:2403.17888v3 eq. 16). Only read
+    # when the pipeline's primitive is "surfel_2d"; the volumetric arm never
+    # evaluates these terms. Defaults reproduce the official `train.py`
+    # staging verbatim -- see `osn_gs/losses/torch_surfel_losses.py`.
+    surfel_regularization: SurfelRegularizationSchedule = field(
+        default_factory=SurfelRegularizationSchedule
+    )
     save_interval: int = 1000
     save_iterations: tuple[int, ...] = ()
     progress_log_interval: int = 100
@@ -108,12 +120,20 @@ class TorchOSNGSTrainer:
         training_config: TorchTrainingConfig | None = None,
         rasterizer_config: GaussianRasterizerConfig | None = None,
         device: str | None = None,
+        surfel_rasterizer_config: SurfelRasterizerConfig | None = None,
     ) -> None:
         self.torch = require_torch()
         self.training_config = training_config or TorchTrainingConfig()
         self.device = device or default_device(self.training_config.prefer_cuda)
         self.pipeline = TorchOSNGSPipeline(pipeline_config or TorchPipelineConfig(), device=self.device)
-        self.rasterizer = OSNGaussianRasterizer(rasterizer_config)
+        # Primitive choice has exactly one source of truth: the pipeline
+        # config. The renderer follows it, because a 2DGS surfel rendered
+        # through the 3DGS affine-covariance projection would not be 2DGS.
+        self.is_surfel = self.pipeline.is_surfel
+        if self.is_surfel:
+            self.rasterizer = OSNSurfelRasterizer(surfel_rasterizer_config)
+        else:
+            self.rasterizer = OSNGaussianRasterizer(rasterizer_config)
         self._stream_socket: Any | None = None
         self._stream_last_error_at = 0.0
         self._streamed_nurbs_signature: tuple[int, tuple[int, ...]] | None = None
@@ -127,6 +147,10 @@ class TorchOSNGSTrainer:
         # run actually used, for the scene-extent-basis A/B report. Additive
         # logging only -- never read back by any algorithm/threshold.
         self._cumulative_adc = {"cloned": 0, "split": 0, "pruned": 0, "opacity_reset_count": 0}
+        # Official 2DGS `train.py` EMA diagnostics, log-only.
+        self._ema_dist_loss = 0.0
+        self._ema_normal_loss = 0.0
+        self._last_surfel_regularization: dict[str, float] = {}
         self._extent_log: dict[str, float] = {}
         schedule = str(self.training_config.visible_nurbs_update_schedule).strip().lower()
         if schedule not in {"initialize", "adc_post_commit", "disabled"}:
@@ -135,6 +159,14 @@ class TorchOSNGSTrainer:
             )
         self.training_config.visible_nurbs_update_schedule = schedule
         self._print(f"OSN-GS rasterizer backend: {self.rasterizer.backend_source}")
+        if self.is_surfel:
+            reg = self.training_config.surfel_regularization
+            self._print(
+                "OSN-GS 2DGS primitive: surfel_2d "
+                f"lambda_dist={reg.lambda_dist} (from iter {reg.dist_from_iter}) "
+                f"lambda_normal={reg.lambda_normal} (from iter {reg.normal_from_iter}) "
+                f"official_staging={reg.matches_official_staging()}"
+            )
 
     def _print(self, message: str) -> None:
         """Print training-status messages, matching the Graphdeco baseline's log style.
@@ -257,6 +289,10 @@ class TorchOSNGSTrainer:
             # Keep the MSE accumulator on-device; forcing a host scalar per view
             # here would serialize the hot path on GPU→CPU synchronization.
             mse_accum = torch.zeros((), dtype=torch.float32, device=self.device)
+            dist_accum = torch.zeros((), dtype=torch.float32, device=self.device)
+            normal_accum = torch.zeros((), dtype=torch.float32, device=self.device)
+            active_lambda_dist = 0.0
+            active_lambda_normal = 0.0
             render_packages = []
             for camera, target in zip(batch.cameras, batch.images):
                 camera, target = self._prepare_training_view(camera, target)
@@ -272,6 +308,25 @@ class TorchOSNGSTrainer:
                 )
                 total = total + image_loss
                 mse_accum = mse_accum + mse.detach()
+
+                if self.is_surfel:
+                    # 2DGS eq. 16: L = L_c + alpha * L_d + beta * L_n, with the
+                    # official `train.py` staging (dist after iteration 3000,
+                    # normal after 7000). Added inside the view loop so the
+                    # `/ num_cameras` below averages them exactly like the
+                    # photometric term; identical to the official code at the
+                    # default batch size of 1.
+                    (
+                        dist_loss,
+                        normal_loss,
+                        active_lambda_dist,
+                        active_lambda_normal,
+                    ) = surfel_regularization_terms(
+                        render_pkg, self.training_config.surfel_regularization, iteration
+                    )
+                    total = total + dist_loss + normal_loss
+                    dist_accum = dist_accum + dist_loss.detach()
+                    normal_accum = normal_accum + normal_loss.detach()
             num_cameras = max(len(batch.cameras), 1)
             total = total / num_cameras
             self._record_timing(timings, "render_loss", phase_start, timed)
@@ -306,6 +361,19 @@ class TorchOSNGSTrainer:
             if self._needs_metric_scalars(iteration):
                 state.last_loss = float(total.detach().cpu())
                 state.last_psnr = psnr_from_mse(float(mean_mse.detach().cpu()))
+                if self.is_surfel:
+                    # Official `train.py` EMA, evaluated only on iterations
+                    # that already pay for a GPU->CPU sync.
+                    dist_value = float(dist_accum.cpu()) / num_cameras
+                    normal_value = float(normal_accum.cpu()) / num_cameras
+                    self._ema_dist_loss = 0.4 * dist_value + 0.6 * self._ema_dist_loss
+                    self._ema_normal_loss = 0.4 * normal_value + 0.6 * self._ema_normal_loss
+                    self._last_surfel_regularization = {
+                        "lambda_dist": active_lambda_dist,
+                        "lambda_normal": active_lambda_normal,
+                        "dist_loss": dist_value,
+                        "normal_loss": normal_value,
+                    }
 
             # Save/stream before ADC and opacity reset (matching the baseline's
             # own save-before-densify_and_prune ordering). Opacity reset zeroes
@@ -1011,6 +1079,11 @@ class TorchOSNGSTrainer:
         }
         if uncertain_count:
             postfix["Uncertain"] = str(uncertain_count)
+        if self.is_surfel:
+            # Same two diagnostics the official 2DGS `train.py` puts on its
+            # progress bar, with the same 0.4/0.6 EMA.
+            postfix["distort"] = f"{self._ema_dist_loss:.5f}"
+            postfix["normal"] = f"{self._ema_normal_loss:.5f}"
         if self._progress_bar is not None:
             self._progress_bar.set_postfix(postfix)
             delta = int(state.iteration) - self._last_progress_iteration
