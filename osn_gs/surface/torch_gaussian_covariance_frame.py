@@ -227,7 +227,12 @@ def covariance_conditioning_score(eigenvalues: Any, covariance: Any | None = Non
     eigenvalues = torch.as_tensor(eigenvalues)
     finite = torch.isfinite(eigenvalues).all(dim=-1)
     if covariance is not None:
-        finite = finite & torch.isfinite(torch.as_tensor(covariance)).all(dim=(-1, -2))
+        # `.all(dim=-1).all(dim=-1)` rather than `.all(dim=(-1, -2))`:
+        # tuple `dim` for `Tensor.all` only exists from torch 2.2, and the
+        # 2DGS branch's CUDA 11.8 runtime pins torch 2.1.2. The chained form
+        # reduces the same two trailing dimensions in the same order, so the
+        # result is identical for every input shape this is called with.
+        finite = finite & torch.isfinite(torch.as_tensor(covariance)).all(dim=-1).all(dim=-1)
     non_degenerate = eigenvalues[:, 0] > degenerate_eps
     return (finite & non_degenerate).float()
 

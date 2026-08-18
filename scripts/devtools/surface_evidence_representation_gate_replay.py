@@ -52,7 +52,8 @@ from osn_gs.surface.torch_chart_unit_face_incidence_partition_boundary import (
 )
 from osn_gs.surface.torch_dense_chart_unit_assembly import build_chart_unit_assembly
 from osn_gs.surface.torch_dense_surface_consistency_components import build_dense_surface_consistency_components
-from osn_gs.surface.torch_gaussian_covariance_frame import covariance_from_scale_rotation
+from osn_gs.gaussian.torch_primitive_evidence_adapter import load_primitive_evidence
+from osn_gs.gaussian.torch_surfel_analysis_adapter import EXACT_RANK2
 from osn_gs.surface.torch_surface_evidence_representation_gate import (
     REPRESENTATIONS,
     build_representation_evidence,
@@ -72,36 +73,40 @@ def _weighted_percentile(values: list[tuple[float, float]], percentile: float) -
     return float(ordered[-1][0])
 
 
-def _load_region_context(checkpoint: Path, cap: int, device: str):
+def _load_region_context(
+    checkpoint: Path,
+    cap: int,
+    device: str,
+    *,
+    surfel_covariance_mode: str = EXACT_RANK2,
+    surfel_epsilon_ratio: float = 1e-3,
+):
     """Everything computed ONCE on raw evidence, identical for all four
     representations: model load, canonical region construction, region
     ownership propagation, and the sparse chart/frame lookup used only for
-    arc typing. None of this differs by representation."""
+    arc typing. None of this differs by representation.
 
-    from osn_gs.gaussian.torch_model import TorchGaussianModel
+    The checkpoint may hold either primitive. `load_primitive_evidence`
+    dispatches on what the checkpoint itself records and returns the same
+    `(positions, covariance, opacity)` triple in both cases, so the whole
+    downstream chain below stays byte-for-byte the code the volumetric
+    baseline was measured with. For a volumetric checkpoint the covariance is
+    exactly the `covariance_from_scale_rotation(get_scaling, get_rotation)`
+    this function used before the 2DGS branch existed."""
 
-    payload = torch.load(checkpoint / "checkpoint.pt", map_location=device, weights_only=False)
-    raw = payload["model_raw"]
-    rest = int(raw["features_rest"].shape[-2])
-    degree = 0
-    while (degree + 1) ** 2 - 1 < rest:
-        degree += 1
-    model = TorchGaussianModel(sh_degree=degree, device=device)
-    model.replace_tensors(
-        xyz=raw["xyz"], features_dc=raw["features_dc"], features_rest=raw["features_rest"],
-        opacity=raw["opacity"], scaling=raw["scaling"], rotation=raw["rotation"],
-        uncertain_confidence=raw["uncertain_confidence"], uncertain_mask=raw["is_uncertain"],
-        surface_uv=raw["surface_uv"], cluster_ids=raw["cluster_ids"],
-        surface_owner_kind=raw.get("surface_owner_kind"), surface_owner_id=raw.get("surface_owner_id"),
-        stable_gaussian_ids=raw.get("stable_gaussian_ids"),
+    evidence = load_primitive_evidence(
+        checkpoint,
+        device=device,
+        surfel_covariance_mode=surfel_covariance_mode,
+        surfel_epsilon_ratio=surfel_epsilon_ratio,
     )
     pipeline = TorchOSNGSPipeline(TorchPipelineConfig(canonical_construction_max_points=cap), device=device)
-    points = model.get_xyz.detach()
+    points = evidence.positions
     stable_ids = list(range(int(points.shape[0])))
     with torch.no_grad():
-        covariance = covariance_from_scale_rotation(model.get_scaling.detach(), model.get_rotation.detach())
+        covariance = evidence.covariance
         bundle = pipeline._construct_canonical_with_full_evidence(
-            points, covariance, torch.sigmoid(model.get_opacity.detach()).reshape(-1), stable_ids,
+            points, covariance, evidence.opacity, stable_ids,
         )
     construction = bundle.construction
     regions = construction.surface_regions
@@ -122,7 +127,7 @@ def _load_region_context(checkpoint: Path, cap: int, device: str):
             owned.setdefault(region_id, []).append(full_index)
     return (
         regions, points, covariance, stable_ids, owned, representative_positions,
-        representative_index, frame_by_region, chart_by_region,
+        representative_index, frame_by_region, chart_by_region, evidence,
     )
 
 
@@ -131,7 +136,7 @@ def analyze_representation(
 ) -> dict:
     (
         regions, points, covariance, stable_ids, owned, representative_positions,
-        representative_index, frame_by_region, chart_by_region,
+        representative_index, frame_by_region, chart_by_region, _evidence,
     ) = region_context
 
     rows = []
