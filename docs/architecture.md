@@ -535,3 +535,9 @@ Initial Gaussians -> one-time density-adaptive voxel bootstrap -> initial patch 
 
 - Worklog 95는 raw Gaussian-center connectivity를 완전히 제거하고 region-owned Gaussian → latent surface support(covariance 미사용 MLS estimator) → structural curve network(기존 sparse chart boundary 재사용, fail-closed surface-following curve) → 기존 NURBS fitter → held-out(train/held checkerboard 분리) 파이프라인을 새로 구현한 첫 end-to-end constructor 프로토타입이다. Visible Gaussian training/ADC/region ownership/NURBS fitter는 미변경이다.
 - Checkpoint 2900/final 실측: valid_supported 0.000%/0.051%(baseline)→2.64%/11.95%(nonzero), unresolved 87.98%/84.73%→42.60%/32.51%(절반 이하). 감소분 대부분은 extrapolative/unsafe로 흡수되고 7개 region 중 3개는 curve network를 만들지 못한다.
+
+## 2026-08-18 Latent-surface curve-network constructor 아키텍처 완성
+
+- Worklog 96은 Worklog 95의 legacy `eligible_parametric_chart_boundary` entrance gate를 제거하고, interior anchor fallback(farthest-point sampling, raw connectivity 없음), parallel-transport curve tracing(매 step axis 재선택 없음), 연속 지지 segment 검증(양 끝점만으로 승인 안 함), family U/V 2×2 correspondence 계약(pre-fit, fit 오차로 재분할 안 함), region당 다중 NURBS patch를 구현했다.
+- Construction 측면(usable seed/valid curve network 비율 상승, legacy gate로 막혔던 region 구성 성공, multi-patch 실현)은 성공했으나, held-out valid_supported는 Worklog 95를 넘지 못했고 extrapolative+unsafe 합계는 두 checkpoint 모두 늘었다.
+- **결정**: curve-network 구성이 널리 가능해졌지만 safe NURBS가 개선되지 않았으므로 새 curve-seeding heuristic을 추가하지 않는다. 병목은 downstream parametric fitting/patch representation으로 이동했다.

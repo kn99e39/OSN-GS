@@ -148,3 +148,9 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 
 - [Worklog 95](worklogs/95_latent_surface_curve_network_constructor_prototype.md)는 raw Gaussian-center connectivity(Worklog 82/83/89의 kNN graph/chart-unit assembly/face-incidence topology)를 완전히 제거한 새 constructor를 처음부터 끝까지 구현했다: region-owned Gaussian → latent surface support(MLS-style position-only estimator) → structural curve network(기존 sparse chart boundary를 seed로, surface-following transversal/rung curve, 미지원 시 fail-closed) → 기존 NURBS fitter → held-out 검증(train/held checkerboard 분리, train 절반만으로 curve network 구성).
 - Checkpoint 2900/final 실측: valid_supported가 baseline의 0.000%/0.051%에서 2.64%/11.95%로 nonzero가 되고 unresolved가 87.98%/84.73%에서 42.60%/32.51%로 줄었다. 다만 감소분 대부분은 extrapolative/unsafe로 흡수되고 7개 region 중 3개는 curve network를 만들지 못한다.
+
+## 2026-08-18 Latent-surface curve-network constructor 아키텍처 완성
+
+- [Worklog 96](worklogs/96_latent_surface_curve_network_constructor_completion.md)은 Worklog 95의 legacy `eligible_parametric_chart_boundary` entrance gate를 제거하고, boundary 부재 시 interior anchor fallback, parallel-transport curve tracing, 연속 지지 segment 검증, family U/V correspondence 계약, region당 다중 NURBS patch를 함께 구현했다.
+- Construction 측면(usable seed 5/7→7/7·6/7, valid curve network 4/7→5/7·6/7, legacy gate로 막혔던 region이 새로 구성 성공, multi-patch 실현)은 성공했다. 그러나 held-out valid_supported는 Worklog 95를 넘지 못했고(2900 거의 동일, final 소폭 하락) extrapolative+unsafe 합계는 두 checkpoint 모두 늘었다.
+- **결정**: curve-network 구성은 널리 가능해졌지만 safe NURBS는 개선되지 않았으므로 새 curve-seeding heuristic을 추가하지 않는다. 병목은 downstream parametric fitting/patch representation으로 이동했다.
