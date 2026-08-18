@@ -547,3 +547,9 @@ Initial Gaussians -> one-time density-adaptive voxel bootstrap -> initial patch 
 - Worklog 97은 Worklog 96의 coherent curve-network block에 PCA 없이 curve network 자체(chord-length 기반, family V/U reconcile)에서 (u,v)를 유도하는 fitting path를 구현하고, 동일 3D 표본·동일 6×6/degree-2 capacity로 기존 PCA_UV 경로와 fallback 없이 paired 비교했다. NURBS degree/capacity, Worklog 95/96 latent-surface support/curve construction은 미변경이다.
 - 실측: checkpoint 2900/final 합쳐 12개 block 중 11개(91.7%)가 인접 transversal trace 간 방향 불일치로 parameterization 자체를 만들지 못했다. Native 경로는 두 checkpoint 어디서도 valid_supported patch를 만들지 못했으나 PCA_UV는 유지했다. 방향이 일관된 합성 block에서는 native fitting이 정상 동작함을 테스트로 확인해 fitting 구현이 아닌 curve-family 구조의 문제로 확인했다.
 - **Decision C: CURVE_NETWORK_PARAMETERIZATION_INVALID** — PCA fallback으로 숨기지 않고 그대로 보고하며, curve-seed heuristic이나 PCA/UV variant를 추가 조정하지 않는다.
+
+## 2026-08-18 전역 동기화 tangent frame 기반 curve lattice
+
+- Worklog 98은 Worklog 96의 per-seed 독립 transversal 방향 선택을, latent surface 위에서 3D 거리 기준 Dijkstra spanning tree로 parallel-transport하고 cycle-closing edge의 holonomy를 검증하는 전역 동기화 tangent frame field로 대체했다. A(Worklog96+PCA)/B(Worklog97 독립방향+native)/C(신규 동기화+native)를 fallback 없이 동일 capacity·held-out 기준으로 paired 비교했다.
+- 실측: B의 방향-불일치 실패율이 combined 91.7%에서 C의 30.3%로 크게 줄고 patch candidate 수도 12→66개로 늘었지만, parameterization 성공 component만 조건부로 봐도 고정 6×6 degree-2 NURBS는 여전히 압도적으로 extrapolative/unsafe였다(조건부 valid_supported 4.8~7.1%). C의 valid_supported는 checkpoint마다 A보다 낫거나 못해 일관된 개선이 아니었다.
+- **Decision B: PARAMETRIC_PATCH_MODEL_LIMIT** — curve construction/parameterization은 더 이상 병목이 아니며, 다음 bounded 결정은 parametric patch representation/fitting model 자체를 다뤄야 한다.
