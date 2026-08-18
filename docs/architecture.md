@@ -553,3 +553,9 @@ Initial Gaussians -> one-time density-adaptive voxel bootstrap -> initial patch 
 - Worklog 98은 Worklog 96의 per-seed 독립 transversal 방향 선택을, latent surface 위에서 3D 거리 기준 Dijkstra spanning tree로 parallel-transport하고 cycle-closing edge의 holonomy를 검증하는 전역 동기화 tangent frame field로 대체했다. A(Worklog96+PCA)/B(Worklog97 독립방향+native)/C(신규 동기화+native)를 fallback 없이 동일 capacity·held-out 기준으로 paired 비교했다.
 - 실측(component 개수 기준): B의 방향-불일치 실패율이 combined 91.67%(11/12)에서 C의 30.30%(20/66, 2900: 17.14%, final: 45.16%)로 크게 줄고 patch candidate 수도 12→66개로 늘었지만, parameterization 성공 component만 조건부로 봐도 고정 6×6 degree-2 NURBS는 여전히 압도적으로 extrapolative/unsafe였다(조건부 valid_supported 4.8~7.1%). C의 valid_supported는 checkpoint마다 A보다 낫거나 못해 일관된 개선이 아니었다.
 - **범위를 좁힌 결론**: latent-surface support 확보, curve construction 널리 가능, 전역 동기화 방향이 Worklog 97 실패를 상당 부분 해소 — 이 세 가지만 확정한다. NURBS representation 자체가 병목이라고 단정하지 않으며, 원인 분리는 후속 배치의 과제다.
+
+## 2026-08-18 Bounded parametric patch architecture gate
+
+- Worklog 99는 Worklog 98의 orientation-coherent component에 pre-fit parameter-domain validity 검증(UV-공간 local Jacobian으로 fold/singularity/extreme-stretch 검출)을 추가하고, A(고정 6×6 LSQ)/B(adaptive capacity NURBS, capacity는 구조 정보로만 결정)/C(Gordon-style curve-network, 고전 원칙과 OSN-GS 근사를 명시 분리)를 fallback 없이 domain-valid component에만 paired 비교했다.
+- 실측: orientation-coherent component의 combined 80.4%(37/46)가 A/B/C 비교 이전에 이미 UV fold로 무효였고(원인 100% foldover), domain-valid로 남은 소수에서도 세 candidate 모두 valid_supported가 사실상 0%였다.
+- **Decision D: PARAMETER_DOMAIN_LIMIT** — Worklog 98은 frame orientation은 풀었지만 전역 parameter-domain 구성은 풀지 못했다. 다음 결정은 intrinsic parameterization 자체를 다뤄야 한다.
