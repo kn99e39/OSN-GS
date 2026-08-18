@@ -35,6 +35,20 @@ evidence analysis):
 mask) because that is what OSN-GS's existing `add_densification_stats` /
 `update_max_radii` already consume; `visibility_mask` carries the official
 boolean form for anything that wants it.
+
+PER-SURFEL CONTRIBUTION INFORMATION -- what is and is not available. The
+per-pixel per-surfel blending weights `omega_i = alpha_i * T_i` of paper eqs.
+12-14 exist only inside the CUDA kernel: `renderCUDA` consumes them in its
+compositing loop and writes out `final_T`, `n_contrib`, and the accumulated
+`out_others` channels, none of which the official `_C.rasterize_gaussians`
+binding returns per (surfel, pixel) pair. Materializing them would mean
+editing the vendored kernel, which would forfeit the byte-identical
+OFFICIAL_CODE_FAITHFUL claim. What this branch therefore exposes is
+everything the official binding does make available: the alpha-weighted
+aggregates those weights produce (`rend_alpha`, `rend_normal`, `rend_dist`,
+`depth_expected`, `depth_median`), and per-surfel visibility (`radii`,
+`visibility_filter`/`visibility_mask`) plus the screen-projected 3D-centre
+gradient on `viewspace_points`.
 """
 
 from dataclasses import dataclass
