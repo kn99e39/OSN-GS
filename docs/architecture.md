@@ -530,3 +530,8 @@ Initial Gaussians -> one-time density-adaptive voxel bootstrap -> initial patch 
 - Worklog 94는 4개 고정 surface-evidence representation(RAW_CENTER_BASELINE/CENTER_LATENT_SURFACE/COVARIANCE_SURFEL_SUPPORT/HYBRID_LATENT_PLUS_SUPPORT)을 같은 7개 real region·같은 unmodified Worklog 89 constructor 체인(`materialize_chart_unit_cut_boundaries`/`evaluate_fit` 그대로 재사용)으로 fallback 없이 비교한 단일 architecture-decision 배치다. Region ownership/ADC/training/Worklog 82 threshold/NURBS capacity/PCA-UV는 모두 미변경이다.
 - Checkpoint 2900/final 실측: COVARIANCE_SURFEL_SUPPORT는 RAW_CENTER_BASELINE과 수치가 정확히 동일했고(constructor가 covariance normal만 읽음을 확인), HYBRID는 CENTER_LATENT_SURFACE와 거의 동일했다(position이 topology를 지배). Latent 기반 두 representation은 recoverable evidence를 2.8~5.1배 늘렸지만 valid_supported는 네 representation 전부 0.2% 미만, unresolved는 83.7~88.0%로 여전히 압도적이었다.
 - **Decision 3**: 네 representation 모두 coherent evidence 대다수를 unresolved/unsafe로 남긴다. Constructor-level 재설계를 중단하고, 다음 architecture target은 training 중 visible geometric evidence 생성 자체(upstream)로 옮긴다.
+
+## 2026-08-18 Latent-surface curve-network constructor 프로토타입
+
+- Worklog 95는 raw Gaussian-center connectivity를 완전히 제거하고 region-owned Gaussian → latent surface support(covariance 미사용 MLS estimator) → structural curve network(기존 sparse chart boundary 재사용, fail-closed surface-following curve) → 기존 NURBS fitter → held-out(train/held checkerboard 분리) 파이프라인을 새로 구현한 첫 end-to-end constructor 프로토타입이다. Visible Gaussian training/ADC/region ownership/NURBS fitter는 미변경이다.
+- Checkpoint 2900/final 실측: valid_supported 0.000%/0.051%(baseline)→2.64%/11.95%(nonzero), unresolved 87.98%/84.73%→42.60%/32.51%(절반 이하). 감소분 대부분은 extrapolative/unsafe로 흡수되고 7개 region 중 3개는 curve network를 만들지 못한다.

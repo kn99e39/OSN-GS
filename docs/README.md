@@ -143,3 +143,8 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - [Worklog 94](worklogs/94_surface_evidence_representation_gate.md)는 root-cause 진단에서 architecture 결정으로 전환하는 단일 배치다. RAW_CENTER_BASELINE/CENTER_LATENT_SURFACE/COVARIANCE_SURFEL_SUPPORT/HYBRID_LATENT_PLUS_SUPPORT 4개 representation을 같은 7개 real region·같은 unmodified Worklog 89 constructor 체인으로 fallback 없이 비교했다.
 - Checkpoint 2900/final 실측: COVARIANCE_SURFEL_SUPPORT는 RAW_CENTER_BASELINE과 수치가 정확히 동일했고, HYBRID는 CENTER_LATENT_SURFACE와 거의 동일했다. Latent 기반 두 representation은 recoverable evidence를 2.8~5.1배 늘렸지만 valid_supported는 네 representation 전부 0.2% 미만이었고 unresolved는 83.7~88.0%로 여전히 압도적이었다. Latent representation은 held-out p95도 2~6.9배 악화시켰다.
 - **Decision 3**: 네 representation 모두 coherent evidence 대다수를 unresolved/unsafe로 남긴다. Constructor-level 재설계를 중단하고, 다음 architecture target은 training 중 visible geometric evidence 생성 자체(upstream)로 옮긴다.
+
+## 2026-08-18 Latent-surface curve-network constructor 프로토타입
+
+- [Worklog 95](worklogs/95_latent_surface_curve_network_constructor_prototype.md)는 raw Gaussian-center connectivity(Worklog 82/83/89의 kNN graph/chart-unit assembly/face-incidence topology)를 완전히 제거한 새 constructor를 처음부터 끝까지 구현했다: region-owned Gaussian → latent surface support(MLS-style position-only estimator) → structural curve network(기존 sparse chart boundary를 seed로, surface-following transversal/rung curve, 미지원 시 fail-closed) → 기존 NURBS fitter → held-out 검증(train/held checkerboard 분리, train 절반만으로 curve network 구성).
+- Checkpoint 2900/final 실측: valid_supported가 baseline의 0.000%/0.051%에서 2.64%/11.95%로 nonzero가 되고 unresolved가 87.98%/84.73%에서 42.60%/32.51%로 줄었다. 다만 감소분 대부분은 extrapolative/unsafe로 흡수되고 7개 region 중 3개는 curve network를 만들지 못한다.
