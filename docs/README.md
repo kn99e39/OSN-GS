@@ -154,3 +154,9 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - [Worklog 96](worklogs/96_latent_surface_curve_network_constructor_completion.md)은 Worklog 95의 legacy `eligible_parametric_chart_boundary` entrance gate를 제거하고, boundary 부재 시 interior anchor fallback, parallel-transport curve tracing, 연속 지지 segment 검증, family U/V correspondence 계약, region당 다중 NURBS patch를 함께 구현했다.
 - Construction 측면(usable seed 5/7→7/7·6/7, valid curve network 4/7→5/7·6/7, legacy gate로 막혔던 region이 새로 구성 성공, multi-patch 실현)은 성공했다. 그러나 held-out valid_supported는 Worklog 95를 넘지 못했고(2900 거의 동일, final 소폭 하락) extrapolative+unsafe 합계는 두 checkpoint 모두 늘었다.
 - **결정**: curve-network 구성은 널리 가능해졌지만 safe NURBS는 개선되지 않았으므로 새 curve-seeding heuristic을 추가하지 않는다. 병목은 downstream parametric fitting/patch representation으로 이동했다.
+
+## 2026-08-18 Curve-network-native NURBS fitting: parameterization 유효성 검증
+
+- [Worklog 97](worklogs/97_curve_network_native_nurbs_fitting.md)은 Worklog 96의 coherent curve-network block에 PCA를 거치지 않고 curve network 자체(chord-length 기반, family 간 reconcile)에서 (u,v)를 유도하는 fitting path(A. PCA_UV_POINT_FIT vs B. CURVE_NETWORK_NATIVE_FIT, fallback 없음, 동일 6×6/degree-2 capacity)를 구현했다.
+- 실측 결과 checkpoint 2900/final 합쳐 12개 block 중 11개(91.7%)가 인접 transversal trace 간 방향 불일치(`inconsistent_transversal_curve_direction`)로 parameterization 자체를 만들지 못했고, native 경로는 두 checkpoint 어디서도 valid_supported patch를 만들지 못한 반면 PCA_UV는 유지했다.
+- **Decision C: CURVE_NETWORK_PARAMETERIZATION_INVALID** — 문제는 fitting 구현이 아니라 Worklog 96 curve-family 구조 자체이며, PCA fallback으로 숨기지 않고 그대로 보고한다.

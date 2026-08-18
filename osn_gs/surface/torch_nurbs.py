@@ -840,6 +840,53 @@ def fit_torch_visible_surface_lsq(
     return surface, uv
 
 
+def fit_torch_visible_surface_from_uv(
+    points: Any,
+    uv: Any,
+    resolution_u: int = 8,
+    resolution_v: int = 4,
+    degree_u: int = 2,
+    degree_v: int = 2,
+    smoothness_lambda: float = 1e-4,
+    tikhonov_lambda: float = 1e-4,
+    chunk_size: int = 4096,
+    point_weights: Any | None = None,
+) -> TorchNURBSSurface:
+    """Fit a tensor-product NURBS surface at EXTERNALLY SUPPLIED, fixed UVs
+    (Worklog 96 addendum -- curve-network-native fitting).
+
+    Unlike :func:`fit_torch_visible_surface_lsq`, this never calls
+    :func:`pca_parameterize_points` and never re-estimates UV via
+    :func:`project_torch_points_to_nurbs` foot-point correction -- the
+    caller's ``uv`` is used both to seed the control grid (IDW, same
+    convention as :func:`fit_torch_visible_surface`) and for the single
+    regularized least-squares solve (:func:`_solve_control_grid_lsq`,
+    reused unmodified). Callers that need a UV coming from anything other
+    than point-cloud PCA (e.g. curve-network-derived parameterization)
+    should use this instead of silently routing back through the PCA-UV
+    path.
+    """
+
+    torch = require_torch()
+    points = torch.as_tensor(points, dtype=torch.float32, device=points.device if hasattr(points, "device") else None)
+    uv = torch.as_tensor(uv, dtype=points.dtype, device=points.device)
+    if point_weights is not None:
+        point_weights = torch.as_tensor(point_weights, dtype=points.dtype, device=points.device).reshape(-1)
+        point_weights = torch.nan_to_num(point_weights, nan=0.0, posinf=0.0, neginf=0.0).clamp_min(0.0)
+        if not bool((point_weights > 0).any()):
+            point_weights = None
+    surface = fit_torch_visible_surface(
+        points, resolution_u=resolution_u, resolution_v=resolution_v, chunk_size=chunk_size,
+        degree_u=degree_u, degree_v=degree_v, initial_uv=uv,
+    )
+    if int(points.shape[0]) <= 1:
+        return surface
+    surface.control_grid = _solve_control_grid_lsq(
+        points, uv, surface, smoothness_lambda, tikhonov_lambda, chunk_size, point_weights,
+    )
+    return surface
+
+
 def boundary_control_indices(
     resolution_u: int,
     resolution_v: int,
