@@ -1285,3 +1285,16 @@ class TorchOSNGSTrainer:
             for key, value in self._cumulative_adc.items():
                 handle.write(f"cumulative_adc_{key}={value}\n")
             handle.write(f"position_lr_extent_mode={self.training_config.position_lr_extent_mode}\n")
+            handle.write(f"primitive={'surfel_2d' if self.is_surfel else 'gaussian_3d'}\n")
+            if self.is_surfel:
+                # What the 2DGS regularizers were actually weighted at when
+                # this checkpoint was written, so a saved arm can be audited
+                # against the official staging without re-reading the log.
+                schedule = self.training_config.surfel_regularization
+                handle.write(f"surfel_lambda_dist={schedule.lambda_dist}\n")
+                handle.write(f"surfel_lambda_normal={schedule.lambda_normal}\n")
+                handle.write(f"surfel_dist_from_iter={schedule.dist_from_iter}\n")
+                handle.write(f"surfel_normal_from_iter={schedule.normal_from_iter}\n")
+                handle.write(f"surfel_official_staging={schedule.matches_official_staging()}\n")
+                for key, value in self._last_surfel_regularization.items():
+                    handle.write(f"surfel_active_{key}={value}\n")

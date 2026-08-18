@@ -127,7 +127,7 @@ def _load_region_context(
             owned.setdefault(region_id, []).append(full_index)
     return (
         regions, points, covariance, stable_ids, owned, representative_positions,
-        representative_index, frame_by_region, chart_by_region, evidence,
+        representative_index, frame_by_region, chart_by_region, evidence, construction,
     )
 
 
@@ -136,7 +136,7 @@ def analyze_representation(
 ) -> dict:
     (
         regions, points, covariance, stable_ids, owned, representative_positions,
-        representative_index, frame_by_region, chart_by_region, _evidence,
+        representative_index, frame_by_region, chart_by_region, _evidence, _construction,
     ) = region_context
 
     rows = []

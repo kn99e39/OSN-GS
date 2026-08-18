@@ -155,7 +155,7 @@ def structural_metrics(region_context, device: str) -> dict:
 
     (
         regions, points, _covariance, _stable_ids, owned, _representative_positions,
-        _representative_index, _frame_by_region, chart_by_region, evidence,
+        _representative_index, _frame_by_region, chart_by_region, evidence, _construction,
     ) = region_context
 
     normals = evidence.normals
@@ -250,24 +250,26 @@ def structural_metrics(region_context, device: str) -> dict:
 
 
 def curve_network_metrics(region_context) -> dict:
-    """Structural curve / curve-network availability, from the same construction."""
+    """Structural curve / curve-network availability, from the same construction.
+
+    Segment endpoints are the construction's own representative positions, so
+    curve LENGTH is measured in the scene's world units and is comparable
+    between arms. `regions_with_usable_curve_network` counts regions whose
+    parametric chart boundary carries at least a triangle's worth of segments
+    -- the minimum from which a chart domain could be built at all.
+    """
 
     (
-        regions, points, _covariance, _stable_ids, owned, _rep_positions,
-        _rep_index, _frame_by_region, chart_by_region, _evidence,
+        _regions, _points, _covariance, _stable_ids, _owned, representative_positions,
+        representative_index, _frame_by_region, chart_by_region, _evidence, _construction,
     ) = region_context
 
     status_counts = Counter()
     segment_kind_counts = Counter()
     total_segments = 0
-    total_length = 0.0
     lengths: list[float] = []
     usable_regions = 0
-
-    node_position = {}
-    for region in regions.regions:
-        for node_id in region.member_ids:
-            node_position.setdefault(node_id, None)
+    spacing = None
 
     for chart in chart_by_region.values():
         status_counts[chart.status] += 1
@@ -276,13 +278,89 @@ def curve_network_metrics(region_context) -> dict:
         total_segments += len(chart.segments)
         if len(chart.segments) >= 3:
             usable_regions += 1
+        for segment in chart.segments:
+            start = representative_index.get(segment.node_a)
+            end = representative_index.get(segment.node_b)
+            if start is None or end is None:
+                continue
+            lengths.append(
+                float((representative_positions[start] - representative_positions[end]).norm())
+            )
+
+    if int(representative_positions.shape[0]) > 8:
+        distances, _ = _knn(representative_positions, _ORIENTATION_NEIGHBORS)
+        spacing = float(distances.mean(dim=1).median())
 
     return {
         "chart_boundary_status_counts": dict(status_counts),
         "structural_curve_segments": total_segments,
         "structural_curve_segment_kinds": dict(segment_kind_counts),
+        "structural_curve_total_length": float(sum(lengths)) if lengths else 0.0,
+        "structural_curve_median_segment_length": _median(lengths),
+        "structural_curve_measured_segments": len(lengths),
+        # Length in units of the construction's own representative spacing, so
+        # the two arms stay comparable even if they sample space differently.
+        "structural_curve_total_length_over_spacing": (
+            float(sum(lengths)) / spacing if lengths and spacing else None
+        ),
+        "representative_spacing": spacing,
         "regions_with_usable_curve_network": usable_regions,
         "regions_with_any_chart_boundary": len(chart_by_region),
+    }
+
+
+def relation_metrics(region_context) -> dict:
+    """Manifold-relation composition of the SAME affinity graph both arms build.
+
+    Reported because one legacy input to that classifier -- the
+    `normal_direction_separation_over_thickness` ratio -- is ill-posed for a
+    true 2DGS surfel, whose per-primitive normal thickness is exactly zero and
+    is therefore floored at `sqrt(1e-12)` by `extract_covariance_frame`. The
+    ratio then saturates, which can only push pairs OUT of `ambiguous` and INTO
+    `parallel_but_separate` (the `same_surface` branch is evaluated first and
+    does not read it). Quantifying the shift is the point: it is a property of
+    the OSN-GS criterion meeting rank-2 evidence, not of the 2DGS training.
+    """
+
+    (
+        _regions, _points, _covariance, _stable_ids, _owned, _rep_positions,
+        _rep_index, _frame_by_region, _chart_by_region, _evidence, construction,
+    ) = region_context
+    graph = construction.manifold_affinity
+    counts = Counter(edge.manifold_relation for edge in graph.edges)
+    total = max(sum(counts.values()), 1)
+    return {
+        "affinity_edge_count": sum(counts.values()),
+        "relation_counts": dict(counts),
+        "relation_fractions": {name: value / total for name, value in counts.items()},
+    }
+
+
+def shape_class_metrics(region_context) -> dict:
+    """Covariance-frame shape classification of the evidence both arms feed in."""
+
+    (
+        _regions, _points, covariance, _stable_ids, _owned, _rep_positions,
+        _rep_index, _frame_by_region, _chart_by_region, evidence, _construction,
+    ) = region_context
+    from osn_gs.surface.torch_gaussian_covariance_frame import extract_covariance_frame
+
+    sample = _deterministic_sample(int(covariance.shape[0]), _STRUCTURAL_SAMPLE_CAP, covariance.device)
+    frame = extract_covariance_frame(covariance[sample])
+    counts = Counter(frame.shape_class)
+    total = max(sum(counts.values()), 1)
+    return {
+        "sampled_primitives": int(sample.numel()),
+        "shape_class_fractions": {name: value / total for name, value in counts.items()},
+        "planarity_median": float(frame.planarity.median()),
+        "normal_thickness_median": float(frame.normal_thickness.median()),
+        "equivalent_tangent_scale_median": float(frame.equivalent_tangent_scale.median()),
+        # For a rank-2 surfel this is the `sqrt(degenerate_eps)` floor, i.e. the
+        # measurement is saturated rather than informative -- see the module
+        # docstring of `torch_primitive_evidence_adapter`.
+        "normal_thickness_is_at_the_degenerate_floor": bool(
+            float(frame.normal_thickness.median()) <= 1.01e-6
+        ),
     }
 
 
@@ -302,6 +380,8 @@ def analyze_arm(name: str, checkpoint: Path, cap: int, device: str, surfel_mode:
         "arm": name,
         "evidence": evidence.describe(),
         "primitive_scale_statistics": _scale_statistics(evidence),
+        "covariance_shape_classes": shape_class_metrics(context),
+        "manifold_relations": relation_metrics(context),
         "region_context_seconds": load_seconds,
         "downstream": downstream["summary"],
         "downstream_regions": downstream["regions"],
