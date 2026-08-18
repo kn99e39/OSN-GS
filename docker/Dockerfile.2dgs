@@ -20,13 +20,20 @@ FROM osn-gs:cuda11.8
 ENV TORCH_CUDA_ARCH_LIST=8.6 \
     MAX_JOBS=4
 
+# numpy MUST stay below 2.0: torch 2.1.2 was built against the numpy 1.x C
+# ABI and every `tensor.numpy()` call fails with "Numpy is not available"
+# under numpy 2.x. An unpinned `pip install scipy` pulls numpy 2.2 in and
+# silently breaks training, so scipy is pinned to the last release that
+# supports the numpy 1.26.4 the base image ships.
 RUN python3.10 -m pip install --no-cache-dir \
         'tqdm>=4.65' \
         'websockets>=11.0' \
         ninja \
         pytest \
-        scipy \
-        plyfile
+        'numpy==1.26.4' \
+        'scipy==1.13.1' \
+        plyfile \
+    && python3.10 -c "import numpy, scipy, torch; assert numpy.__version__.startswith('1.'), numpy.__version__; torch.zeros(1).numpy(); print('numpy', numpy.__version__, 'scipy', scipy.__version__)"
 
 COPY osn_gs/render/vendor /tmp/osn_gs_vendor
 RUN python3.10 -m pip install --no-build-isolation /tmp/osn_gs_vendor/diff_surfel_rasterization \

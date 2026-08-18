@@ -155,20 +155,36 @@ def apply_adaptive_density_control(
     clone_mask = certain & high_grad & (scale_max <= dense_extent)
     split_mask = certain & high_grad & (scale_max > dense_extent)
 
-    available = None
+    split_samples = max(1, int(config.split_samples))
+    clone_budget: int | None = None
+    split_child_budget: int | None = None
     if config.max_gaussians > 0:
         available = max(0, int(config.max_gaussians) - len(model))
-        if available == 0:
-            clone_mask = torch.zeros_like(clone_mask)
-            split_mask = torch.zeros_like(split_mask)
+        # `max_gaussians` is a VRAM guard, not part of 3DGS or 2DGS. When it
+        # binds, how the remaining budget is divided matters enormously: an
+        # earlier revision spent it on clones first, which meant `split` got
+        # zero on every capped step. Splitting is how both methods resolve
+        # under-reconstructed large primitives, so suppressing it entirely
+        # does not "slow growth" -- it changes the geometry the run produces
+        # (measured: a capped 3DGS arm's train PSNR at 30k fell below its own
+        # 2.9k reference). The budget is therefore divided in proportion to
+        # each operation's DEMAND, so both operations survive a bound cap at
+        # the same relative rate.
+        clone_demand = int(clone_mask.sum().item())
+        split_child_demand = int(split_mask.sum().item()) * split_samples
+        total_demand = clone_demand + split_child_demand
+        if total_demand <= available:
+            clone_budget, split_child_budget = clone_demand, split_child_demand
+        elif total_demand == 0:
+            clone_budget = split_child_budget = 0
+        else:
+            clone_budget = int(round(available * clone_demand / total_demand))
+            split_child_budget = max(0, available - clone_budget)
 
-    clone_idx = _limited_indices(clone_mask, available)
+    clone_idx = _limited_indices(clone_mask, clone_budget, grads)
     cloned = int(clone_idx.numel())
-    if available is not None:
-        available = max(0, available - cloned)
-    split_samples = max(1, int(config.split_samples))
-    parent_limit = None if available is None else max(0, available // split_samples)
-    split_idx = _limited_indices(split_mask, parent_limit)
+    parent_limit = None if split_child_budget is None else max(0, split_child_budget // split_samples)
+    split_idx = _limited_indices(split_mask, parent_limit, grads)
     split_parents = int(split_idx.numel())
     split = split_parents * split_samples
     anisotropy = scale_max / torch.clamp(model.get_scaling.detach().min(dim=1).values, min=1e-12)
@@ -370,9 +386,26 @@ def _prune_mask(model: TorchGaussianModel, prune_mask) -> int:
     return pruned
 
 
-def _limited_indices(mask, limit: int | None = None):
+def _limited_indices(mask, limit: int | None = None, priority=None):
+    """Indices where ``mask`` holds, at most ``limit`` of them.
+
+    When a limit binds and ``priority`` is given, the retained subset is the
+    highest-priority one (densification gradient) rather than the lowest row
+    indices. Row order carries no meaning -- it is whatever order ADC left the
+    tensors in -- so truncating by it discards exactly the primitives the
+    method most wants to densify. The returned indices stay ascending so the
+    shape transaction's row layout is unchanged, and the unlimited path is
+    bit-identical to before.
+    """
+
     torch = require_torch()
     idx = torch.nonzero(mask, as_tuple=False).reshape(-1)
-    if limit is not None and idx.numel() > limit:
-        idx = idx[: max(0, int(limit))]
-    return idx
+    if limit is None or idx.numel() <= limit:
+        return idx
+    limit = max(0, int(limit))
+    if limit == 0:
+        return idx[:0]
+    if priority is None:
+        return idx[:limit]
+    ranked = torch.topk(priority[idx], limit, largest=True).indices
+    return idx[ranked.sort().values]
