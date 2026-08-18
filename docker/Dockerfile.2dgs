@@ -1,0 +1,34 @@
+# 2DGS experiment runtime for the exp/2dgs-nurbs-surface-evidence branch.
+#
+# Extends the existing OSN-GS CUDA 11.8 image (which already carries
+# torch 2.1.2+cu118 and the compiled 3DGS `diff_gaussian_rasterization`) with:
+#   * the runtime python dependencies `requirements.txt` lists but the base
+#     image did not install (tqdm, websockets), plus `ninja` for JIT builds and
+#     `pytest` for the focused/regression suites;
+#   * a compiled build of the vendored official 2DGS surfel rasterizer.
+#
+# The surfel rasterizer is the UNMODIFIED upstream
+# `hbb1/diff-surfel-rasterization` @ e0ed020 -- see
+# osn_gs/render/vendor/diff_surfel_rasterization/OSN_GS_PROVENANCE.md. Only
+# its glm include path is redirected to the byte-identical tree the 3DGS
+# rasterizer already vendors.
+#
+# TORCH_CUDA_ARCH_LIST=8.6 targets the RTX 3080 Ti / RTX 3090 in this host.
+FROM osn-gs:cuda11.8
+
+ENV TORCH_CUDA_ARCH_LIST=8.6 \
+    MAX_JOBS=4
+
+RUN python3.10 -m pip install --no-cache-dir \
+        'tqdm>=4.65' \
+        'websockets>=11.0' \
+        ninja \
+        pytest
+
+COPY osn_gs/render/vendor /tmp/osn_gs_vendor
+RUN python3.10 -m pip install --no-build-isolation /tmp/osn_gs_vendor/diff_surfel_rasterization \
+    && python3.10 -c "import diff_surfel_rasterization; print('diff_surfel_rasterization built')" \
+    && rm -rf /tmp/osn_gs_vendor
+
+WORKDIR /workspace
+CMD ["bash"]

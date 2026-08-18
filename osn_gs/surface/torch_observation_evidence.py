@@ -37,11 +37,19 @@ priority order and ``tests/test_observation_evidence.py``'s
 
 import hashlib
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from osn_gs.gaussian.torch_model import TorchGaussianModel
-from osn_gs.render.gaussian_rasterizer import OSNGaussianRasterizer
 from osn_gs.render.torch_fallback import TorchCamera, _auto_chunk_size
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    # Annotation-only at runtime. Importing this eagerly closes the cycle
+    # osn_gs.render -> osn_gs.render.gaussian_rasterizer -> osn_gs.gaussian ->
+    # osn_gs.surface -> here -> osn_gs.render.gaussian_rasterizer, which
+    # breaks whenever `osn_gs.render` is the first subpackage imported (e.g.
+    # `import osn_gs.render.diff_surfel_loader`). Annotations in this module
+    # are already strings via `from __future__ import annotations`.
+    from osn_gs.render.gaussian_rasterizer import OSNGaussianRasterizer
 from osn_gs.surface.torch_voxel_hierarchy import STATE_EMPTY, TorchVoxelGaussianHierarchy
 from osn_gs.utils.torch_ops import require_torch
 
