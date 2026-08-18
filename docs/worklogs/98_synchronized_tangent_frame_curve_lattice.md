@@ -2,7 +2,7 @@
 
 ## 상태
 
-**완료 — Decision B: PARAMETRIC_PATCH_MODEL_LIMIT.** Worklog 96의 per-seed 독립 transversal 방향 선택을 latent surface 위 전역 동기화 tangent frame field로 대체했다. Worklog 97의 `inconsistent_transversal_curve_direction` 실패는 크게 줄었다(block/component 기준 91.7%→30.3% invalid). 그러나 parameterization이 성공한 component만 봐도 최종 6×6 degree-2 NURBS는 여전히 압도적으로 extrapolative/unsafe다(조건부 valid_supported 4.8~7.1%). 따라서 curve construction/parameterization은 더 이상 병목이 아니며, 다음 bounded 결정은 parametric patch representation/fitting model 자체를 다뤄야 한다. Visible Gaussian training, ADC, region ownership, Worklog 95 latent-surface estimator, supported-query 규약, continuous segment-support 요구, 기존 seed provenance, NURBS degree(2)·6×6 control grid, Worklog 97 external-UV/network-native fitting, held-out·safety 기준은 모두 미변경이다.
+**완료 — 범위를 좁힌 결론(정정, 아래 "결과 해석 정정" 참고).** Worklog 96의 per-seed 독립 transversal 방향 선택을 latent surface 위 전역 동기화 tangent frame field로 대체했다. Worklog 97의 `inconsistent_transversal_curve_direction` 실패는 크게 줄었다(component 개수 기준 combined 91.7%→30.30% invalid, 2900: 17.14%, final: 45.16% — 아래 "결과 해석 정정" 표 참고). 그러나 parameterization이 성공한 component만 봐도 지금 경로(동기화 field→tree-integrated UV→고정 6×6 degree-2 tensor-product LSQ NURBS)는 여전히 대부분 extrapolative/unsafe다. **이것이 증명하는 것은 "NURBS representation 자체가 병목"이 아니라, 이 특정 fitting 경로(고정 capacity + 이 UV 구성 + 이 LSQ 절차)가 부족하다는 것뿐이다** — latent-surface support는 확보됐고, curve construction은 널리 가능해졌고, 전역 동기화된 tangent 방향이 Worklog 97의 독립-방향 실패를 상당 부분 해소한다는 것까지가 이 worklog가 실제로 증명한 범위다. 어느 구성 요소(patch 표현 자체/고정 capacity/generic LSQ 절차/UV 구성) 때문에 최종 fit이 여전히 부족한지는 이 배치만으로 분리되지 않는다. Visible Gaussian training, ADC, region ownership, Worklog 95 latent-surface estimator, supported-query 규약, continuous segment-support 요구, 기존 seed provenance, NURBS degree(2)·6×6 control grid, Worklog 97 external-UV/network-native fitting, held-out·safety 기준은 모두 미변경이다.
 
 ## 구현
 
@@ -38,19 +38,33 @@ Tree가 아닌(cycle-closing) 모든 지지 edge에 대해 한쪽 node의 `e_u`�
 
 `baseline_compatible` checkpoint 2900(held-out evidence 1915), final(held-out evidence 3920). 산출물: `output/extent_ab/val98/synchronized_frame_lattice_replay.json`, `..._final.json`.
 
-| checkpoint | 경로 | attempted | invalid/failed | valid_supported | extrapolative | unsafe | held-out p95 |
+| checkpoint | 경로 | attempted | invalid/failed(개수, raw %) | valid_supported(evidence-weighted) | extrapolative(evidence-weighted) | unsafe(evidence-weighted) | held-out p95 |
 |---|---|---:|---:|---:|---:|---:|---:|
-| 2900 | A PCA_UV | 7 | 0 | 3.41% | 94.36% | 2.23% | 6.65 |
-| 2900 | B 독립방향 native | 7 | 7(100%) | 0.00% | 0.00% | 0.00% | — |
-| 2900 | **C 동기화 field native** | **35** | **6(20.4%)** | **5.67%** | 44.05% | 29.86% | 7.95 |
-| final | A PCA_UV | 5 | 0 | 13.96% | 64.67% | 21.37% | 8.08 |
-| final | B 독립방향 native | 5 | 4(80%) | 0.00% | 21.37% | 0.00% | 4.66 |
-| final | **C 동기화 field native** | **31** | **14(50.1%)** | **2.38%** | 21.27% | 26.27% | 7.64 |
+| 2900 | A PCA_UV | 7 | 0/7 (0.00%) | 3.41% | 94.36% | 2.23% | 6.65 |
+| 2900 | B 독립방향 native | 7 | 7/7 (100.00%) | 0.00% | 0.00% | 0.00% | — |
+| 2900 | **C 동기화 field native** | **35** | **6/35 (17.14%)** | **5.67%** | 44.05% | 29.86% | 7.95 |
+| final | A PCA_UV | 5 | 0/5 (0.00%) | 13.96% | 64.67% | 21.37% | 8.08 |
+| final | B 독립방향 native | 5 | 4/5 (80.00%) | 0.00% | 21.37% | 0.00% | 4.66 |
+| final | **C 동기화 field native** | **31** | **14/31 (45.16%)** | **2.38%** | 21.27% | 26.27% | 7.64 |
+| combined | B 독립방향 native | 12 | 11/12 (91.67%) | — | — | — | — |
+| combined | **C 동기화 field native** | **66** | **20/66 (30.30%)** | — | — | — | — |
 
-**Worklog 97의 `inconsistent_transversal_curve_direction` 실패는 크게 줄어든다**: block/component 기준 combined invalid rate가 B의 91.7%(11/12)에서 C의 30.3%(20/66)로 떨어진다 — region-level 전역 field가 seed마다 독립적으로 방향을 고르던 문제를 실제로 해소함을 실측이 보여준다. C는 또한 훨씬 많은 patch candidate(66개 component, worklog96의 12개 seed 대비)를 만든다 — 하나의 전역 field가 여러 coherent 영역으로 자연 분해되기 때문이다.
+**Component 개수 기준 raw invalid rate**(다음 두 줄이 실제 raw JSON `components_attempted`/`components_fit_failed_or_invalid`에서 직접 계산한 값이다 — 최초 배포판은 이 수치를 evidence-weighted `parameterization_invalid` fraction과 혼동해 2900을 20.4%, final을 50.1%로 잘못 기재했다. 두 수치는 서로 다른 지표(raw component count 기준 vs. held-out evidence 비중 가중)이며, raw 값이 "몇 개 component 중 몇 개가 실패했는가"의 정확한 답이다):
 
-그러나 **parameterization이 성공한 component만 조건부로 봐도 최종 NURBS는 여전히 대부분 extrapolative/unsafe다**: 2900에서 조건부(비-invalid) valid_supported는 5.67%/(1-20.4%)=7.1%, extrapolative 55.3%, unsafe 37.5%; final에서 조건부 valid_supported는 2.38%/(1-50.1%)=4.8%, extrapolative 42.6%, unsafe 52.6%다. C의 valid_supported는 checkpoint마다 결과가 엇갈린다(2900: A 3.41%보다 높음, final: A 13.96%보다 낮음) — 두 checkpoint 모두에서 A보다 일관되게 낫다고 할 근거는 없다. 다만 extrapolative+unsafe 합계는 C가 두 checkpoint 모두 A보다 낮다(2900: 73.9% vs 96.6%, final: 47.5% vs 86.0%).
+- 2900: 6/35 = **17.14%**
+- final: 14/31 = **45.16%**
+- combined: 20/66 = **30.30%**
+
+`evidence_weighted_fractions`의 `parameterization_invalid`(2900: 20.42%, final: 50.08%)는 **다른 지표**다 — 각 실패 component가 그 region의 held-out evidence 중 자기 share(=held_out_evidence_size/len(components))만큼을 "parameterization_invalid" 분류에 기여한 값이며, 위 표의 valid_supported/extrapolative/unsafe와 같은 evidence-weighted 축에 있다. 두 지표를 섞어 쓰지 않는다.
+
+**Worklog 97의 `inconsistent_transversal_curve_direction` 실패는 크게 줄어든다**: component 개수 기준 combined invalid rate가 B의 91.67%(11/12)에서 C의 30.30%(20/66)로 떨어진다 — region-level 전역 field가 seed마다 독립적으로 방향을 고르던 문제를 실제로 해소함을 실측이 보여준다. C는 또한 훨씬 많은 patch candidate(66개 component, worklog96의 12개 seed 대비)를 만든다 — 하나의 전역 field가 여러 coherent 영역으로 자연 분해되기 때문이다.
+
+그러나 **parameterization이 성공한 component만 조건부로 봐도(evidence-weighted 값 기준) 최종 NURBS는 여전히 대부분 extrapolative/unsafe다**: 2900에서 조건부(비-invalid) valid_supported는 5.67%/(1-20.42%)=7.1%, extrapolative 55.4%, unsafe 37.5%; final에서 조건부 valid_supported는 2.38%/(1-50.08%)=4.8%, extrapolative 42.6%, unsafe 52.6%다. C의 valid_supported는 checkpoint마다 결과가 엇갈린다(2900: A 3.41%보다 높음, final: A 13.96%보다 낮음) — 두 checkpoint 모두에서 A보다 일관되게 낫다고 할 근거는 없다. 다만 extrapolative+unsafe 합계는 C가 두 checkpoint 모두 A보다 낮다(2900: 73.9% vs 96.6%, final: 47.5% vs 86.0%).
+
+## 결과 해석 정정
+
+이 배치가 실제로 증명하는 것은 다음 네 가지뿐이다: (1) latent-surface support는 확보돼 있다, (2) curve construction은 널리 가능해졌다(usable seed·coherent component 수 증가), (3) 전역 동기화된 tangent 방향이 Worklog 97의 독립-방향 실패를 상당 부분(component 기준 91.67%→30.30%) 해소한다, (4) 그러나 지금 경로(동기화 field→tree-integrated UV→고정 6×6 degree-2 tensor-product LSQ)는 parameterization이 성공한 component에서도 대부분 extrapolative/unsafe다. **NURBS representation 자체가 이미 병목으로 증명됐다고 단정하지 않는다** — 고정 6×6 capacity, generic point LSQ fitting, curve-network을 point cloud로 collapse하는 방식, tree-integrated UV 자체의 parametric domain 품질 중 어느 것이 원인인지는 이 배치만으로 분리되지 않았다. 후속 배치가 이를 bounded gate로 분리해야 한다.
 
 ## 결정
 
-**B. PARAMETRIC_PATCH_MODEL_LIMIT.** Coherent U/V lattice는 이제 훨씬 널리 가능해졌고(combined invalid rate 91.7%→30.3%, patch candidate 수도 대폭 증가) intrinsic UV 자체는 대부분 유효하지만, **그 위에서 고정된 6×6 degree-2 tensor-product NURBS는 parameterization이 성공한 경우에도 압도적으로 extrapolative/unsafe로 남는다**(조건부 valid_supported 4.8~7.1%뿐). Curve construction과 parameterization은 더 이상 제한 요인이 아니다. 다음 bounded 결정은 **parametric patch representation/fitting model 자체**를 다뤄야 한다 — curve seeding으로 되돌아가지 않는다. 지시대로 이 배치는 여기서 architecture 결정으로 끝나며, 또 다른 고립 진단(curve-seed/PCA-axis/sign-flip/UV)을 추가하지 않는다.
+**결정 보류(범위 축소).** 이 worklog는 자체적으로 최종 architecture 결정을 내리지 않는다 — 원래 초안의 "Decision B: PARAMETRIC_PATCH_MODEL_LIMIT"는 과도한 일반화였다(위 "결과 해석 정정" 참고). Curve construction과 parameterization이 Worklog 97 대비 크게 개선됐다는 것과, 현재의 특정 fitting 경로가 여전히 대부분 extrapolative/unsafe를 낸다는 것 — 이 두 가지 좁은 사실만 확정한다. 어느 구성 요소(patch representation/고정 capacity/generic LSQ/UV 구성)가 원인인지 분리하는 것이 다음 bounded 배치의 과제다.

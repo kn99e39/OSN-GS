@@ -164,5 +164,5 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 ## 2026-08-18 전역 동기화 tangent frame 기반 curve lattice
 
 - [Worklog 98](worklogs/98_synchronized_tangent_frame_curve_lattice.md)은 Worklog 96의 per-seed 독립 transversal 방향 선택을 latent surface 위 전역 동기화 tangent frame field(3D 거리 기준 Dijkstra spanning tree로 parallel-transport, cycle-closing edge holonomy 검증)로 대체하고, A(Worklog96+PCA)/B(Worklog97 독립방향)/C(신규 동기화)를 fallback 없이 paired 비교했다.
-- 실측 결과 Worklog 97의 방향-불일치 실패율이 combined 91.7%(11/12)에서 30.3%(20/66)로 크게 줄고 patch candidate 수도 대폭 늘었지만, parameterization이 성공한 경우에도 최종 NURBS는 여전히 압도적으로 extrapolative/unsafe였다(조건부 valid_supported 4.8~7.1%).
-- **Decision B: PARAMETRIC_PATCH_MODEL_LIMIT** — curve construction/parameterization은 더 이상 병목이 아니며, 다음 결정은 parametric patch representation/fitting model 자체를 다뤄야 한다.
+- 실측 결과(component 개수 기준) Worklog 97의 방향-불일치 실패율이 combined 91.67%(11/12)에서 30.30%(20/66)로 크게 줄고 patch candidate 수도 대폭 늘었지만, parameterization이 성공한 경우에도 최종 NURBS는 여전히 압도적으로 extrapolative/unsafe였다(조건부 valid_supported 4.8~7.1%).
+- **범위를 좁힌 결론**: latent-surface support 확보, curve construction 널리 가능, 전역 동기화 방향이 Worklog 97 실패를 상당 부분 해소 — 이 세 가지만 확정한다. NURBS representation 자체가 병목이라고 이미 증명됐다고 단정하지 않으며, 고정 capacity/generic LSQ/UV 구성 중 어느 것이 원인인지는 후속 배치가 분리해야 한다.
