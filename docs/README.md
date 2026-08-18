@@ -182,5 +182,11 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 ## 2026-08-19 Intrinsic-integrability-driven local chart atlas
 
 - [Worklog 101](worklogs/101_intrinsic_integrability_local_chart_atlas.md)은 "component 하나 = chart 하나" 가정을 버리고, 동일 source graph 위에서 결정론적 anchor·BFS ring 성장·매 ring마다 Worklog 100 differential 적분/검증으로 여러 개의 겹칠 수 있는 local chart atlas를 구성하고, A(단일 전역 chart)/B(local chart atlas)를 fallback 없이 비교했다.
-- 실측 결과 chart 단위 domain validity가 39.1%(단일 전역 chart)→**100%(115/115, atlas)**로 크게 개선됐지만, 그 chart의 92.2%(106/115)가 고정 6×6 NURBS grid의 최소 evidence(36점)에도 못 미쳤고, 실제 fit이 시도된 나머지 9개도 전부 unsafe/extrapolative로 끝나 valid_supported는 여전히 0%였다.
+- 실측 결과 chart 단위 domain validity가 39.1%(단일 전역 chart)→**100%(115/115, atlas)**로 크게 개선됐지만, 그 chart의 92.2%(106/115)가 고정 6×6 NURBS grid의 최소 evidence(36점)에도 못 미쳤고, 실제 fit이 시도된 나머지 9개도 전부 unsafe/extrapolative로 끝나 valid_supported는 여전히 0%였다. **(Worklog 102 정정) "100%"는 이미 만들어진 chart만의 항등적 수치이며, 의미 있는 지표인 source-evidence 커버리지는 87.8%(1089/1241 node), 나머지 12.2%는 명시적 unchartable로 남는다.**
 - **Decision B: VALID_CHARTS_EXIST_BUT_CURRENT_PATCH_MODEL_FAILS** — intrinsic parameterization 문제는 chart scale에서 operationally 해소됐다고 선언하고, 다음 gate는 local/adaptive parametric patch representation을 다뤄야 한다.
+
+## 2026-08-19 Pre-fit patch identifiability / adaptive capacity gate
+
+- [Worklog 102](worklogs/102_patch_identifiability_capacity_gate.md)는 Worklog 101의 "36 미만 자동 기각" 컷오프를 실제 solver와 동일한 basis-table 기반 pre-fit algebraic identifiability(design matrix가 achievable rank에 도달하는가)로 대체하고, A(고정 6×6)/B(adaptive quadratic, 3×3~6×6)/C(support-adaptive, degree 1~2)를 fallback 없이 비교했다.
+- 실측 결과 C는 identifiable chart 비율을 23.5%(A)→68.7%로 크게 늘렸지만 VALID_SUPPORTED는 A/B/C 모두 정확히 2/115(1.7%)로 동일했다 — 새로 식별 가능해진 52개 chart 중 어느 하나도 안전한 fit에 도달하지 못했다.
+- **Decision C: TENSOR_PRODUCT_PATCH_STILL_FAILS** — intrinsic parameterization이나 capacity 부족이 아니라 현재 local tensor-product NURBS fitting/representation 자체의 한계로 확인됐다. Worklog 101의 "chart 단위 domain validity 100%" 표현도 항등적 수치일 뿐이라고 정정하고, 의미 있는 지표(source-evidence 커버리지 87.8%)를 명시했다.

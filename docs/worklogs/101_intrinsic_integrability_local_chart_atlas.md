@@ -1,5 +1,9 @@
 # Worklog 101 — intrinsic-integrability-driven local chart atlas
 
+## 정정 (Worklog 102 라운드에서 반영)
+
+이 worklog 본문의 "chart 단위 domain validity 100%(115/115)"라는 표현은 **이미 materialize된 chart들이 구성 조건에 의해 domain-valid하다는 항등적 사실**일 뿐, intrinsic parameterization 문제가 evidence 전체에 대해 보편적으로 해소됐다는 의미로 읽어서는 안 된다. 실제로 의미 있는 지표는 **source-evidence 커버리지**다 — combined 1241개 source node 중 1089개(87.8%)만 유효 chart로 커버됐고, 나머지 152개(12.2%)는 어떤 anchor로도 chart를 만들지 못해 명시적으로 unchartable로 남았다. "115/115"는 분모 선택(이미 만들어진 chart만 셈)에 의한 항등식이며, 그 자체를 "100% 해결"의 근거로 인용하지 않는다.
+
 ## 상태
 
 **완료 — Decision B: VALID_CHARTS_EXIST_BUT_CURRENT_PATCH_MODEL_FAILS.** Worklog 100은 Worklog 98의 coherent component 전체를 하나의 전역 chart로 강제하는 것 자체가 다수 component에게 잘못된 scale임을 실측으로 확인했다(global differential integration이 domain-valid를 15→18/46로만 늘렸고, 그 위의 local-injectivity 보정은 단 하나도 추가로 구제하지 못했다). 이번 배치는 "하나의 component = 하나의 chart"라는 가정 자체를 버리고, 같은 continuously-supported source graph 위에서 결정론적으로 성장시킨 **여러 개의 겹칠 수 있는 local chart로 이루어진 atlas**로 대체했다. 실측 결과는 뚜렷하다 — **chart 단위 domain validity는 100%(115/115)**로, 기존 단일-전역-chart 방식의 39.1%(18/46, Worklog 100 candidate B와 동일 수치)를 압도한다. 하지만 그렇게 만들어진 chart의 **92.2%(106/115)는 고정된 6×6/degree-2 control grid가 필요로 하는 최소 evidence(36점)에도 못 미치는** 너무 작은 크기(median 9점)였고, 실제로 fit이 시도된 나머지 9개(7.8%)는 전부 unsafe(8개) 또는 extrapolative(1개)로 끝나 **valid_supported는 여전히 0%**다. Domain 구성 문제는 chart 단위에서 사실상 해소됐지만, 그 위에 얹힌 고정 patch representation(6×6 tensor-product NURBS)이 병목이 됐다 — 다음 architecture gate는 patch representation/fitting model 자체를 다뤄야 한다. Visible Gaussian training, ADC, region ownership, Worklog 95 latent-surface estimator, continuous support contract, Worklog 98 synchronized tangent-frame field, Worklog 100 symmetric edge differential·global differential integration·수정된 source-graph validator, held-out evaluation, 기존 6×6/degree-2 NURBS fitter는 모두 미변경이다. Chart 생성·성장·종료 어디에도 fit 오차·held-out 오차·extrapolative/unsafe 분류를 사용하지 않는다(AST로 검증).

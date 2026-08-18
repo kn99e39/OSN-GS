@@ -569,5 +569,11 @@ Initial Gaussians -> one-time density-adaptive voxel bootstrap -> initial patch 
 ## 2026-08-19 Intrinsic-integrability-driven local chart atlas
 
 - Worklog 101은 "component 하나 = chart 하나" 가정을 버리고, 동일 continuously-supported source graph 위에서 결정론적 anchor(centroid-최근접, 이후 farthest-uncovered)로부터 BFS hop-count ring을 성장시키며 매 ring마다 Worklog 100의 전역 differential 적분·수정된 validator를 다시 적용해 처음 무효가 되는 ring 직전을 maximal chart로 확정하는 방식(NURBS/held-out 오차 미사용, AST로 확인)으로 여러 개의 겹칠 수 있는 local chart atlas를 구성하고, A(단일 전역 chart, Worklog 100 candidate B 그대로)/B(local chart atlas)를 fallback 없이 비교했다.
-- 실측: chart 단위 domain validity가 39.1%(단일 전역 chart)에서 100%(115/115, atlas)로 크게 개선됐지만, 그 chart의 92.2%(106/115)가 고정 6×6 NURBS grid의 최소 evidence(36점)보다 작았고(median 9점), 실제 fit이 시도된 나머지 9개(7.8%)도 8개 unsafe·1개 extrapolative로 전부 실패해 valid_supported는 여전히 combined 0%였다.
+- 실측: chart 단위 domain validity가 39.1%(단일 전역 chart)에서 100%(115/115, atlas)로 크게 개선됐지만, 그 chart의 92.2%(106/115)가 고정 6×6 NURBS grid의 최소 evidence(36점)보다 작았고(median 9점), 실제 fit이 시도된 나머지 9개(7.8%)도 8개 unsafe·1개 extrapolative로 전부 실패해 valid_supported는 여전히 combined 0%였다. **(Worklog 102 정정) "100%"는 이미 만들어진 chart 분모만의 항등적 수치다 — 의미 있는 지표는 source-evidence 커버리지 87.8%(1089/1241 node)이며 12.2%는 명시적 unchartable.**
 - **Decision B: VALID_CHARTS_EXIST_BUT_CURRENT_PATCH_MODEL_FAILS** — intrinsic parameterization 문제는 chart scale에서 operationally 해소된 것으로 선언하고, 다음 architecture gate는 local/adaptive parametric patch representation을 다뤄야 한다. 6×6 fitting을 만족시키려고 chart를 인위적으로 키우지 않는다.
+
+## 2026-08-19 Pre-fit patch identifiability / adaptive capacity gate
+
+- Worklog 102는 Worklog 101의 count 기반("36 미만 자동 기각") 컷오프를 실제 solver가 쓰는 것과 동일한 `TorchNURBSSurface._basis_tables` 기반 tensor-product B-spline design matrix의 SVD로 판정하는 pre-fit algebraic identifiability(design matrix가 자기 shape의 achievable rank `min(sample_count, control_variable_count)`에 도달하는가)로 대체하고, A(고정 6×6/degree2, 무변경)/B(degree 2 고정, 3×3~6×6 중 최대 identifiable grid)/C(degree 1(2×2 최소)~degree 2(3×3 최소), identifiability만으로 order·capacity 결정)를 fallback 없이 비교했다.
+- 실측: C는 identifiable chart 비율을 A의 23.5%(27/115)에서 68.7%(79/115)로 크게 늘렸지만, VALID_SUPPORTED는 A/B/C 모두 정확히 2/115(1.7%)로 동일했다 — C가 새로 식별 가능하게 만든 52개 chart 중 어느 하나도 안전한 fit에 이르지 못했다(identifiable 79개 중 97.5%가 unsafe/extrapolative).
+- **Decision C: TENSOR_PRODUCT_PATCH_STILL_FAILS** — intrinsic parameterization이나 과도한 고정 capacity 문제가 아니라 현재 local tensor-product NURBS fitting/representation 자체의 한계로 확인됐다. 또한 Worklog 101의 "chart 단위 domain validity 100%"는 항등적 수치일 뿐임을 정정하고, 의미 있는 지표인 source-evidence 커버리지(87.8%)를 명시했다.
