@@ -559,3 +559,9 @@ Initial Gaussians -> one-time density-adaptive voxel bootstrap -> initial patch 
 - Worklog 99는 Worklog 98의 orientation-coherent component에 pre-fit parameter-domain validity 검증(UV-공간 local Jacobian으로 fold/singularity/extreme-stretch 검출)을 추가하고, A(고정 6×6 LSQ)/B(adaptive capacity NURBS, capacity는 구조 정보로만 결정)/C(Gordon-style curve-network, 고전 원칙과 OSN-GS 근사를 명시 분리)를 fallback 없이 domain-valid component에만 paired 비교했다.
 - 실측: orientation-coherent component의 combined 80.4%(37/46)가 A/B/C 비교 이전에 이미 UV fold로 무효였고(원인 100% foldover), domain-valid로 남은 소수에서도 세 candidate 모두 valid_supported가 사실상 0%였다.
 - **Decision D: PARAMETER_DOMAIN_LIMIT** — Worklog 98은 frame orientation은 풀었지만 전역 parameter-domain 구성은 풀지 못했다. 다음 결정은 intrinsic parameterization 자체를 다뤄야 한다.
+
+## 2026-08-19 Bounded intrinsic parameterization architecture gate
+
+- Worklog 100은 Worklog 99 validator의 두 confound(local Jacobian 이웃이 UV-공간 kNN이었던 것, orientation 기준이 독립 부호 PCA/support normal이었던 것)를 source-graph adjacency·synchronized frame(단일 전역 flip은 canonicalize, fold 아님)으로 같은 배치에서 수정하고, A(Worklog 98 tree-integrated UV, 무변경)/B(모든 supported edge를 동시에 푸는 전역 differential least-squares 적분)/C(B에서 엄격히 초기화된 고정 스케줄 local-injectivity 보정)를 fallback 없이 paired 비교했다.
+- 실측: 수정된 validator 기준 A의 domain-invalid율은 67.4%(31/46, Worklog 99의 confound 있던 80.4%보다 낮으나 여전히 다수)였고, B는 domain-valid를 15→18/46로만 늘렸으며, C는 46개 component 전부에서 B의 domain-valid 여부와 정확히 일치(추가 구제 0건)했다. B의 domain-invalid component에서도 differential residual 절대값은 작았다(fold가 noise가 아니라 진짜 국소 방향 반전).
+- **Decision C: COMPONENT_SCALE_NOT_GLOBALLY_PARAMETERIZABLE** — synchronized tangent field는 국소적으로 일관되지만 현재 component scale에서 다수가 하나의 chart로 전역 적분될 수 없다. 다음 분해는 NURBS fitting 이전에 intrinsic integrability·chart 구조가 이끌어야 한다.

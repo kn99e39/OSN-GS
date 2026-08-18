@@ -1,10 +1,10 @@
 ---
 name: project_parametric_patch_architecture_gate
-description: worklog 99 -- pre-fit UV domain validity check finds 80.4% of worklog 98's orientation-coherent components already fold before A/B/C fitting comparison; Decision D, next target is intrinsic parameterization, not NURBS capacity/fitting
+description: worklog 99 -- pre-fit UV domain validity check finds 80.4% of worklog 98's orientation-coherent components already fold before A/B/C fitting comparison; HISTORICAL, validator had 2 confounds, superseded by [[project_intrinsic_parameterization_architecture_gate]]
 metadata:
   node_type: memory
   type: project
-  modified: 2026-08-18
+  modified: 2026-08-19
 ---
 
 Worklog 99 resolves Worklog 98's open question: whether the remaining extrapolative/unsafe outcome is caused by fixed NURBS capacity, generic LSQ fitting, curve-network-vs-point-cloud construction, or the tree-integrated UV domain itself. Visible Gaussian training, ADC, region ownership, Worklog 95's estimator, continuous support contract, Worklog 98's synchronized tangent-frame field/coherent components, each component's input 3D evidence, held-out evaluation, and the existing extrapolative/unsafe/valid_supported definitions are all fixed. No candidate tuned using held-out results.
