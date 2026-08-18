@@ -178,3 +178,9 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - [Worklog 100](worklogs/100_intrinsic_parameterization_architecture_gate.md)은 Worklog 99 validator의 두 confound(UV-공간 kNN, 독립 부호 PCA normal)를 같은 배치에서 수정하고, A(tree-integrated UV)/B(전역 differential 동시 적분)/C(B에서 엄격히 초기화된 orientation-preserving 보정)를 fallback 없이 paired 비교했다.
 - 실측 결과 수정된 validator 기준 A의 domain-invalid율은 67.4%(31/46, confound 있던 80.4%보다 낮지만 여전히 다수)였고, B는 domain-valid를 15→18/46로만 늘렸으며, **C는 46개 전부에서 B의 domain-valid 여부와 정확히 일치**(추가 구제 0건, 나머지 28개는 전부 `not_globally_parameterizable_at_current_scale`로 fail-closed)했다. B의 domain-invalid component에서도 differential residual 자체는 작아, fold가 noise가 아니라 진짜 국소 방향 반전임을 뒷받침한다.
 - **Decision C: COMPONENT_SCALE_NOT_GLOBALLY_PARAMETERIZABLE** — synchronized tangent field는 국소적으로 일관되지만 현재 component scale에서 다수가 하나의 chart로 전역 적분될 수 없다. 앞으로의 분해는 NURBS fitting 이전에 intrinsic integrability·chart 구조 자체가 이끌어야 한다.
+
+## 2026-08-19 Intrinsic-integrability-driven local chart atlas
+
+- [Worklog 101](worklogs/101_intrinsic_integrability_local_chart_atlas.md)은 "component 하나 = chart 하나" 가정을 버리고, 동일 source graph 위에서 결정론적 anchor·BFS ring 성장·매 ring마다 Worklog 100 differential 적분/검증으로 여러 개의 겹칠 수 있는 local chart atlas를 구성하고, A(단일 전역 chart)/B(local chart atlas)를 fallback 없이 비교했다.
+- 실측 결과 chart 단위 domain validity가 39.1%(단일 전역 chart)→**100%(115/115, atlas)**로 크게 개선됐지만, 그 chart의 92.2%(106/115)가 고정 6×6 NURBS grid의 최소 evidence(36점)에도 못 미쳤고, 실제 fit이 시도된 나머지 9개도 전부 unsafe/extrapolative로 끝나 valid_supported는 여전히 0%였다.
+- **Decision B: VALID_CHARTS_EXIST_BUT_CURRENT_PATCH_MODEL_FAILS** — intrinsic parameterization 문제는 chart scale에서 operationally 해소됐다고 선언하고, 다음 gate는 local/adaptive parametric patch representation을 다뤄야 한다.
