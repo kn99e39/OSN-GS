@@ -211,3 +211,9 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - 실측(checkpoint `baseline_compatible/final`): 입력 1,685,549개 전부 배정, unassigned 0, multiply-owned 0, spatially disconnected subset 0, `coverage_identity_holds=true`. Subset 166,585개(최대 559,541 = 33.2%, median 1, singleton 64.8% = Gaussian의 6.4%, 크기 ≤8이 94.1% = Gaussian의 15.8%). Normal-compatibility cut edge 3,389,357개(spatial edge의 46.1%). Fallback ownership 107,947개(6.40%) — 전부 자기 자신만의 subset을 갖고, 어떤 Gaussian도 제외되지 않는다.
 - Review export `output/osn_gs_coverage_first_subset_partition/`: ORIGINAL_SCENE / NORMAL_ORIENTATION_VIEW / GAUSSIAN_SUBSET_PARTITION / SUBSET_BOUNDARY_VIEW 4개 전체 scene view(crop 없음, 원본 좌표계, WebRenderer 폴더 규약 준수) + **각 view의 `render.ppm`**(trainer의 `_preview_camera`와 동일한 카메라라 checkpoint 자신의 `render.ppm`과 픽셀 비교 가능) + `partition_report.json`.
 - **이 worklog는 architecture 성공/실패 판단을 내리지 않는다** — 사용자가 GAUSSIAN_SUBSET_PARTITION을 직접 시각적으로 검토한 뒤에야 다음 단계(subset-local Trustable Gaussian 추정 → latent surface → 1 subset : 1 NURBS Patch)를 구현한다.
+
+## 2026-08-19 Coverage-first Gaussian Subset partition checkpoint 정정 (Worklog 106)
+
+- Worklog 105가 쓴 `output/extent_ab/val64/baseline_compatible/final`이 사용자 확인 결과 제대로 학습된 3DGS scene이 아니었다(opacity reset 직후, PSNR 20.1) — 사용자가 `output/osn_gs_scene/3000`(PSNR 23.92)을 지목했다.
+- [Worklog 106](worklogs/106_coverage_first_partition_checkpoint_correction.md)은 Worklog 105 코드를 전혀 바꾸지 않고 checkpoint만 바꿔 재실측했다: 입력 1,033,693개 전부 배정(`coverage_identity_holds=true`), subset 29,944개(max 857,342=82.9%), normal-cut edge 25.1%(구 checkpoint는 46.1%), fallback ownership 2.09%(구 checkpoint는 6.40%). Export `output/osn_gs_coverage_first_subset_partition_v2/`.
+- **Worklog 94~105의 모든 checkpoint-의존 수치는 이 정정 전까지 잘못된 scene에서 나온 것이었다** — 코드/architecture 논리 결론(버그 수정, decision 자체)이 아니라 수치만 재검증이 필요하다. 다음 실측은 `output/osn_gs_scene/3000`을 기본으로 쓴다.

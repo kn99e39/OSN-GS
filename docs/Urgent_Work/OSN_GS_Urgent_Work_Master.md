@@ -340,6 +340,12 @@ Fix 후 lockstep 재검증: step 1은 float32 noise 수준까지 일치, step 60
 
 **이 addendum은 coverage-first architecture의 성공/실패, over-segmentation 수용 여부, normal 임계값 적절성에 대해 어떤 판단도 내리지 않는다.** 사용자가 GAUSSIAN_SUBSET_PARTITION을 직접 시각적으로 검토한 뒤에야 다음 단계(subset-local Trustable Gaussian 추정 -> latent surface -> 1 subset : 1 NURBS Patch)를 구현한다. 자세한 내용은 `docs/worklogs/105_coverage_first_gaussian_subset_partition.md` 참고.
 
+**Worklog 106 addendum(coverage-first partition checkpoint 정정 재실측 — architecture 판단 없음)**: Worklog 105가 쓴 `output/extent_ab/val64/baseline_compatible/final`(iteration 3100, PSNR 20.1, opacity reset 직후)이 사용자 확인 결과 제대로 학습된 3DGS scene이 아니었다 — `HANDOFF_2026-08-19.md` §0이 이미 표시해 둔 미해결 checkpoint-identity 질문이 실제 문제로 확인된 것이다. 사용자가 **`output/osn_gs_scene/3000`(PSNR 23.92)을 명시적으로 지목**했다. Worklog 105의 코드(모듈·테스트·export 스크립트)는 전혀 바꾸지 않고 checkpoint만 바꿔 재실행했다.
+
+**재실측**: 입력 = visible Gaussian **1,033,693개 전부** 배정(`coverage_identity_holds=true`, unassigned/multiply-owned/disconnected 전부 0). Subset **29,944개**(min 1 / median 1 / mean 34.52 / p95 7 / max **857,342 = 82.94%**). Singleton 21,612개(subset의 72.17%, Gaussian의 2.09%). Normal-compatibility cut edge 1,121,675개(spatial edge의 **25.13%** — 구 checkpoint의 46.1%보다 훨씬 낮음). Fallback ownership 21,612개(**2.09%** — 구 checkpoint의 6.40%보다 훨씬 낮음). 정성적 관찰(architecture 판단 아님): opacity-reset 직후의 noisy checkpoint가 orientation 신호 자체를 훼손해 fallback/cut 비율을 끌어올렸을 가능성과 방향이 일치한다.
+
+Export `output/osn_gs_coverage_first_subset_partition_v2/`(Worklog 105의 잘못된-checkpoint export는 `output/osn_gs_coverage_first_subset_partition/`에 비교용으로 그대로 보존). **`output/extent_ab/val64/baseline_compatible/final`을 참조하는 Worklog 94~105의 모든 checkpoint-의존 수치는 이 정정 전까지 잘못된 scene에서 나온 것으로 취급한다** — 그 worklog들의 코드/논리 결론(버그 수정, negative decision 자체)까지 무효는 아니지만, 구체적 수치는 재검증 전까지 참고용일 뿐이다. 향후 실측은 사용자가 다른 checkpoint를 지목하지 않는 한 `output/osn_gs_scene/3000`을 기본으로 쓴다. 자세한 내용은 `docs/worklogs/106_coverage_first_partition_checkpoint_correction.md` 참고.
+
 ## 7. 현재 검증 상태와 알려진 위험
 
 Repository-wide pytest 최신 기준선(worklog 105 구현 후): 1152 passed, 1 skipped, 1 warning, 18 subtests passed in 376.95s.
