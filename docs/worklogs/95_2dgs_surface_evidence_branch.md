@@ -270,7 +270,23 @@ Downstream NURBS 계약 — **비율과 절대량을 함께 봐야 한다**(수�
 
 ### 12.6 명시적으로 기록하는 한계
 
-1. **Legacy 지표의 ill-posedness.** `torch_gaussian_manifold_affinity`의 `normal_direction_separation_over_thickness = gap / average_thickness`는 진짜 surfel에서 분모가 0이라 `extract_covariance_frame`의 `sqrt(1e-12)` floor에 걸려 포화된다(`normal_thickness_is_at_the_degenerate_floor: true`로 보고됨). `same_surface` 분기가 먼저 평가되고 이 값을 읽지 않으므로 영향은 `ambiguous` → `parallel_but_separate` 방향뿐이지만, **surface element에 per-primitive band thickness라는 개념이 정의되지 않는다**는 사실 자체를 결과로 보고한다. 공개된 `epsilon_regularized` 보조 측정이 별도로 있다.
+1. **Legacy 지표의 ill-posedness — 실측으로 영향 확인함.** `torch_gaussian_manifold_affinity`의 `normal_direction_separation_over_thickness = gap / average_thickness`는 진짜 surfel에서 분모가 0이라 `extract_covariance_frame`의 `sqrt(1e-12)` floor에 걸려 포화된다(`normal_thickness_is_at_the_degenerate_floor: true`로 보고됨). **surface element에 per-primitive band thickness라는 개념이 정의되지 않는다**는 사실 자체가 결과다.
+
+   그 왜곡의 크기를 가정하지 않고 측정하기 위해 `epsilon_regularized` 보조 측정(`epsilon_ratio=1e-3`, thickness median `1.0e-6` → `6.7e-6`)을 같은 chain으로 별도 실행했다. **결론은 바뀌지 않는다**:
+
+   | 지표 | `exact_rank2` | `epsilon_regularized` |
+   |---|---:|---:|
+   | affinity `same_surface` | 0.12565 | 0.12243 |
+   | affinity `parallel_but_separate` | 0.15742 | 0.15893 |
+   | `valid_supported` | 0.000147 | 0.000148 |
+   | `unresolved` | 0.89176 | 0.89109 |
+   | coherent chart-unit | 0.89208 | 0.89185 |
+   | held-out p95 | 5.566 | 5.566 |
+   | region 수 | 74 | 76 |
+   | usable curve network | 43 | 47 |
+   | structural curve segment | 153 | 169 |
+
+   예상한 방향(포화된 비율이 pair를 `ambiguous`에서 `parallel_but_separate`로 밀어냄)은 실제로 나타나지만 크기가 작다 — `same_surface` 상대차 2.6%. downstream 판정 지표(`valid_supported`, `unresolved`, held-out p95)는 사실상 동일하다. 즉 **이 브랜치의 판정은 adapter 모드에 robust하다.** 다만 `epsilon_regularized`가 region과 curve를 소폭 더 만들어내므로(74→76, 43→47, 153→169), 이 legacy 계약을 rank-2 evidence에 맞게 정리하면 downstream이 조금 더 회수할 여지는 있다.
 2. **Shape class 분류기 artifact.** 2DGS의 `planar_surfel` 비율(14.0%)이 vanilla(14.8%)보다 높지 않은데, 이는 평면성이 나빠서가 아니라(planarity median 1.65e7) `elongation = (s_u/s_v)^2`가 median 23.5로 `elongation_threshold=3`을 넘어 대부분 `ambiguous_shape`로 떨어지기 때문이다. rank-2 evidence에 대한 분류기 한계이지 기하 진술이 아니다.
 3. **Region evidence 예산.** Worklog 82의 `build_same_surface_adjacency`가 region-owned evidence에 대해 dense `cdist`(O(n^2) 메모리)를 계산한다. 2DGS는 단일 region에 evidence를 훨씬 많이 모으므로(한 region이 57,274점 → 12.2GiB 요구) 양 arm에 **동일한 결정론적 20,000점 예산**을 적용했다. region 0(57,274)과 63(51,536)만 잘렸다. Worklog 94의 full-evidence replay와 절대값을 직접 비교할 수 없다.
 4. **비율 대 절대량.** 수용 evidence 총량이 37.4배 다르므로 downstream *비율* 비교는 분모가 다르다. 위 표는 두 가지를 모두 제시한다.
