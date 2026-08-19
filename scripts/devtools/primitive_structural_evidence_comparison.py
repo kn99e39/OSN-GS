@@ -371,7 +371,7 @@ def analyze_arm(name: str, checkpoint: Path, cap: int, device: str, surfel_mode:
     )
     load_seconds = time.perf_counter() - start
 
-    evidence = context[-1]
+    evidence = context[9]
     downstream = analyze_representation(REPRESENTATION_RAW_CENTER_BASELINE, context, device)
     structural = structural_metrics(context, device)
     curves = curve_network_metrics(context)
