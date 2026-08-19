@@ -72,6 +72,20 @@ from osn_gs.surface.torch_surface_evidence_representation_gate import (
 _STRUCTURAL_SAMPLE_CAP = 4000
 _ORIENTATION_NEIGHBORS = 8
 
+# Region-owned evidence budget for the DOWNSTREAM chain, applied identically to
+# both arms. Worklog 82's `build_same_surface_adjacency` computes a dense
+# `cdist(positions, positions)` over a region's owned evidence, which is O(n^2)
+# in memory. The 2DGS arm concentrates far more evidence into single regions
+# than the volumetric arm does -- one 2DGS region asked for a 12.2 GiB distance
+# matrix (~57k points) on a 12 GB card -- so the raw owned sets are subsampled
+# to this budget with a deterministic stride before the constructor sees them.
+#
+# This is a DISCLOSED deviation from worklog 94's replay, which ran on full
+# owned evidence because the volumetric regions it measured were small enough.
+# It is applied by the same rule to both arms, so the arms stay comparable with
+# each other; absolute numbers are NOT directly comparable with worklog 94's.
+_REGION_EVIDENCE_BUDGET = 20000
+
 
 def _median(values: list[float]) -> float | None:
     if not values:
@@ -364,12 +378,38 @@ def shape_class_metrics(region_context) -> dict:
     }
 
 
-def analyze_arm(name: str, checkpoint: Path, cap: int, device: str, surfel_mode: str) -> dict:
+def _bound_region_evidence(context, budget: int):
+    """Deterministically subsample each region's owned evidence to `budget`.
+
+    Returns the context with a new `owned` mapping and a record of what was
+    bounded, so the report states it rather than hiding it.
+    """
+
+    context = list(context)
+    owned = context[4]
+    bounded: dict[int, list[int]] = {}
+    trimmed: dict[int, dict[str, int]] = {}
+    for region_id, indices in owned.items():
+        if len(indices) <= budget:
+            bounded[region_id] = indices
+            continue
+        stride = torch.linspace(0, len(indices) - 1, budget).round().long().unique().tolist()
+        bounded[region_id] = [indices[position] for position in stride]
+        trimmed[region_id] = {"owned": len(indices), "used": len(bounded[region_id])}
+    context[4] = bounded
+    return tuple(context), trimmed
+
+
+def analyze_arm(
+    name: str, checkpoint: Path, cap: int, device: str, surfel_mode: str,
+    region_evidence_budget: int = _REGION_EVIDENCE_BUDGET,
+) -> dict:
     start = time.perf_counter()
     context = _load_region_context(
         checkpoint, cap, device, surfel_covariance_mode=surfel_mode
     )
     load_seconds = time.perf_counter() - start
+    context, trimmed_regions = _bound_region_evidence(context, region_evidence_budget)
 
     evidence = context[9]
     downstream = analyze_representation(REPRESENTATION_RAW_CENTER_BASELINE, context, device)
@@ -383,6 +423,8 @@ def analyze_arm(name: str, checkpoint: Path, cap: int, device: str, surfel_mode:
         "covariance_shape_classes": shape_class_metrics(context),
         "manifold_relations": relation_metrics(context),
         "region_context_seconds": load_seconds,
+        "region_evidence_budget": region_evidence_budget,
+        "regions_trimmed_to_budget": trimmed_regions,
         "downstream": downstream["summary"],
         "downstream_regions": downstream["regions"],
         "structural": structural["summary"],
@@ -427,6 +469,14 @@ def main() -> None:
             "disclosed wherever its numbers are quoted."
         ),
     )
+    parser.add_argument(
+        "--region_evidence_budget", type=int, default=_REGION_EVIDENCE_BUDGET,
+        help=(
+            "Deterministic per-region owned-evidence budget for the downstream "
+            "chain, applied identically to both arms. Worklog 82's adjacency "
+            "builder is O(n^2) in memory over a region's owned evidence."
+        ),
+    )
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
@@ -444,17 +494,30 @@ def main() -> None:
         "downstream_representation": REPRESENTATION_RAW_CENTER_BASELINE,
         "arms": [],
     }
+    args.output.parent.mkdir(parents=True, exist_ok=True)
     for name, checkpoint in arms:
         print(f"[comparison] analyzing arm {name} <- {checkpoint}", flush=True)
-        report["arms"].append(
-            analyze_arm(name, checkpoint, args.cap, args.device, args.surfel_covariance_mode)
-        )
-
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(report, indent=2, sort_keys=True), encoding="utf-8")
+        try:
+            report["arms"].append(
+                analyze_arm(
+                    name, checkpoint, args.cap, args.device,
+                    args.surfel_covariance_mode, args.region_evidence_budget,
+                )
+            )
+        except Exception as exc:  # noqa: BLE001
+            # One arm failing must not discard the other's completed analysis:
+            # a region-context build takes tens of minutes on a real
+            # multi-million primitive checkpoint.
+            print(f"[comparison] arm {name} FAILED: {type(exc).__name__}: {exc}", flush=True)
+            report["arms"].append({"arm": name, "error": f"{type(exc).__name__}: {exc}"})
+        # Written after every arm so a later failure cannot lose earlier work.
+        args.output.write_text(json.dumps(report, indent=2, sort_keys=True), encoding="utf-8")
     print(f"[comparison] wrote {args.output}", flush=True)
 
     for arm in report["arms"]:
+        if "error" in arm:
+            print(f"  {arm['arm']:<12} FAILED: {arm['error']}", flush=True)
+            continue
         summary = arm["downstream"]["evidence_fractions"]
         structural = arm["structural"]
         print(
