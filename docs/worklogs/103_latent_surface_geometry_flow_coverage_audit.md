@@ -93,13 +93,15 @@ Projection displacement는 local median spacing 대비 배수로, MLS 투영이 
 
 ## 8. Export 결과물
 
+**(2026-08-19 정정)** WebRenderer는 `iteration_<N>` 폴더당 `point_cloud.ply` 정확히 1개만 읽는다(0개 또는 1개의 `nurbs_surface.json`을 동반) — 초판에서 폴더 하나에 여러 ply를 섞어 넣었던 것을 발견해 전부 폴더 하나당 ply 1개로 재구성했다.
+
 - `output/osn_gs_scene_latent_coverage_audit/coverage_audit_report.json` — 위 표의 원본 전체(region별 세부 포함).
-- `output/osn_gs_scene_latent_coverage_audit/iteration_0000100/` — A. FULL_SCENE (`point_cloud.ply`, 전체 168만 Gaussian).
-- `output/osn_gs_scene_latent_coverage_audit/iteration_0000101/` — B. REGION_EVIDENCE (`full_scene.ply` + `region_owned_evidence.ply`).
-- `output/osn_gs_scene_latent_coverage_audit/iteration_0000102/` — C. RAW_VS_LATENT (`raw_region_evidence.ply` + `latent_projected_samples.ply` + `nurbs_surface.json`의 `base_curves`로 4,599개 displacement 선분).
-- `output/osn_gs_scene_latent_coverage_audit/iteration_0000103/` — D. ALL_LATENT_SURFACES (`full_scene.ply` + `latent_projected_samples.ply` + visualization NURBS 49개).
-- `output/osn_gs_scene_latent_coverage_audit/iteration_0000104/` — E. DOWNSTREAM_COMPARISON (`full_scene.ply` + visualization NURBS 49개 + Worklog 102 candidate-C patch 60개, `osn_gs_representation_kind` 필드로 patch별 출처 구분).
-- `output/osn_gs_scene_latent_coverage_audit/regions/region_<id>/iteration_0000001/` — region별 독립 export(raw/latent/unsupported ply + displacement curve + visualization NURBS), world 좌표계 그대로.
+- `output/osn_gs_scene_latent_coverage_audit/full_scene/iteration_0000001/` — 전체 168만 Gaussian(`point_cloud.ply`만, json 없음).
+- `output/osn_gs_scene_latent_coverage_audit/region_owned_evidence/iteration_0000001/` — 전 region raw evidence(`point_cloud.ply`만).
+- `output/osn_gs_scene_latent_coverage_audit/latent_projected_samples_with_displacement/iteration_0000001/` — latent projected sample(`point_cloud.ply`) + `nurbs_surface.json`(`base_curves`로 4,599개 displacement 선분).
+- `output/osn_gs_scene_latent_coverage_audit/latent_projected_samples_with_visualization_nurbs/iteration_0000001/` — 동일 latent sample(`point_cloud.ply`) + `nurbs_surface.json`(visualization NURBS 49개).
+- `output/osn_gs_scene_latent_coverage_audit/full_scene_with_worklog102_nurbs/iteration_0000001/` — 전체 Gaussian(`point_cloud.ply`) + `nurbs_surface.json`(Worklog 102 candidate-C patch 60개).
+- `output/osn_gs_scene_latent_coverage_audit/regions/region_<id>/{raw_region_evidence,unsupported_evidence,latent_projected_samples_with_displacement,latent_projected_samples_with_visualization_nurbs}/iteration_0000001/` — region별 독립 export, 각 폴더 ply 1개, world 좌표계 그대로.
 
 Worklog 98~102의 기존 historical replay output(`output/extent_ab/val99~val102/*.json`)은 전혀 덮어쓰지 않았다 — 전부 이전 raw-position geometry 흐름 하에서 생성된 결과로 그대로 보존된다.
 
@@ -112,7 +114,7 @@ python scripts/devtools/latent_surface_coverage_export.py \
     --device cuda --cap 2048
 ```
 
-WebRenderer에서 `output/osn_gs_scene_latent_coverage_audit/` 디렉터리를 통째로 열면 `iteration_0000100`~`iteration_0000104` 5개 stage를 iteration 전환만으로 비교할 수 있고, `regions/region_<id>/iteration_0000001/`을 region별로 열면 개별 region의 raw/latent/unsupported/displacement/visualization NURBS를 world 좌표계에서 독립적으로 볼 수 있다.
+WebRenderer에서 필요한 폴더들을 함께 선택해 로드하면(예: `full_scene`과 `latent_projected_samples_with_visualization_nurbs`를 동시에 선택) 여러 iteration으로 나뉘어 브라우징하며 비교할 수 있고, `regions/region_<id>/`의 각 하위 폴더를 region별로 열면 개별 region의 raw/latent/unsupported/displacement/visualization NURBS를 world 좌표계에서 독립적으로 볼 수 있다.
 
 ## 결론 없음
 

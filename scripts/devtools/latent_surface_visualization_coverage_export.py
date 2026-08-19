@@ -54,6 +54,7 @@ from osn_gs.surface.torch_latent_surface_visualization_coverage import materiali
 
 STAGE_D_ALL_LATENT_SURFACES = 103
 _SH_DC = 0.28209479177387814
+_ITER = "iteration_0000001"
 
 
 def _color_to_f_dc(rgb: tuple[float, float, float]) -> tuple[float, float, float]:
@@ -112,7 +113,7 @@ def _surface_to_patch_dict(patch_id: int, surface, extra: dict) -> dict:
     }
 
 
-def run(checkpoint: Path, cap: int, device: str, out_dir: Path, displacement_stride: int) -> dict:
+def run(checkpoint: Path, cap: int, device: str, out_dir: Path) -> dict:
     model, stable_ids = _load_model(checkpoint, device)
     (
         regions, points, covariance, owned, representative_positions,
@@ -182,29 +183,31 @@ def run(checkpoint: Path, cap: int, device: str, out_dir: Path, displacement_str
         )
         all_latent_samples.append(latent_samples_region)
 
-        # Region-isolated regeneration.
-        region_dir = out_dir / "regions" / f"region_{region_id}" / "iteration_0000001"
-        _write_diagnostic_ply(region_dir / "raw_region_evidence.ply", raw_evidence, (1.0, 1.0, 1.0), support.median_spacing * 0.3)
-        _write_diagnostic_ply(region_dir / "latent_projected_samples.ply", latent_samples_region, (0.2, 0.9, 0.9), support.median_spacing * 0.3)
-        _write_diagnostic_ply(region_dir / "unsupported_evidence.ply", audit.unsupported_raw_positions, (0.9, 0.2, 0.2), support.median_spacing * 0.3)
+        # Region-isolated regeneration -- ONE point_cloud.ply per folder,
+        # at most ONE nurbs_surface.json alongside it (WebRenderer
+        # directory contract).
+        region_root = out_dir / "regions" / f"region_{region_id}"
+        raw_dir = region_root / "raw_region_evidence" / _ITER
+        _write_diagnostic_ply(raw_dir / "point_cloud.ply", raw_evidence, (1.0, 1.0, 1.0), support.median_spacing * 0.3)
+
+        unsupported_dir = region_root / "unsupported_evidence" / _ITER
+        _write_diagnostic_ply(unsupported_dir / "point_cloud.ply", audit.unsupported_raw_positions, (0.9, 0.2, 0.2), support.median_spacing * 0.3)
+
         # Unrepresented fragments (post-subdivision): distinct color/kind so
         # they read as "latent geometry exists but no proxy could be fit"
         # rather than absence.
         unrepresented_positions_region = (
             torch.cat(unrepresented_positions_parts, dim=0) if unrepresented_positions_parts else torch.zeros((0, 3))
         )
-        _write_diagnostic_ply(region_dir / "unrepresented_latent_fragments.ply", unrepresented_positions_region, (1.0, 0.5, 0.0), support.median_spacing * 0.3)
-        displacement_segments_region = []
-        for unit in audit.units:
-            for row in range(0, int(unit.raw_positions.shape[0]), max(1, displacement_stride)):
-                displacement_segments_region.append([
-                    unit.raw_positions[row].detach().cpu().tolist(),
-                    unit.latent_positions[row].detach().cpu().tolist(),
-                ])
+        unrepresented_dir = region_root / "unrepresented_latent_fragments" / _ITER
+        _write_diagnostic_ply(unrepresented_dir / "point_cloud.ply", unrepresented_positions_region, (1.0, 0.5, 0.0), support.median_spacing * 0.3)
+
+        viz_dir = region_root / "latent_projected_samples_with_visualization_nurbs" / _ITER
+        _write_diagnostic_ply(viz_dir / "point_cloud.ply", latent_samples_region, (0.2, 0.9, 0.9), support.median_spacing * 0.3)
         _write_nurbs_json(
-            region_dir / "nurbs_surface.json", 1, viz_patches_region, base_curves=displacement_segments_region,
+            viz_dir / "nurbs_surface.json", 1, viz_patches_region,
             metadata={
-                "osn_gs_representation_kind": "region_isolated_latent_surface_coverage_subdivided",
+                "osn_gs_representation_kind": "latent_surface_coverage_visualization_nurbs_subdivided",
                 "region_id": region_id, "unrepresented_fragment_count": len(unrepresented_region),
             },
         )
@@ -227,19 +230,24 @@ def run(checkpoint: Path, cap: int, device: str, out_dir: Path, displacement_str
             "node_accounting_ok": (represented_count + unrepresented_count == supported_total),
         })
 
-    # D. ALL_LATENT_SURFACES regeneration.
-    all_latent_dir = out_dir / f"iteration_{STAGE_D_ALL_LATENT_SURFACES:07d}"
-    model.save_ply(all_latent_dir / "full_scene.ply")
+    # D. ALL_LATENT_SURFACES regeneration -- ONE point_cloud.ply per
+    # folder, at most ONE nurbs_surface.json alongside it.
+    full_scene_dir = out_dir / "full_scene" / _ITER
+    model.save_ply(full_scene_dir / "point_cloud.ply")
+
     all_latent_cat = torch.cat(all_latent_samples, dim=0) if all_latent_samples else torch.zeros((0, 3))
-    _write_diagnostic_ply(all_latent_dir / "latent_projected_samples.ply", all_latent_cat, (0.2, 0.9, 0.9), 0.02)
     all_unrepresented_positions = (
         torch.cat(all_unrepresented_position_parts, dim=0) if all_unrepresented_position_parts else torch.zeros((0, 3))
     )
-    _write_diagnostic_ply(all_latent_dir / "unrepresented_latent_fragments.ply", all_unrepresented_positions, (1.0, 0.5, 0.0), 0.02)
+    unrepresented_dir = out_dir / "unrepresented_latent_fragments" / _ITER
+    _write_diagnostic_ply(unrepresented_dir / "point_cloud.ply", all_unrepresented_positions, (1.0, 0.5, 0.0), 0.02)
+
+    viz_dir = out_dir / "latent_projected_samples_with_visualization_nurbs" / _ITER
+    _write_diagnostic_ply(viz_dir / "point_cloud.ply", all_latent_cat, (0.2, 0.9, 0.9), 0.02)
     _write_nurbs_json(
-        all_latent_dir / "nurbs_surface.json", STAGE_D_ALL_LATENT_SURFACES, all_viz_patches,
+        viz_dir / "nurbs_surface.json", STAGE_D_ALL_LATENT_SURFACES, all_viz_patches,
         metadata={
-            "osn_gs_representation_kind": "latent_surface_coverage_visualization_nurbs",
+            "osn_gs_representation_kind": "latent_surface_coverage_visualization_nurbs_subdivided",
             "count": len(all_viz_patches), "unrepresented_fragment_count": len(all_unrepresented_markers),
         },
     )
@@ -250,7 +258,11 @@ def run(checkpoint: Path, cap: int, device: str, out_dir: Path, displacement_str
 
     report = {
         "checkpoint": str(checkpoint), "cap": cap,
-        "stage_regenerated": str(all_latent_dir),
+        "global_export_dirs": {
+            "full_scene": str(full_scene_dir),
+            "unrepresented_latent_fragments": str(unrepresented_dir),
+            "latent_projected_samples_with_visualization_nurbs": str(viz_dir),
+        },
         "region_isolated_dir": str(out_dir / "regions"),
         "regions": region_reports,
         "global": {
@@ -275,11 +287,10 @@ def main() -> None:
     parser.add_argument("--checkpoint", type=Path, default=Path("output/extent_ab/val64/baseline_compatible/final"))
     parser.add_argument("--out", type=Path, default=Path("output/osn_gs_scene_latent_coverage_audit_subdivided"))
     parser.add_argument("--device", default="cuda")
-    parser.add_argument("--displacement-stride", type=int, default=1)
     args = parser.parse_args()
 
     start = time.perf_counter()
-    report = run(args.checkpoint, args.cap, args.device, args.out, args.displacement_stride)
+    report = run(args.checkpoint, args.cap, args.device, args.out)
     report["runtime_seconds"] = time.perf_counter() - start
 
     report_path = args.out / "visualization_coverage_certificate.json"

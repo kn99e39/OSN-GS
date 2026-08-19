@@ -37,9 +37,13 @@ Region별 represented 비율은 97.3%~99.2% 사이다. `visualization_coverage_c
 
 ## 4. Export
 
+**(2026-08-19 정정)** WebRenderer는 `iteration_<N>` 폴더당 `point_cloud.ply` 정확히 1개만 읽으므로(0~1개의 `nurbs_surface.json` 동반), 대표성 있는 point set마다 별도 폴더를 쓰도록 재구성했다.
+
 - `output/osn_gs_scene_latent_coverage_audit_subdivided/visualization_coverage_certificate.json` — 위 표의 원본 전체, region·unit·fragment 단위까지.
-- `output/osn_gs_scene_latent_coverage_audit_subdivided/iteration_0000103/` — 재생성된 D stage(`full_scene.ply` + `latent_projected_samples.ply` + subdivision 이후 NURBS 59개 + `unrepresented_latent_fragments.ply`).
-- `output/osn_gs_scene_latent_coverage_audit_subdivided/regions/region_<id>/iteration_0000001/` — region별 재생성(raw/latent/unsupported/unrepresented ply + displacement curve + subdivision 후 NURBS).
+- `output/osn_gs_scene_latent_coverage_audit_subdivided/full_scene/iteration_0000001/` — 재생성 대상 전체 Gaussian(`point_cloud.ply`만).
+- `output/osn_gs_scene_latent_coverage_audit_subdivided/latent_projected_samples_with_visualization_nurbs/iteration_0000001/` — latent projected sample(`point_cloud.ply`) + `nurbs_surface.json`(subdivision 이후 NURBS 59개).
+- `output/osn_gs_scene_latent_coverage_audit_subdivided/unrepresented_latent_fragments/iteration_0000001/` — 미표현 fragment(`point_cloud.ply`만, json 없음).
+- `output/osn_gs_scene_latent_coverage_audit_subdivided/regions/region_<id>/{raw_region_evidence,unsupported_evidence,unrepresented_latent_fragments,latent_projected_samples_with_visualization_nurbs}/iteration_0000001/` — region별 재생성, 각 폴더 ply 1개.
 - Worklog 103의 원본 export(`output/osn_gs_scene_latent_coverage_audit/`)는 전혀 건드리지 않았다.
 
 ## 5. 재현 명령

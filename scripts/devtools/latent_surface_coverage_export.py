@@ -11,8 +11,15 @@ would accept it.
 
 This script does NOT advance Worklog 98-102 architecture decisions. It
 reuses Worklog 102's existing candidate-C pipeline ONLY to produce the
-`worklog102_existing_nurbs` comparison representation (view E) -- nothing
-about that pipeline is modified, tuned, or re-decided here.
+`worklog102_existing_nurbs` comparison representation -- nothing about
+that pipeline is modified, tuned, or re-decided here.
+
+WebRenderer directory contract (explicit user correction): each
+``iteration_<N>`` folder holds EXACTLY ONE ``point_cloud.ply`` -- the
+renderer reads only one PLY per iteration folder. A folder with a
+``point_cloud.ply`` pairs with either exactly one ``nurbs_surface.json``
+or none. Every distinct point set therefore gets its OWN folder; nothing
+is ever combined into a shared PLY.
 
 No qualitative/architecture conclusion is computed or printed by this
 script -- only factual counts, displacement statistics, and file paths.
@@ -46,17 +53,8 @@ from osn_gs.surface.torch_latent_surface_tangent_frame_field import build_tangen
 from osn_gs.surface.torch_latent_surface_visualization_nurbs import fit_visualization_nurbs
 from osn_gs.surface.torch_nurbs import fit_torch_visible_surface_from_uv
 
-# Stage-view iteration labels (Section 11) -- distinct representation-kind
-# "iterations" the WebRenderer's own iteration switcher can toggle between,
-# all in the SAME world coordinates (no camera transform is applied or
-# needed -- the renderer is the same interactive 3D world throughout).
-STAGE_A_FULL_SCENE = 100
-STAGE_B_REGION_EVIDENCE = 101
-STAGE_C_RAW_VS_LATENT = 102
-STAGE_D_ALL_LATENT_SURFACES = 103
-STAGE_E_DOWNSTREAM_COMPARISON = 104
-
 _SH_DC = 0.28209479177387814
+_ITER = "iteration_0000001"
 
 
 def _color_to_f_dc(rgb: tuple[float, float, float]) -> tuple[float, float, float]:
@@ -64,31 +62,15 @@ def _color_to_f_dc(rgb: tuple[float, float, float]) -> tuple[float, float, float
 
 
 def _write_diagnostic_ply(path: Path, positions: Any, rgb: tuple[float, float, float], point_scale: float) -> int:
-    """Minimal renderer-compatible Gaussian PLY for a plain diagnostic
-    point set (no OSN-GS-specific columns) -- every point gets the SAME
-    flat color and a small isotropic scale so it renders as a visible dot,
-    not an interpretable trained Gaussian."""
+    """Minimal renderer-compatible Gaussian ``point_cloud.ply`` for a plain
+    diagnostic point set (no OSN-GS-specific columns) -- every point gets
+    the SAME flat color and a small isotropic scale so it renders as a
+    visible dot, not an interpretable trained Gaussian. ``path`` must be
+    the sole PLY in its own folder (WebRenderer directory contract)."""
 
     path.parent.mkdir(parents=True, exist_ok=True)
     count = int(positions.shape[0])
-    if count == 0:
-        # Still write a valid, empty PLY rather than skipping the file --
-        # zero coverage must be visible as zero, not as a missing file.
-        header = (
-            "ply\nformat ascii 1.0\nelement vertex 0\n"
-            "property float x\nproperty float y\nproperty float z\n"
-            "property float f_dc_0\nproperty float f_dc_1\nproperty float f_dc_2\n"
-            "property float opacity\nproperty float scale_0\nproperty float scale_1\nproperty float scale_2\n"
-            "property float rot_0\nproperty float rot_1\nproperty float rot_2\nproperty float rot_3\n"
-            "end_header\n"
-        )
-        path.write_text(header, encoding="utf-8")
-        return 0
-
-    positions_np = positions.detach().cpu().numpy()
-    f_dc = _color_to_f_dc(rgb)
-    log_scale = float(torch.log(torch.tensor(max(point_scale, 1e-6))).item())
-    lines = [
+    header_lines = [
         "ply", "format ascii 1.0", f"element vertex {count}",
         "property float x", "property float y", "property float z",
         "property float f_dc_0", "property float f_dc_1", "property float f_dc_2",
@@ -97,17 +79,20 @@ def _write_diagnostic_ply(path: Path, positions: Any, rgb: tuple[float, float, f
         "property float rot_0", "property float rot_1", "property float rot_2", "property float rot_3",
         "end_header",
     ]
-    header = "\n".join(lines) + "\n"
-    body_rows = []
-    opacity_logit = 10.0  # sigmoid(10) ~= 0.99995, fully opaque diagnostic point
-    for row in positions_np:
-        body_rows.append(
-            f"{row[0]:.6f} {row[1]:.6f} {row[2]:.6f} "
-            f"{f_dc[0]:.6f} {f_dc[1]:.6f} {f_dc[2]:.6f} {opacity_logit:.6f} "
-            f"{log_scale:.6f} {log_scale:.6f} {log_scale:.6f} "
-            f"1.0 0.0 0.0 0.0"
-        )
-    path.write_text(header + "\n".join(body_rows) + "\n", encoding="utf-8")
+    header = "\n".join(header_lines) + "\n"
+    if count == 0:
+        path.write_text(header, encoding="utf-8")
+        return 0
+    positions_np = positions.detach().cpu().numpy()
+    f_dc = _color_to_f_dc(rgb)
+    log_scale = float(torch.log(torch.tensor(max(point_scale, 1e-6))).item())
+    rows = [
+        f"{row[0]:.6f} {row[1]:.6f} {row[2]:.6f} "
+        f"{f_dc[0]:.6f} {f_dc[1]:.6f} {f_dc[2]:.6f} 10.0 "
+        f"{log_scale:.6f} {log_scale:.6f} {log_scale:.6f} 1.0 0.0 0.0 0.0"
+        for row in positions_np
+    ]
+    path.write_text(header + "\n".join(rows) + "\n", encoding="utf-8")
     return count
 
 
@@ -146,8 +131,8 @@ def _pick_field_anchor(seeds) -> tuple[object, object] | tuple[None, None]:
 
 def _worklog102_patches_for_region(train_evidence, region_chart, representative_positions, representative_index, support) -> list[dict]:
     """Reuses Worklog 102's existing candidate-C pipeline UNCHANGED, purely
-    to populate the `worklog102_existing_nurbs` comparison representation
-    (view E). No architecture decision is made or re-evaluated here."""
+    to populate the `worklog102_existing_nurbs` comparison representation.
+    No architecture decision is made or re-evaluated here."""
 
     seeds = build_seed_curves(train_evidence, region_chart, representative_positions, representative_index, support)
     anchor_position, anchor_hint = _pick_field_anchor(seeds)
@@ -186,16 +171,10 @@ def run(checkpoint: Path, cap: int, device: str, out_dir: Path, displacement_str
     ) = _region_analysis(model, stable_ids, cap, device)
 
     region_reports = []
-    global_full_scene_written = False
     all_latent_samples = []
     all_viz_patches: list[dict] = []
     all_worklog102_patches: list[dict] = []
     all_displacement_segments: list[list[list[float]]] = []
-
-    # A. FULL_SCENE -- written once, shared by every stage that includes it.
-    full_scene_path = out_dir / f"iteration_{STAGE_A_FULL_SCENE:07d}" / "point_cloud.ply"
-    model.save_ply(full_scene_path)
-    global_full_scene_written = True
 
     for region in regions.regions:
         region_id = region.region_id
@@ -224,7 +203,7 @@ def run(checkpoint: Path, cap: int, device: str, out_dir: Path, displacement_str
         all_viz_patches.extend(viz_patches_region)
 
         region_chart = chart_by_region.get(region_id)
-        train_evidence, _held = raw_evidence, None
+        train_evidence = raw_evidence
         worklog102_patches_region = []
         try:
             worklog102_patches_region = _worklog102_patches_for_region(
@@ -234,18 +213,12 @@ def run(checkpoint: Path, cap: int, device: str, out_dir: Path, displacement_str
             region_reports.append({"region": region_id, "worklog102_comparison_error": f"{type(exc).__name__}: {exc}"})
         all_worklog102_patches.extend(worklog102_patches_region)
 
-        # C. RAW_VS_LATENT / region-isolated exports.
-        region_dir = out_dir / "regions" / f"region_{region_id}" / "iteration_0000001"
-        _write_diagnostic_ply(region_dir / "raw_region_evidence.ply", raw_evidence, (1.0, 1.0, 1.0), support.median_spacing * 0.3)
-        supported_indices = torch.tensor(
-            sorted({node for unit in audit.units for node in unit.node_indices}), dtype=torch.long,
-        ) if audit.units else torch.zeros((0,), dtype=torch.long)
         latent_samples_region = (
             torch.cat([unit.latent_positions for unit in audit.units], dim=0)
             if audit.units else torch.zeros((0, 3))
         )
-        _write_diagnostic_ply(region_dir / "latent_projected_samples.ply", latent_samples_region, (0.2, 0.9, 0.9), support.median_spacing * 0.3)
-        _write_diagnostic_ply(region_dir / "unsupported_evidence.ply", audit.unsupported_raw_positions, (0.9, 0.2, 0.2), support.median_spacing * 0.3)
+        all_latent_samples.append(latent_samples_region)
+
         displacement_segments_region = []
         for unit in audit.units:
             for row in range(0, int(unit.raw_positions.shape[0]), max(1, displacement_stride)):
@@ -253,12 +226,30 @@ def run(checkpoint: Path, cap: int, device: str, out_dir: Path, displacement_str
                     unit.raw_positions[row].detach().cpu().tolist(),
                     unit.latent_positions[row].detach().cpu().tolist(),
                 ])
-        _write_nurbs_json(
-            region_dir / "nurbs_surface.json", 1, viz_patches_region, base_curves=displacement_segments_region,
-            metadata={"osn_gs_representation_kind": "region_isolated_latent_surface_coverage", "region_id": region_id},
-        )
         all_displacement_segments.extend(displacement_segments_region)
-        all_latent_samples.append(latent_samples_region)
+
+        # Region-isolated exports -- ONE point_cloud.ply per folder, at
+        # most ONE nurbs_surface.json alongside it.
+        region_root = out_dir / "regions" / f"region_{region_id}"
+        raw_dir = region_root / "raw_region_evidence" / _ITER
+        _write_diagnostic_ply(raw_dir / "point_cloud.ply", raw_evidence, (1.0, 1.0, 1.0), support.median_spacing * 0.3)
+
+        unsupported_dir = region_root / "unsupported_evidence" / _ITER
+        _write_diagnostic_ply(unsupported_dir / "point_cloud.ply", audit.unsupported_raw_positions, (0.9, 0.2, 0.2), support.median_spacing * 0.3)
+
+        displacement_dir = region_root / "latent_projected_samples_with_displacement" / _ITER
+        _write_diagnostic_ply(displacement_dir / "point_cloud.ply", latent_samples_region, (0.2, 0.9, 0.9), support.median_spacing * 0.3)
+        _write_nurbs_json(
+            displacement_dir / "nurbs_surface.json", 1, [], base_curves=displacement_segments_region,
+            metadata={"osn_gs_representation_kind": "latent_surface_projection_displacement", "region_id": region_id},
+        )
+
+        viz_dir = region_root / "latent_projected_samples_with_visualization_nurbs" / _ITER
+        _write_diagnostic_ply(viz_dir / "point_cloud.ply", latent_samples_region, (0.2, 0.9, 0.9), support.median_spacing * 0.3)
+        _write_nurbs_json(
+            viz_dir / "nurbs_surface.json", 1, viz_patches_region,
+            metadata={"osn_gs_representation_kind": "latent_surface_coverage_visualization_nurbs", "region_id": region_id},
+        )
 
         region_reports.append({
             "region": region_id,
@@ -277,57 +268,56 @@ def run(checkpoint: Path, cap: int, device: str, out_dir: Path, displacement_str
             "visualization_nurbs_materialized": len(viz_patches_region),
             "visualization_nurbs_failed": len(audit.units) - len(viz_patches_region),
             "worklog102_comparison_patch_count": len(worklog102_patches_region),
+            "export_dirs": {
+                "raw_region_evidence": str(raw_dir), "unsupported_evidence": str(unsupported_dir),
+                "latent_projected_samples_with_displacement": str(displacement_dir),
+                "latent_projected_samples_with_visualization_nurbs": str(viz_dir),
+            },
         })
 
-    # B. REGION_EVIDENCE -- full scene + every region's raw evidence, combined.
-    region_evidence_dir = out_dir / f"iteration_{STAGE_B_REGION_EVIDENCE:07d}"
-    model.save_ply(region_evidence_dir / "full_scene.ply")
     all_raw_region_points = torch.cat(
         [points[torch.tensor(owned[r.region_id], dtype=torch.long)] for r in regions.regions if len(owned.get(r.region_id, [])) >= 4],
         dim=0,
     ) if any(len(owned.get(r.region_id, [])) >= 4 for r in regions.regions) else torch.zeros((0, 3))
-    _write_diagnostic_ply(region_evidence_dir / "region_owned_evidence.ply", all_raw_region_points, (1.0, 0.85, 0.2), 0.02)
-
-    # D. ALL_LATENT_SURFACES -- full scene + all projected latent positions + all viz NURBS.
-    all_latent_dir = out_dir / f"iteration_{STAGE_D_ALL_LATENT_SURFACES:07d}"
-    model.save_ply(all_latent_dir / "full_scene.ply")
     all_latent_cat = torch.cat(all_latent_samples, dim=0) if all_latent_samples else torch.zeros((0, 3))
-    _write_diagnostic_ply(all_latent_dir / "latent_projected_samples.ply", all_latent_cat, (0.2, 0.9, 0.9), 0.02)
-    _write_nurbs_json(
-        all_latent_dir / "nurbs_surface.json", STAGE_D_ALL_LATENT_SURFACES, all_viz_patches,
-        metadata={"osn_gs_representation_kind": "latent_surface_coverage_visualization_nurbs", "count": len(all_viz_patches)},
-    )
 
-    # C (global) -- raw vs latent, all regions, plus displacement segments.
-    raw_vs_latent_dir = out_dir / f"iteration_{STAGE_C_RAW_VS_LATENT:07d}"
-    _write_diagnostic_ply(raw_vs_latent_dir / "raw_region_evidence.ply", all_raw_region_points, (1.0, 1.0, 1.0), 0.02)
-    _write_diagnostic_ply(raw_vs_latent_dir / "latent_projected_samples.ply", all_latent_cat, (0.2, 0.9, 0.9), 0.02)
+    # Global stages -- each its OWN folder, one point_cloud.ply, 0 or 1 nurbs_surface.json.
+    full_scene_dir = out_dir / "full_scene" / _ITER
+    model.save_ply(full_scene_dir / "point_cloud.ply")
+
+    region_evidence_dir = out_dir / "region_owned_evidence" / _ITER
+    _write_diagnostic_ply(region_evidence_dir / "point_cloud.ply", all_raw_region_points, (1.0, 0.85, 0.2), 0.02)
+
+    displacement_dir = out_dir / "latent_projected_samples_with_displacement" / _ITER
+    _write_diagnostic_ply(displacement_dir / "point_cloud.ply", all_latent_cat, (0.2, 0.9, 0.9), 0.02)
     _write_nurbs_json(
-        raw_vs_latent_dir / "nurbs_surface.json", STAGE_C_RAW_VS_LATENT, [], base_curves=all_displacement_segments,
+        displacement_dir / "nurbs_surface.json", 1, [], base_curves=all_displacement_segments,
         metadata={"osn_gs_representation_kind": "latent_surface_projection_displacement", "segment_count": len(all_displacement_segments)},
     )
 
-    # E. DOWNSTREAM_COMPARISON -- full scene + viz NURBS + worklog102 NURBS, merged, tagged.
-    downstream_dir = out_dir / f"iteration_{STAGE_E_DOWNSTREAM_COMPARISON:07d}"
-    model.save_ply(downstream_dir / "full_scene.ply")
+    viz_dir = out_dir / "latent_projected_samples_with_visualization_nurbs" / _ITER
+    _write_diagnostic_ply(viz_dir / "point_cloud.ply", all_latent_cat, (0.2, 0.9, 0.9), 0.02)
     _write_nurbs_json(
-        downstream_dir / "nurbs_surface.json", STAGE_E_DOWNSTREAM_COMPARISON,
-        all_viz_patches + all_worklog102_patches,
-        metadata={
-            "osn_gs_representation_kinds": ["latent_surface_coverage_visualization_nurbs", "worklog102_existing_nurbs"],
-            "visualization_nurbs_count": len(all_viz_patches), "worklog102_nurbs_count": len(all_worklog102_patches),
-        },
+        viz_dir / "nurbs_surface.json", 1, all_viz_patches,
+        metadata={"osn_gs_representation_kind": "latent_surface_coverage_visualization_nurbs", "count": len(all_viz_patches)},
+    )
+
+    worklog102_dir = out_dir / "full_scene_with_worklog102_nurbs" / _ITER
+    model.save_ply(worklog102_dir / "point_cloud.ply")
+    _write_nurbs_json(
+        worklog102_dir / "nurbs_surface.json", 1, all_worklog102_patches,
+        metadata={"osn_gs_representation_kind": "worklog102_existing_nurbs", "count": len(all_worklog102_patches)},
     )
 
     report = {
         "checkpoint": str(checkpoint), "cap": cap,
         "full_scene_gaussian_count": len(model),
-        "stages": {
-            "A_full_scene": str(full_scene_path.parent),
-            "B_region_evidence": str(region_evidence_dir),
-            "C_raw_vs_latent": str(raw_vs_latent_dir),
-            "D_all_latent_surfaces": str(all_latent_dir),
-            "E_downstream_comparison": str(downstream_dir),
+        "global_export_dirs": {
+            "full_scene": str(full_scene_dir),
+            "region_owned_evidence": str(region_evidence_dir),
+            "latent_projected_samples_with_displacement": str(displacement_dir),
+            "latent_projected_samples_with_visualization_nurbs": str(viz_dir),
+            "full_scene_with_worklog102_nurbs": str(worklog102_dir),
         },
         "region_isolated_dir": str(out_dir / "regions"),
         "regions": region_reports,
