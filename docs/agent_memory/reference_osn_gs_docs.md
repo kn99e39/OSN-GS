@@ -5,11 +5,12 @@ metadata:
   node_type: memory
   type: reference
   originSessionId: 9f58b1e8-0abf-4c0b-a3b4-3b8396c6006c
-  modified: 2026-07-31T06:37:18.621Z
+  modified: 2026-08-19T08:15:27.109Z
 ---
 
 Read in this order at the start of a session that needs project context:
 
+0. `docs/Urgent_Work/HANDOFF_2026-08-19.md` — **read this FIRST if it still exists** (check for a newer-dated HANDOFF_*.md first and prefer that). Session-continuity briefing: as of that date there is an unresolved blocking question over whether `output/extent_ab/val64/baseline_compatible/final` (the checkpoint every "real replay" in worklogs 94-104 used) is actually the user's intended scene, plus a real Worklog 98 raw-vs-latent-position geometry bug found and fixed in Worklog 103, plus an unanswered methodological question about whether raw Gaussian centers (image-loss-only trained, no surface constraint, in both OSN-GS and baseline 3DGS) are even valid surface evidence for the whole chart/NURBS line. Do not treat Worklog 94-102's Decisions as settled without reading this first.
 1. `docs/architecture.md` — what OSN-GS is and the intended one-way data flow (visible Gaussians → NURBS → infer occluded surface → generate Gaussians there). Corrected 2026-07-15; see [[project-osn-gs-direction]].
 2. `docs/worklogs/19_nurbs_direction_correction.md` — **read before any older worklog** (verify this file still exists before relying on it: as of 2026-07-31 it does NOT — `docs/worklogs/` went through at least two rounds of pruning/renumbering since this note was written, and the number `19` is now reused for an unrelated file, `19_volumetric_gaussian_reliability_scene_dataset.md` — see [[project_volumetric_gaussian_scene_dataset]]. The direction-correction content itself is recoverable only via `git log -- docs/worklogs/` history, not by filename lookup. The RULE it stated — visible Gaussians are never moved by the NURBS — is still current per [[project_osn_gs_direction]]; it's only the specific worklog file/number reference that's stale). States the direction rule (visible Gaussians are never moved by the NURBS) and explicitly takes precedence over worklogs 01–18, which were written under the opposite "NURBS is the source of truth" premise and are intentionally left uncorrected as historical records.
 3. `TODO.md` — the current work queue. Its own rule (line 1): delete an item once its goal is confirmed. Remaining items are secondary quality-gap candidates plus a NURBS-construction stabilization roadmap.
