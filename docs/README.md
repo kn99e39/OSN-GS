@@ -196,3 +196,9 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - [Worklog 103](worklogs/103_latent_surface_geometry_flow_coverage_audit.md)은 Worklog 98이 Worklog 95 latent surface 추정기의 실제 투영 좌표(`query.positions`)를 버리고 raw Gaussian center로 되돌아가 있던 divergence를 발견·수정했다 — Worklog 98~102의 geometry 의존 결론 전부(위 Decision들 포함)가 corrected latent position으로 재실측되기 전까지는 authoritative가 아니다.
 - 신규 coverage-audit/visualization-NURBS 모듈로, 다운스트림 승인 기준(chart validity, identifiability, NURBS 안전성)에 전혀 구애받지 않고 latent surface의 spatial coverage를 있는 그대로 export했다: region-owned evidence 7,774개 중 latent-supported 4,599개(59.2%), support unit 86개, visualization NURBS 성공 49/86.
 - **이 worklog는 architecture 결정을 내리지 않는다** — coverage가 충분한지는 사용자가 export 결과를 직접 시각적으로 판단한다.
+
+## 2026-08-19 Latent surface visualization coverage 완결성 보정
+
+- [Worklog 104](worklogs/104_latent_surface_visualization_coverage_completeness.md)는 Worklog 103이 실패한 37/86 unit을 조사해 전부 `insufficient_points_for_any_surface`(크기 1~2 node 고립 조각, 원천적으로 표현 불가능)임을 확인하고, 신규 `torch_latent_surface_visualization_coverage.py`로 latent surface 자체는 건드리지 않고 시각화 유닛만 연결성 기반으로 결정론적으로 subdivision했다.
+- 실측 결과 latent-supported 4,599개 중 4,539개(98.7%)가 visualization NURBS로 표현되고 나머지 60개(1.3%)만 정확한 source node ID와 함께 명시적 unrepresented fragment로 남았다 — `node_accounting_ok`가 7개 region 전부 기계적으로 검증됨(모든 node가 표현되거나 명시적으로 미표현 처리, 조용한 누락 없음).
+- **이 worklog도 architecture 결정을 내리지 않는다** — 완결성 조건이 충족됐으므로 이제 `ALL_LATENT_SURFACES` view를 사용자가 정성적으로 검토해도 된다는 사실만 보고한다.

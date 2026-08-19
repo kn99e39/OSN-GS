@@ -322,6 +322,10 @@ Fix 후 lockstep 재검증: step 1은 float32 noise 수준까지 일치, step 60
 
 **실측(checkpoint `baseline_compatible/final`, 7-region, 순수 사실 보고, 정성적 결론 없음)**: region-owned raw evidence 7,774개 중 latent-supported 4,599개(59.2%), unsupported 3,175개(40.8%), latent support unit 86개, visualization NURBS 시도 86개 중 성공 49개·실패 37개. Projection displacement는 local spacing 대비 median 0.22~0.30배, p95 0.77~0.96배, max 1.24~1.67배(region별). 자세한 내용과 전체 export 경로는 `docs/worklogs/103_latent_surface_geometry_flow_coverage_audit.md` 참고 — **이 worklog는 coverage가 충분한지, chart/NURBS 구성이 맞는지에 대해 어떤 판단도 내리지 않는다.**
 
+**Worklog 104 addendum(latent surface visualization coverage 완결성 보정 — architecture 결정 없음)**: Worklog 103이 실패한 37/86 unit을 직접 재현·조사한 결과, **전부 `insufficient_points_for_any_surface`이며 예외 없이 크기 1~2 node짜리 고립 조각**이었다(표면은 최소 3개의 비공선 점이 필요하므로 원천적으로 subdivision으로 구제 불가능한 최소 크기). 신규 `torch_latent_surface_visualization_coverage.py::materialize_unit_with_subdivision`이 latent surface 자체·다운스트림 승인 기준을 전혀 건드리지 않고 **시각화 유닛만** 재조직한다 — 실패한 unit을 자신의 continuously-supported graph 연결성만으로(convex hull/bounding box/PCA rectangle/임의 bridging 없이) 결정론적으로 하위 조각으로 나누고 재귀적으로 재시도하며, 최소 크기 미만이면 정확한 source node ID와 사유를 담아 `UNREPRESENTED_LATENT_FRAGMENT`로 report한다. 구현 중 실제 버그를 발견·수정했다 — fit을 먼저 시도한 뒤 실패해야만 subdivision하는 순서였는데, fitter가 연결성을 신경 쓰지 않고 서로 연결된 적 없는 두 조각도 수치적으로 "성공"시킬 수 있어, connected-component 분석을 fit 시도보다 먼저 하도록 순서를 바꿨다.
+
+**실측**: latent-supported 4,599개 중 **4,539개(98.7%)가 visualization NURBS로 표현**되고 나머지 60개(1.3%)만 명시적 unrepresented fragment로 남았다(전부 원래의 37개 unit과 동일한 1~2 node 고립 조각). Visualization NURBS patch 수는 49→59로 늘었다. `node_accounting_ok`(모든 latent-supported node가 표현되거나 명시적으로 미표현 처리됐는지)가 7개 region 전부 `true`로 기계적으로 검증됐다 — 어떤 node도 조용히 사라지지 않는다. Worklog 103의 원본 export는 그대로 보존했고, 재생성된 결과는 별도 디렉터리(`output/osn_gs_scene_latent_coverage_audit_subdivided/`)에 저장했다. 자세한 내용은 `docs/worklogs/104_latent_surface_visualization_coverage_completeness.md` 참고 — **이 worklog도 coverage 충분성이나 architecture 유지/폐기에 대해 어떤 판단도 내리지 않는다.**
+
 ## 7. 현재 검증 상태와 알려진 위험
 
 Repository-wide pytest 최신 기준선(worklog 88 구현 전 재확인): 931 passed, 1 skipped, 1 warning, 18 subtests passed in 250.18s.
