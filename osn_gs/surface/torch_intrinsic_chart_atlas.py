@@ -154,6 +154,18 @@ def _restrict_component(
         for edge in holonomy_edges
     )
 
+    # Geometry provenance (Worklog 103): a chart is a restriction, never a
+    # re-derivation -- raw_positions/projection_displacement/latent_supported
+    # must survive the restriction unchanged, indexed the same way
+    # positions/normals/e_u/e_v already are. Older parent components built
+    # before this contract (raw_positions=None) leave the restriction's
+    # provenance fields None too, rather than fabricating them.
+    raw_positions = component.raw_positions[selector] if component.raw_positions is not None else None
+    projection_displacement = (
+        component.projection_displacement[selector] if component.projection_displacement is not None else None
+    )
+    latent_supported = component.latent_supported[selector] if component.latent_supported is not None else None
+
     return TangentFrameFieldComponent(
         node_indices=tuple(component.node_indices[i] for i in sorted(node_indices)),
         positions=component.positions[selector], normals=component.normals[selector],
@@ -162,6 +174,8 @@ def _restrict_component(
         tree_edges=remapped_tree, holonomy_edges=remapped_holonomy,
         singularities=(), coherent=True, incoherence_reason=None,
         anchor_seed_type=component.anchor_seed_type,
+        raw_positions=raw_positions, projection_displacement=projection_displacement,
+        latent_supported=latent_supported,
     )
 
 

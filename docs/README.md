@@ -190,3 +190,9 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - [Worklog 102](worklogs/102_patch_identifiability_capacity_gate.md)는 Worklog 101의 "36 미만 자동 기각" 컷오프를 실제 solver와 동일한 basis-table 기반 pre-fit algebraic identifiability(design matrix가 achievable rank에 도달하는가)로 대체하고, A(고정 6×6)/B(adaptive quadratic, 3×3~6×6)/C(support-adaptive, degree 1~2)를 fallback 없이 비교했다.
 - 실측 결과 C는 identifiable chart 비율을 23.5%(A)→68.7%로 크게 늘렸지만 VALID_SUPPORTED는 A/B/C 모두 정확히 2/115(1.7%)로 동일했다 — 새로 식별 가능해진 52개 chart 중 어느 하나도 안전한 fit에 도달하지 못했다.
 - **Decision C: TENSOR_PRODUCT_PATCH_STILL_FAILS** — intrinsic parameterization이나 capacity 부족이 아니라 현재 local tensor-product NURBS fitting/representation 자체의 한계로 확인됐다. Worklog 101의 "chart 단위 domain validity 100%" 표현도 항등적 수치일 뿐이라고 정정하고, 의미 있는 지표(source-evidence 커버리지 87.8%)를 명시했다.
+
+## 2026-08-19 Latent surface geometry 흐름 복구 및 spatial coverage 실측 감사
+
+- [Worklog 103](worklogs/103_latent_surface_geometry_flow_coverage_audit.md)은 Worklog 98이 Worklog 95 latent surface 추정기의 실제 투영 좌표(`query.positions`)를 버리고 raw Gaussian center로 되돌아가 있던 divergence를 발견·수정했다 — Worklog 98~102의 geometry 의존 결론 전부(위 Decision들 포함)가 corrected latent position으로 재실측되기 전까지는 authoritative가 아니다.
+- 신규 coverage-audit/visualization-NURBS 모듈로, 다운스트림 승인 기준(chart validity, identifiability, NURBS 안전성)에 전혀 구애받지 않고 latent surface의 spatial coverage를 있는 그대로 export했다: region-owned evidence 7,774개 중 latent-supported 4,599개(59.2%), support unit 86개, visualization NURBS 성공 49/86.
+- **이 worklog는 architecture 결정을 내리지 않는다** — coverage가 충분한지는 사용자가 export 결과를 직접 시각적으로 판단한다.

@@ -69,8 +69,16 @@ class HolonomyEdge:
 
 @dataclass(frozen=True)
 class TangentFrameFieldComponent:
+    """Geometry provenance contract (Worklog 103): ``positions`` is the
+    AUTHORITATIVE latent-projected coordinate (``LatentSurfaceSupport
+    .query_batch(...).positions``), never the raw Gaussian center -- every
+    geometry-dependent downstream consumer (edge differentials, UV
+    integration, chart growth, patch fitting) must keep reading this field
+    to get latent geometry. ``raw_positions`` and ``projection_displacement``
+    are provenance-only companions, never substituted in for ``positions``."""
+
     node_indices: tuple[int, ...]  # indices into the original points tensor
-    positions: Any  # (M, 3)
+    positions: Any  # (M, 3) -- LATENT-PROJECTED position (query.positions), authoritative
     normals: Any  # (M, 3)
     e_u: Any  # (M, 3)
     e_v: Any  # (M, 3)
@@ -82,6 +90,12 @@ class TangentFrameFieldComponent:
     coherent: bool
     incoherence_reason: str | None
     anchor_seed_type: str | None
+    # Geometry provenance (Worklog 103 addition, optional/defaulted so
+    # pre-existing synthetic-fixture constructors that don't care about
+    # provenance keep working unchanged):
+    raw_positions: Any = None  # (M, 3) -- original Gaussian center, BEFORE latent projection
+    projection_displacement: Any = None  # (M, 3) -- positions - raw_positions
+    latent_supported: Any = None  # (M,) bool -- this node's own query.supported flag
 
 
 @dataclass(frozen=True)
@@ -256,6 +270,16 @@ def build_tangent_frame_field(
     count = int(points.shape[0])
     query = support.query_batch(points)
     normals = query.normals
+    # Geometry-provenance contract (Worklog 103): `query.positions` is the
+    # actual iterative weighted-PCA/MLS-projected latent-surface coordinate
+    # -- the authoritative geometry for every downstream consumer. `points`
+    # (raw Gaussian centers) is kept ONLY to (a) drive the existing,
+    # unchanged kNN/continuous-support edge criteria below (Worklog 96's
+    # own chord-based contract, untouched) and (b) as provenance alongside
+    # the projected coordinate -- it is never substituted back in as a
+    # component's own `.positions`.
+    projected_points = query.positions
+    node_supported = query.supported
 
     candidate_edges = _knn_edges(points, k)
     supported_mask = []
@@ -291,8 +315,14 @@ def build_tangent_frame_field(
         if len(node_list) < min_component_size:
             continue
         local_edges = edge_set_by_component.get(component_index, [])
-        component_points = points[node_list]
+        # `component_points` -- the geometry actually used for frame
+        # propagation, u/v arc-length integration, and everything stored
+        # into the component -- is now the LATENT-PROJECTED coordinate.
+        # `component_raw_points` is kept only as provenance.
+        component_points = projected_points[node_list]
+        component_raw_points = points[node_list]
         component_normals = normals[node_list]
+        component_supported = node_supported[node_list]
 
         if component_index in anchor_local_by_component:
             root_local = anchor_local_by_component[component_index]
@@ -336,6 +366,9 @@ def build_tangent_frame_field(
             tree_edges=remapped_tree_edges, holonomy_edges=remapped_holonomy,
             singularities=singularities, coherent=coherent, incoherence_reason=reason,
             anchor_seed_type=anchor_seed_type if component_index in anchor_local_by_component else None,
+            raw_positions=component_raw_points[selector],
+            projection_displacement=component_points[selector] - component_raw_points[selector],
+            latent_supported=component_supported[selector],
         ))
 
     return TangentFrameFieldResult(
