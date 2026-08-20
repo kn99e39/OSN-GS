@@ -152,3 +152,9 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - **그러나 downstream NURBS 계약은 여전히 미충족이다**: `valid_supported`가 처음으로 0이 아닌 값(vanilla 0 → 2DGS 35)이 나왔지만 `unresolved`는 오히려 67.4%→89.2%로 올랐고 materialization rate는 0.077%다. coherent evidence 대비 회수율은 0.44%→0.087%로 **떨어졌다** — evidence는 49배 늘었는데 회수 비율은 5배 나빠졌으므로, 다음 병목 후보는 evidence 생성이 아니라 **cut-boundary 회수 단계의 scaling**이다.
 - 이 과정에서 기존 OSN-GS 결함 하나를 고쳤다: `--adc_max_gaussians`가 걸릴 때 남은 예산을 clone에 먼저 전부 배정해 split이 **완전히 사라지던** 문제(demand 비례 분배 + 최고 gradient 우선 선택으로 수정, `tests/test_density_control_budget.py`). 이 결함 때문에 첫 비교 시도는 폐기했다.
 - 브랜치는 병합하지 않는다. 2DGS를 NURBS 성공 방향으로 튜닝하지 않았다.
+
+## 2026-08-19 2DGS Coverage-first Surfel Subset partition — 신규 canonical 방향 (arch/2dgs-coverage-first-surface)
+
+- 사용자 지시로 `voxel-surface-regions`의 Worklog 105/106(volumetric 3DGS covariance-minor-axis normal 기반 coverage-first partition) 방향을 중단하고, 이미 검증된 `exp/2dgs-nurbs-surface-evidence` 브랜치의 실제 2DGS surfel primitive를 canonical surface evidence로 채택했다. 신규 브랜치 `arch/2dgs-coverage-first-surface`(base `exp/2dgs-nurbs-surface-evidence`@`54b72c2`)에서 진행하며 `voxel-surface-regions`에는 병합하지 않는다.
+- [Worklog 96](worklogs/96_2dgs_coverage_first_surfel_partition.md): 신규 `torch_surfel_surface_orientation.py`가 surfel의 intrinsic `t_u`/`t_v`/`t_w`(학습된 rotation quaternion의 열)를 그대로 읽는다 — eigen-decomposition·covariance 구성이 전혀 없음을 AST로 강제 검증. Coverage-first partition 구현은 `voxel-surface-regions`에서 코드 변경 없이 이식(orientation 타입 힌트만 구조적 Protocol로 완화, 3DGS/2DGS 어느 쪽 orientation이든 받되 어느 쪽도 import하지 않음). 신규 export 스크립트가 fail-closed로 volumetric checkpoint를 거부함을 실증.
+- **실측은 없다** — 학습된 2DGS checkpoint(Worklog 95가 만든 30k-iteration 결과)를 이 로컬 머신에서 찾지 못했다. 재학습(CUDA 빌드 미검증) 또는 원본 checkpoint 회수 중 사용자 결정이 필요하다. Architecture 판단은 이 배치에서 내리지 않는다.
