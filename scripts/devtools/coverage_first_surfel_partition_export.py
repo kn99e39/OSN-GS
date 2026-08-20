@@ -336,6 +336,14 @@ def main() -> None:
             "fully_cut_gaussian_count": int((cut_ratio >= 1.0).sum()),
             "uncut_gaussian_count": int((cut_ratio <= 0.0).sum()),
         }
+        local_spacing = partition.local_spacing
+        spacing_stats = {
+            "min": float(local_spacing.min().item()) if visible_count else 0.0,
+            "median": _percentile(local_spacing, 0.5),
+            "mean": float(local_spacing.mean().item()) if visible_count else 0.0,
+            "p95": _percentile(local_spacing, 0.95),
+            "max": float(local_spacing.max().item()) if visible_count else 0.0,
+        }
         # Local unsigned normal agreement over the SPATIAL adjacency neighborhood
         # (section 10.D) -- independent of whether the edge was accepted.
         if int(spatial_edges.shape[0]) > 0:
@@ -450,6 +458,7 @@ def main() -> None:
             "source": "torch_surfel_surface_orientation.derive_surface_orientation_from_surfel",
         },
         "partition": accounting,
+        "local_spacing": spacing_stats,
         "local_normal_coherence_over_spatial_neighborhood": normal_coherence_stats,
         "ownership_kinds": list(OWNERSHIP_KINDS),
         "cut_edges": {

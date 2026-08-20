@@ -29,3 +29,7 @@ _test_output_unused/
 
 # Editable-install metadata
 osn_gs.egg-info/
+
+# Local CUDA extension build artifacts (scripts/build_surfel_extension.bat, etc.)
+osn_gs/render/vendor/*/build/
+osn_gs/render/vendor/*/*.egg-info/
