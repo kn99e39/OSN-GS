@@ -227,6 +227,112 @@ def _knn(positions: Any, k: int, chunk_size: int, progress: Callable[[str], None
     return torch.cat(index_chunks, dim=0), torch.cat(distance_chunks, dim=0)
 
 
+@dataclass(frozen=True)
+class CandidateGraph:
+    """The local candidate adjacency graph, shared verbatim between the plain
+    connected-component partition (this module) and any downstream partition
+    variant that needs the SAME local evidence (e.g.
+    ``torch_region_coherent_surfel_partition.py``'s anti-chaining partition).
+    Building this once and reusing it is what makes an A/B comparison between
+    two partition SEMANTICS an isolated comparison rather than one that also
+    silently varies the input graph.
+    """
+
+    count: int
+    local_spacing: Any  # (N,) float -- median kNN distance
+    candidate_edges: Any  # (E_c, 2) long, canonical a<b, deduplicated kNN pairs
+    spatial_edge_mask: Any  # (E_c,) bool -- passed the local-spacing distance test
+    normal_compatible_mask: Any  # (E_c,) bool -- passed |dot(n_i, n_j)| >= floor
+    normal_alignment: Any  # (E_c,) float -- the raw |dot(n_i, n_j)| value for every candidate edge
+
+    @property
+    def accepted_edges(self) -> Any:
+        return self.candidate_edges[self.spatial_edge_mask & self.normal_compatible_mask]
+
+    @property
+    def normal_cut_edges(self) -> Any:
+        return self.candidate_edges[self.spatial_edge_mask & ~self.normal_compatible_mask]
+
+
+def build_candidate_graph(
+    orientation: SurfaceOrientationEvidence,
+    config: CoverageFirstPartitionConfig,
+    *,
+    progress: Callable[[str], None] | None = None,
+) -> CandidateGraph:
+    """kNN spatial adjacency + local-spacing gate + normal compatibility --
+    the complete LOCAL candidate relationship, computed exactly once.
+
+    This is a pure extraction of ``partition_gaussian_subsets``'s own edge
+    construction (same kNN call, same spacing gate, same alignment test, same
+    dedup key) -- it does not change that function's behavior or numbers.
+    Callers needing more than a plain connected component over this graph
+    (e.g. a region-coherence-gated merge) must not rebuild the graph
+    themselves; they call this function and consume ``CandidateGraph``
+    directly, so "local candidate evidence" has exactly one implementation.
+    """
+
+    torch = require_torch()
+    positions = orientation.positions
+    normals = orientation.surface_normal
+    count = int(positions.shape[0])
+    device = positions.device
+
+    k = min(int(config.neighbor_count), max(count - 1, 0))
+    if count == 0 or k <= 0:
+        empty_long = torch.zeros((0, 2), dtype=torch.int64, device=device)
+        empty_bool = torch.zeros((0,), dtype=torch.bool, device=device)
+        return CandidateGraph(
+            count=count,
+            local_spacing=torch.zeros((count,), dtype=positions.dtype, device=device),
+            candidate_edges=empty_long,
+            spatial_edge_mask=empty_bool,
+            normal_compatible_mask=empty_bool,
+            normal_alignment=torch.zeros((0,), dtype=positions.dtype, device=device),
+        )
+
+    chunk_size = int(config.knn_chunk_size) or _auto_chunk_size(count, device)
+    neighbor_index, neighbor_distance = _knn(positions, k, chunk_size, progress)
+
+    # Local sampling pitch: the median of a Gaussian's own kNN distances.
+    # Median (not mean/max) so a single far outlier neighbour cannot inflate
+    # the scale a Gaussian is allowed to connect over.
+    local_spacing = neighbor_distance.median(dim=1).values
+
+    rows = torch.arange(count, dtype=torch.int64, device=device).unsqueeze(1).expand(-1, k)
+    left = torch.minimum(rows.reshape(-1), neighbor_index.reshape(-1))
+    right = torch.maximum(rows.reshape(-1), neighbor_index.reshape(-1))
+    # Deduplicate through a single int64 key instead of `unique(..., dim=0)`:
+    # exact for count < 3e9 and far cheaper at scene scale.
+    key = left * int(count) + right
+    unique_key = torch.unique(key)
+    del key, rows, left, right, neighbor_index
+    candidate_left = torch.div(unique_key, count, rounding_mode="floor")
+    candidate_right = unique_key - candidate_left * count
+    candidate_edges = torch.stack((candidate_left, candidate_right), dim=1)
+    del unique_key
+
+    edge_distance = (positions[candidate_left] - positions[candidate_right]).norm(dim=-1)
+    connect_scale = torch.minimum(local_spacing[candidate_left], local_spacing[candidate_right])
+    spatial_edge_mask = edge_distance <= config.spatial_connect_spacing_multiplier * connect_scale.clamp_min(_EPS)
+    alignment = unsigned_normal_alignment(normals[candidate_left], normals[candidate_right])
+    normal_compatible_mask = alignment >= config.normal_compatibility_min_alignment
+    if progress is not None:
+        progress(
+            f"edges candidate={int(candidate_edges.shape[0])} "
+            f"spatial={int(spatial_edge_mask.sum())} accepted={int((spatial_edge_mask & normal_compatible_mask).sum())}"
+        )
+
+    return CandidateGraph(
+        count=count,
+        local_spacing=local_spacing,
+        candidate_edges=candidate_edges,
+        spatial_edge_mask=spatial_edge_mask,
+        normal_compatible_mask=normal_compatible_mask,
+        normal_alignment=alignment,
+    )
+
+
 def _connected_component_roots(count: int, edges: Any, config: CoverageFirstPartitionConfig) -> Any:
     """Connected-component labels by Shiloach-Vishkin hooking with full path compression.
 
@@ -286,7 +392,6 @@ def partition_gaussian_subsets(
     torch = require_torch()
     config = config or CoverageFirstPartitionConfig()
     positions = orientation.positions
-    normals = orientation.surface_normal
     count = int(positions.shape[0])
     device = positions.device
 
@@ -323,39 +428,13 @@ def partition_gaussian_subsets(
             config=config,
         )
 
-    chunk_size = int(config.knn_chunk_size) or _auto_chunk_size(count, device)
-    neighbor_index, neighbor_distance = _knn(positions, k, chunk_size, progress)
+    graph = build_candidate_graph(orientation, config, progress=progress)
+    local_spacing = graph.local_spacing
+    candidate_edges = graph.candidate_edges
+    spatial_edge_mask = graph.spatial_edge_mask
+    normal_compatible_mask = graph.normal_compatible_mask
 
-    # Local sampling pitch: the median of a Gaussian's own kNN distances.
-    # Median (not mean/max) so a single far outlier neighbour cannot inflate
-    # the scale a Gaussian is allowed to connect over.
-    local_spacing = neighbor_distance.median(dim=1).values
-
-    rows = torch.arange(count, dtype=torch.int64, device=device).unsqueeze(1).expand(-1, k)
-    left = torch.minimum(rows.reshape(-1), neighbor_index.reshape(-1))
-    right = torch.maximum(rows.reshape(-1), neighbor_index.reshape(-1))
-    # Deduplicate through a single int64 key instead of `unique(..., dim=0)`:
-    # exact for count < 3e9 and far cheaper at scene scale.
-    key = left * int(count) + right
-    unique_key = torch.unique(key)
-    del key, rows, left, right, neighbor_index
-    candidate_left = torch.div(unique_key, count, rounding_mode="floor")
-    candidate_right = unique_key - candidate_left * count
-    candidate_edges = torch.stack((candidate_left, candidate_right), dim=1)
-    del unique_key
-
-    edge_distance = (positions[candidate_left] - positions[candidate_right]).norm(dim=-1)
-    connect_scale = torch.minimum(local_spacing[candidate_left], local_spacing[candidate_right])
-    spatial_edge_mask = edge_distance <= config.spatial_connect_spacing_multiplier * connect_scale.clamp_min(_EPS)
-    alignment = unsigned_normal_alignment(normals[candidate_left], normals[candidate_right])
-    normal_compatible_mask = alignment >= config.normal_compatibility_min_alignment
-    if progress is not None:
-        progress(
-            f"edges candidate={int(candidate_edges.shape[0])} "
-            f"spatial={int(spatial_edge_mask.sum())} accepted={int((spatial_edge_mask & normal_compatible_mask).sum())}"
-        )
-
-    accepted = candidate_edges[spatial_edge_mask & normal_compatible_mask]
+    accepted = graph.accepted_edges
     roots = _connected_component_roots(count, accepted, config)
 
     unique_roots, inverse, counts = torch.unique(roots, return_inverse=True, return_counts=True)

@@ -77,7 +77,9 @@ Volumetric 3DGS 경로(`torch_gaussian_surface_orientation.py`)와의 구조적 
 
 ### 5-A. 재학습 실행 결과
 
-**CUDA 확장 빌드**: `docker/Dockerfile.2dgs`의 VS + `TORCH_CUDA_ARCH_LIST` 패턴을 이 Windows/RTX 5080 머신에 맞게 이식한 신규 `scripts/build_surfel_extension.bat`(기존 `scripts/build_baseline_extensions.bat`과 동일 구조, arch만 `12.0`)로 `osn_gs/render/vendor/diff_surfel_rasterization`을 빌드·설치했다. 빌드 직후 `tests/test_surfel_rasterization_cuda.py`/`test_surfel_regularization_cuda.py` 21개 CUDA 테스트가 전부 **skip에서 pass로** 바뀌었다(§8에서 재확인) — perspective-correct ray-splat intersection, depth distortion, normal consistency가 이 머신에서 실제로 검증됐다.
+**CUDA 확장 빌드**: `docker/Dockerfile.2dgs`의 VS + `TORCH_CUDA_ARCH_LIST` 패턴을 이 Windows/RTX 5080 머신에 맞게 이식한 신규 `scripts/build_surfel_extension.bat`(기존 `scripts/build_baseline_extensions.bat`과 동일 구조, arch만 `12.0`)로 `osn_gs/render/vendor/diff_surfel_rasterization`을 빌드·설치했다. 빌드 직후 `tests/test_surfel_rasterization_cuda.py`/`test_surfel_regularization_cuda.py`(2개 파일, 21개 테스트)만 직접 실행해 전부 **skip에서 pass로** 바뀌었음을 확인했다 — perspective-correct ray-splat intersection, depth distortion, normal consistency가 이 머신에서 실제로 검증됐다.
+
+**(2026-08-20 정정, Worklog 97 §16)** 위 문장의 원래 표현("§8에서 재확인")은 부정확했다. §8의 `1077 passed, 22 skipped ... in 252.65s` 전체 회귀는 이 CUDA 확장 빌드 **이전**(최초 구현 커밋 `8082336` 시점)에 실행된 것이고, 빌드 이후에는 위 2개 CUDA 테스트 파일만 개별 실행했을 뿐 **전체 회귀를 다시 돌리지 않았다** — 즉 §8에 적힌 "22 skipped"는 빌드 이전 상태를 정확히 기록한 것이지 빌드 이후 상태와 모순되는 오류가 아니며, 두 숫자는 서로 다른 시점을 가리킨다. 다만 "(§8에서 재확인)"이라는 문구가 마치 §8이 빌드 이후 pass를 재확인한 것처럼 읽혀 오해의 소지가 있었다. Worklog 97에서 CUDA 확장이 빌드된 상태로 전체 회귀를 처음 실행했고, 그 결과를 Worklog 97 §16/§17에 정확한 현재 상태로 기록한다.
 
 **학습 실행**: `scripts/experiments/run_2dgs_vs_vanilla_30k.sh`의 `2dgs` arm과 **동일한 파라미터**(§5의 표, 재조정 없음)로 `train.py`를 직접 실행했다(`-s DATASET --images images_8 --eval --llffhold 8 --primitive surfel_2d --lambda_dist 100 --lambda_normal 0.05 --depth_ratio 0 --dist_from_iter 3000 --normal_from_iter 7000 --adc_prune_opacity_threshold 0.05`, 나머지 densification/예산/해상도 설정도 원본 스크립트와 동일). 실행 로그: `output/arch_2dgs_coverage_first_surface/2dgs_run1/`.
 
