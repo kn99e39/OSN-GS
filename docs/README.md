@@ -165,3 +165,10 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - [Worklog 97](worklogs/97_region_coherent_surfel_partition.md)은 Worklog 96이 밝힌 병리(intrinsic 2DGS normal로도 local pairwise connected component가 single-linkage chaining으로 74.70% 거대 subset을 만듦)를 **partition union rule 하나만** 바꿔 재실측했다. Primitive/local candidate graph는 완전히 동일 — sign-invariant orientation scatter `M_R=sum n_i n_i^T`로 region 전체의 concentration을 측정하고, 기존 `a=0.85`에서 대수적으로 유도한(새 자유 파라미터 없는) floor `(1+a)/2=0.925`를 병합 조건으로 추가했다.
 - **실측: 최대 subset 비율 74.70%→21.20%, subset 수 58,646→104,548, region-coherence rejected merge 553,357개.** 옛 894,378-surfel 거대 subset이 31,564개로 분해됐고(최대 후손은 원래의 28.4%), 남은 최대 subset은 시각 검토상 진짜 평평한 바닥 하나. WL96 singleton 40,410개는 동일 local graph 때문에 전부 isolated fallback으로 그대로 남음. Coverage identity 100% 유지.
 - **이 worklog도 architecture 성공/실패 판단을 내리지 않는다** — 사용자가 6개 review export view(`output/osn_gs_region_coherent_surfel_partition/`)를 검토한 뒤 다음 단계(subset-local Trust)를 결정한다.
+
+## 2026-08-20 Discontinuity-first Surfel Subset partition — 부정적 실측 (arch/2dgs-coverage-first-surface)
+
+- [Worklog 98](worklogs/98_discontinuity_first_surfel_partition.md)은 Worklog 97의 region-concentration 방식이 곡률 있는 테이블 옆면을 정상 normal 회전만으로 쪼갠다는 지적에 따라, local shape operator 기반 smooth-surface residual + positional/parallel-sheet 기준으로 union rule을 다시 교체했다.
+- **합성 fixture에서는 성공**(원통형 밴드 180° 회전 유지, 크리즈 정확히 절단, 평행 시트 분리) — 그러나 **실제 scene 재실측에서는 실패**: 개별 edge 판정만으로는 dense kNN 그래프의 percolation을 막지 못해 **94.51%짜리 거대 subset**이 재발했다(WL97의 20.84%보다 훨씬 나쁨, WL96의 74.70%보다도 나쁨). 테이블은 더 이상 다리별로 쪼개지지 않지만 바닥·산울타리와도 분리되지 않는다.
+- Checkpoint 유실(사용자의 `output/confirmed/` 정리 과정 추정)로 동일 설정 재학습 필요했고, 재현성 확인됨(surfel 수·PSNR 오차범위 내 일치).
+- **이 worklog는 부정적 실측 결과를 정직하게 보고한다** — architecture 최종 판단은 사용자가 review export(`output/osn_gs_discontinuity_first_surfel_partition/`) 검토 후 결정한다.

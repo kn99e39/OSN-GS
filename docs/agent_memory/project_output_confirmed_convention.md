@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 06f8c1f6-8e00-47ed-9b87-f3ca26aeaf84
-  modified: 2026-08-20T06:12:44.071Z
+  modified: 2026-08-20T06:59:10.207Z
 ---
 
 The user stated (2026-08-20): going forward, intermediate output artifacts they have reviewed get moved into `output/confirmed/` (preserving the original subfolder structure, e.g. `output/confirmed/arch_2dgs_coverage_first_surface/...`). They already did this themselves for several Worklog 105-107 export directories (`extent_ab`, `arch_2dgs_coverage_first_surface`, `osn_gs_2dgs_coverage_first_subset_partition`, `osn_gs_coverage_first_subset_partition[_v2]`, `osn_gs_scene_latent_coverage_audit[_subdivided]`).
@@ -17,3 +17,5 @@ The user stated (2026-08-20): going forward, intermediate output artifacts they 
 - Never claim or imply architecture approval, Gate approval, or "the user approved this direction" based on an `output/confirmed/` location alone.
 - If asked to move something into `output/confirmed/` myself, that action means "the user is done looking at this / it's checked off their review list," not "this design is accepted."
 - Keep referring to worklogs' actual "결론 없음" / no-architecture-decision language as the source of truth for whether a direction has been decided, independent of this filesystem convention.
+
+**Incident (2026-08-20, Worklog 98)**: during this reorganization the Worklog 96/97 canonical 30k 2DGS surfel checkpoint (`2dgs_run1/30000`) actually went missing from disk entirely (not just moved) -- neither `output/` nor `output/confirmed/` had it when Worklog 98 needed to reuse it for a same-checkpoint comparison. Had to ask the user, who chose to retrain (confirmed reproducible: surfel count and held-out PSNR matched within noise). **When a checkpoint/export a prior worklog depended on can't be found in either location, don't assume it was deleted on purpose or silently substitute a different one -- surface the gap and ask**, the same way as [[feedback_correct_replay_checkpoint]].
