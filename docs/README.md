@@ -172,3 +172,11 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - **합성 fixture에서는 성공**(원통형 밴드 180° 회전 유지, 크리즈 정확히 절단, 평행 시트 분리) — 그러나 **실제 scene 재실측에서는 실패**: 개별 edge 판정만으로는 dense kNN 그래프의 percolation을 막지 못해 **94.51%짜리 거대 subset**이 재발했다(WL97의 20.84%보다 훨씬 나쁨, WL96의 74.70%보다도 나쁨). 테이블은 더 이상 다리별로 쪼개지지 않지만 바닥·산울타리와도 분리되지 않는다.
 - Checkpoint 유실(사용자의 `output/confirmed/` 정리 과정 추정)로 동일 설정 재학습 필요했고, 재현성 확인됨(surfel 수·PSNR 오차범위 내 일치).
 - **이 worklog는 부정적 실측 결과를 정직하게 보고한다** — architecture 최종 판단은 사용자가 review export(`output/osn_gs_discontinuity_first_surfel_partition/`) 검토 후 결정한다.
+
+## 2026-08-20 Interface-coherent Surfel Region merge — 혼재된 실측 (arch/2dgs-coverage-first-surface)
+
+- [Worklog 99](worklogs/99_interface_coherent_region_merge.md)는 WL97(largest 20.84%, 과분열)과 WL98(largest 94.51%, percolation 재발)을 각각 최종 union rule로 쓰지 않고, "WL97의 안전하지만 과분열된 초기 region → region 간 interface 전체를 WL98의 미분 증거로 집계 평가 → 광범위하게 지지되는 매끄러운 접점만 merge"라는 2단계 파이프라인(`torch_interface_coherent_region_merge.py`)으로 교체했다.
+- 구현 중 WL97 자체의 candidate edge 승인에 positional 검사가 없어 평행 시트를 그대로 초기 region으로 합쳐버린다는 것을 발견 — WL97에 opt-in 필드 `require_positional_continuity`(기본값 `False`, 기존 동작 불변)를 추가해 정정.
+- 합성 fixture(원통 과분열 복원, 크리즈/평행시트/zigzag 체인 분리 유지, 단일 edge 지지 부족)는 전부 설계 의도대로 통과.
+- **실제 scene 재실측(같은 checkpoint): 테이블 상판 곡면은 하나의 region으로 성공적으로 복원됐으나(다만 정확한 공로 귀속은 미확정), 배경(파티오+잔디+울타리)이 다시 53.86%짜리 거대 subset으로 합쳐졌다** — WL98(94.51%)보다는 낫지만 WL97(20.84%)보다는 나쁘다.
+- 신규 focused 테스트 14개 + WL97 회귀 테스트 1개, 전체 regression 1144 passed 1 skipped. **혼재된 결과를 정직하게 보고 — architecture 판단 없음.**

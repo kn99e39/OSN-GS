@@ -97,6 +97,21 @@ class RegionCoherenceConfig:
     # weight, not a trust score, and every surfel gets exactly the same value.
     structural_weight: float = 1.0
 
+    # OFF by default so every existing caller and test reproduces the exact
+    # original Worklog 97 numbers unchanged. When a caller opts in (Worklog
+    # 99's region initialization does), an additional REUSED Worklog 98
+    # criterion -- the self-normalizing normal-offset/tangential-offset
+    # ratio, no new threshold -- gates local edge acceptance alongside
+    # spatial adjacency and normal compatibility. Discovered necessary
+    # because Worklog 97's own candidate acceptance has no positional test:
+    # two nearby PARALLEL sheets with identical normals pass both of its
+    # existing gates and get fused into one region, which a downstream
+    # region-MERGE step (Worklog 99) can never undo since merging never
+    # splits. This uses only `positions` and `surface_normal`, so it does
+    # not change what `SurfaceOrientationEvidence` requires.
+    require_positional_continuity: bool = False
+    parallel_sheet_normal_over_tangent_ratio: float = 1.0
+
     def concentration_floor(self) -> float:
         """Region-coherence floor, derived from the EXISTING local alignment
         threshold ``a = local.normal_compatibility_min_alignment`` rather than
@@ -128,6 +143,8 @@ class RegionCoherenceConfig:
             "structural_weight": self.structural_weight,
             "concentration_floor": self.concentration_floor(),
             "concentration_floor_derivation": "(1 + local.normal_compatibility_min_alignment) / 2",
+            "require_positional_continuity": self.require_positional_continuity,
+            "parallel_sheet_normal_over_tangent_ratio": self.parallel_sheet_normal_over_tangent_ratio,
         }
 
 
@@ -369,6 +386,15 @@ def partition_surfels_region_coherent(
         )
 
     accepted_mask = graph.spatial_edge_mask & graph.normal_compatible_mask
+    if config.require_positional_continuity:
+        left, right = graph.candidate_edges[:, 0], graph.candidate_edges[:, 1]
+        delta_x = positions[right] - positions[left]
+        sign = torch.where((normals[left] * normals[right]).sum(dim=-1, keepdim=True) < 0, -1.0, 1.0)
+        average_normal = torch.nn.functional.normalize(normals[left] + normals[right] * sign, dim=-1, eps=_EPS)
+        normal_offset = (delta_x * average_normal).sum(dim=-1).abs()
+        tangential_offset = (delta_x - normal_offset.unsqueeze(-1) * average_normal).norm(dim=-1)
+        normal_offset_ratio = normal_offset / tangential_offset.clamp_min(_EPS)
+        accepted_mask = accepted_mask & (normal_offset_ratio <= config.parallel_sheet_normal_over_tangent_ratio)
     accepted_index = torch.nonzero(accepted_mask, as_tuple=False).reshape(-1)
     accepted_edges = graph.candidate_edges[accepted_index]
     accepted_alignment = graph.normal_alignment[accepted_index]

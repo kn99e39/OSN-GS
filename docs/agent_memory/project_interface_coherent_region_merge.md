@@ -1,0 +1,23 @@
+---
+name: project-interface-coherent-region-merge
+description: "Worklog 99 combines WL97's region-level anti-percolation init with WL98's curvature-aware residual, aggregated over whole region interfaces; real-scene result is MIXED (largest subset 53.86%, better than WL98's 94.51% but worse than WL97's 20.84%); no architecture decision"
+metadata: 
+  node_type: memory
+  type: project
+  originSessionId: 06f8c1f6-8e00-47ed-9b87-f3ca26aeaf84
+  modified: 2026-08-20T07:52:41.451Z
+---
+
+Worklog 99 (2026-08-20, `arch/2dgs-coverage-first-surface`): the user rejected both [[project_region_coherent_surfel_partition]] (WL97, largest 20.84% but over-segments curved surfaces) and [[project_discontinuity_first_surfel_partition]] (WL98, curvature preserved but largest subset 94.51% -- percolation) as final union rules, and directed a new architecture: WL97's over-segmented regions as a SAFE initialization, then merge regions only when their WHOLE shared interface (never a single edge) gives broad, supported, curvature-consistent (WL98's shape-operator residual), positionally-continuous evidence of one smooth surface.
+
+New module: `osn_gs/surface/torch_interface_coherent_region_merge.py`. Region adjacency = pairs of WL97-initial regions connected by >=1 local candidate edge; interface = the COMPLETE edge set crossing between them. Accept a merge only if: (1) support -- unique surfels per side >= `local.neighbor_count` (derived, not new) AND interface spatial extent (bounding diagonal / mean local spacing) >= `local.spatial_connect_spacing_multiplier` (derived, not new); (2) curvature consistency -- majority (`interface_smooth_majority_fraction=0.5`, the ONE genuinely new parameter) of interface edges classify as smooth-continuation under WL98's own global residual+ratio thresholds (reused, not recomputed per-interface); (3) positional continuity -- mean normal-offset ratio over the interface <= WL98's threshold (reused). Deterministic round-based sequential DSU merge (WL97 Kruskal-style precedent), converges in 8 rounds on the real scene.
+
+**Real bug found and fixed along the way**: WL97's own candidate-edge acceptance has NO positional test, so two nearby parallel sheets with identical normals were already fused into ONE initial WL97 region before this module's merge step ever ran -- a merge-only algorithm can never undo that. Fixed by adding an opt-in field `require_positional_continuity` (default `False`, all 15 existing WL97 tests/behavior unchanged) to `RegionCoherenceConfig` in `torch_region_coherent_surfel_partition.py`; this module's own initialization turns it on. Verified via a new WL97 regression test.
+
+**Synthetic fixtures: all pass** (14 new tests) -- over-segmented quarter/half cylinder merges back to 1 region, sharp crease stays separate, parallel sheets stay separate (once the WL97 bug above is fixed), a zigzag 4-plate narrow-bridge chain does not percolate via transitivity, a single smooth edge alone cannot pass the support floor.
+
+**Real-scene measurement (same checkpoint as WL97/98, 1,190,469 surfels): MIXED.** B=WL97 standalone: 104,977 subsets, largest 20.84%. C=WL98 standalone: 7,676 subsets, largest 94.51%. D=this module: initial regions 114,420 (positional-gated WL97, own largest ~20.62%, confirmed percolation-safe) -> final 108,848 after only 5,572 merges -> **largest final subset 53.86%**. Visually: the curved table top DOES recover as one clean region (positive), but `MERGE_PROVENANCE_DEPTH` shows it needed almost no merges -- so credit may belong mostly to the WL97-positional-gate fix, not the new merge mechanism itself (attribution left unresolved). Meanwhile the patio+grass+hedge background fused into the SAME 53.86% giant subset (visually uniform color) -- worse than WL97 alone on the primary percolation metric, though much better than WL98. `ACCEPTED_REGION_INTERFACE_MERGES` view shows most accepted merges concentrated in the hedge's dense, textured area, suggesting the 0.5 majority threshold may be too permissive there.
+
+Review export: `output/osn_gs_interface_coherent_region_merge/` (7 views: ORIGINAL_2DGS_SCENE, WL97_REGION_CONCENTRATION_PARTITION, WL98_DISCONTINUITY_FIRST_PARTITION, INTERFACE_COHERENT_PARTITION, ACCEPTED_REGION_INTERFACE_MERGES, REJECTED_REGION_INTERFACES, MERGE_PROVENANCE_DEPTH), PNG previews in `preview_png/`.
+
+14 new focused tests + 1 WL97 regression test, all pass. Full regression 1144 passed, 1 skipped (+15 from WL98's 1129). **No architecture decision made -- mixed result reported honestly**: better than WL98 on percolation, worse than WL97, table recovery genuine but attribution unresolved. See [[project_discontinuity_first_surfel_partition]] and [[project_region_coherent_surfel_partition]] for the preceding stages.

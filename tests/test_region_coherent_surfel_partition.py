@@ -189,6 +189,37 @@ def test_rejected_region_merge_is_not_reconnected_through_ownership_only_surfel(
     assert accounting["coverage_identity_holds"] is True
 
 
+def _parallel_sheets(rows: int = 12, columns: int = 12, pitch: float = 0.1, gap: float = 0.15, lateral_offset: float = 0.03) -> _Orientation:
+    """Two flat sheets with IDENTICAL normals, close enough to be spatial
+    candidates -- Worklog 97's own gates (spatial adjacency + normal
+    compatibility) have no positional criterion, so by DEFAULT it fuses
+    these into one region. Regression fixture for `require_positional_continuity`."""
+
+    a = _flat_sheet(rows, columns, pitch, z=0.0)
+    b = _flat_sheet(rows, columns, pitch, z=gap)
+    b[:, 0] += lateral_offset
+    positions = torch.cat([a, b], dim=0)
+    normals = torch.tensor([[0.0, 0.0, 1.0]]).repeat(positions.shape[0], 1)
+    return _Orientation(positions, normals)
+
+
+def test_parallel_sheets_fuse_by_default_but_separate_when_positional_continuity_required():
+    orientation = _parallel_sheets()
+    half = int(orientation.positions.shape[0]) // 2
+
+    default_partition = partition_surfels_region_coherent(orientation)
+    assert default_partition.subset_count == 1  # documents the gap this option closes
+
+    gated_config = RegionCoherenceConfig(require_positional_continuity=True)
+    gated_partition = partition_surfels_region_coherent(orientation, gated_config)
+    gated_accounting = region_coherent_accounting(gated_partition)
+    assert gated_accounting["subset_count"] >= 2
+    assert gated_accounting["coverage_identity_holds"] is True
+    assert int(gated_partition.subset_ids[:half].unique().numel()) == 1
+    assert int(gated_partition.subset_ids[half:].unique().numel()) == 1
+    assert int(gated_partition.subset_ids[0]) != int(gated_partition.subset_ids[half])
+
+
 def test_ownership_propagated_surfel_cannot_merge_two_structural_regions():
     orientation = _two_regions_with_bridge()
     partition = partition_surfels_region_coherent(orientation)
@@ -292,10 +323,16 @@ def test_module_does_not_derive_per_surfel_normals():
 
 
 def test_only_one_new_free_parameter_is_introduced():
-    """structural_weight is the only new independent field; the coherence
-    floor is a pure function of the existing local alignment threshold."""
+    """structural_weight is the only new independent field for Worklog 97's
+    OWN primary replay; the coherence floor is a pure function of the
+    existing local alignment threshold. `require_positional_continuity` /
+    `parallel_sheet_normal_over_tangent_ratio` were added later (Worklog 99)
+    as an OPT-IN extension, defaulted OFF so this module's own standalone
+    numbers are unchanged unless a caller explicitly turns it on."""
 
     default = RegionCoherenceConfig()
     fields = {f for f in default.__dataclass_fields__ if f != "local"}
-    assert fields == {"structural_weight"}
+    assert fields == {"structural_weight", "require_positional_continuity", "parallel_sheet_normal_over_tangent_ratio"}
     assert default.structural_weight == 1.0
+    assert default.require_positional_continuity is False
+    assert default.parallel_sheet_normal_over_tangent_ratio == 1.0
