@@ -219,3 +219,10 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - **실측: WL103 singleton의 94.5%는 자기 CENTER가 어떤 뷰에서도 `on_observed_surface`가 된 적이 없다** — pairwise edge 판정이 너무 엄격해서가 아니라 surfel 자체가 애초에 positive observed-visible evidence가 아니라는 뜻(**Branch A**). renderer-native `radii>0`와 비교하면 이 surfel의 99.98%가 평균 48개 뷰에서 여전히 투영/기여는 하고 있었으나(occlusion-aware 신호 아님, 2DGS 커널이 노출하는 유일한 per-surfel 신호), directive 지시에 따라 그 신호만으로 결론을 뒤집지 않고 한계로 기록했다.
 - Branch A에 따라 새 adjacency는 만들지 않고, `torch_primitive_ownership_visible_topology_separation.py`로 **primitive ownership(전량 보존)과 visible topology membership(component 크기>=2인 36.6%만 구조적 component)을 별개 계약으로 분리**했다 — singleton-owned surfel은 버려지지 않지만 더 이상 "Visible Surface Component"라 부르지 않는다.
 - 신규 focused 테스트 18개, 전체 regression 1216 passed 1 skipped(+18).
+
+## 2026-08-21 Renderer Contribution Diagnostics — Worklog 104 Branch A 기각 (arch/2dgs-coverage-first-surface)
+
+- [Worklog 105](worklogs/105_renderer_contribution_diagnostics.md)는 벤더된 2DGS CUDA 커널을 전혀 수정하지 않고, 모든 학습 스텝이 이미 실행하는 공식 backward pass를 진단 목적으로만 `torch.autograd.grad`로 재사용해(`.backward()` 아님, `.grad` 비변경) surfel별 실제 alpha-compositing 기여를 측정했다(`osn_gs/render/torch_surfel_contribution_diagnostics.py`).
+- **실측: Worklog 104가 "한 번도 positively observed 안 됨"(713,540개)으로 분류한 surfel의 95.4%(680,527개)가 실제로는 렌더러의 공식 alpha-compositing에 기여하고 있었다**(중앙값 20개 뷰). **Case B: Worklog 104의 Branch A가 기각된다** — Phase-C의 point-sample CENTER 질의는 학습된 2DGS 표현에 부적절한 primitive-level visibility 정의임이 실증됐다.
+- Directive 지시대로 여기서 멈췄다: 새 threshold/adjacency 없음. Rendering 불변성과 오탐 방지(진짜 가려진 surfel)를 실제 CUDA fixture로 검증했다.
+- 신규 focused 테스트 9개, 전체 regression 1225 passed 1 skipped(+9).
