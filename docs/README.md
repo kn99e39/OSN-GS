@@ -197,3 +197,11 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - **실제 scene 재실측: 최대 subset 비율이 22.91%(WL100)→42.13%로 거의 두 배가 되는 실질적 percolation 위험을 발견.** Worklog 100이 막았던 특정 patio↔hedge 연결(WL99의 5-merge lineage)은 여전히 차단됐지만, 산울타리(hedge) 내부에서 새로운 거대 병합이 발생했다(시각 검토로 확인).
 - **두 독립적 증거(material하지 않음 + percolation 재발)가 같은 결론을 가리켜 adaptive support를 채택하지 않는다.** Worklog 100(`SUPPORT_MODE_FIXED_MASKED_KNN`)이 유일한 baseline으로 유지된다.
 - 신규 focused 테스트 12개(FIXED 모드가 WL100과 완전히 동일함을 재현 테스트로 고정 포함), 전체 regression 1170 passed 1 skipped(+12). **architecture 최종 판단은 이 배치에서 내리지 않는다.**
+
+## 2026-08-21 Maximal Visible Surface Components — 실제 scene 부정적 결과 (arch/2dgs-coverage-first-surface)
+
+- [Worklog 102](worklogs/102_maximal_visible_surface_components.md)는 Worklog 97-101의 "conservative 초기화 → bilateral 증명 후 merge" 철학을 전면 교체해 "완전한 관측-가시 evidence에서 시작 → 명시적 관측/occlusion/불연속 증거가 있을 때만 CUT"하는 새 아키텍처(`torch_maximal_visible_connectivity.py`)를 구현했다. Canonical Phase-C observation 상태(`torch_observation_evidence.py`, 전혀 수정 안 함)를 그대로 재사용하되, 수백만 edge 규모를 위해 동일한 per-view 규칙을 벡터화하고 `classify_world_samples`와 완전히 동일한 출력임을 직접 검증했다.
+- **곡률-오판 문제(지시 §5)를 실제로 발견·수정**: 처음 설계한 "두 endpoint 깊이의 선형보간"이 사실상 금지된 직선 3D chord와 구조적으로 동일하다는 것을 fixture를 돌리기도 전에 깨닫고, 카메라 자신의 화면-공간 depth를 RANGE(기하학적으로 필연적인 상하한, `edge_length` 기반) 판정으로 교체했다. WL98의 positional-offset 공식에서 실제 부호 버그도 발견·수정(이 모듈 자신의 복사본만; WL100은 지시대로 보존).
+- 합성 fixture 8종(완전 가시 평면/곡면, occluder로 분리된 벽, occluded gap이 있는 같은 곡면, known free-space gap, 평행 시트, 진짜 discontinuity, 증거 없는 unobserved gap) 전부 통과, 신규 focused 테스트 14개.
+- **실제 scene 재실측(161개 전체 train camera, 2DGS surfel rasterizer로 직접 depth 렌더링): 최대 component 비율 92.69%** — WL96(74.70%)보다 나쁘고 WL98(94.51%)에 근접한다. 관측 기반 CUT(occlusion/free-space)은 전체 cut의 1.4%뿐 발동했고(local 이웃 사이에는 실제 occluder/gap이 드묾), WL98 재사용 geometric cut은 광범위하게(29.3%) 발동했음에도 dense kNN 그래프의 percolation을 막지 못했다 — WL98이 이미 증명한 실패 모드가 완전히 다른 architecture에서도 재현됐다. Patio-측/hedge-측 seed가 동일 component로 확인(WL99/100이 막았던 연결이 재발), 테이블의 독립성도 사라졌다.
+- 전체 regression 1184 passed 1 skipped(+14). **Architecture 성공을 주장하지 않는다 — 정직한 부정적 결과.**
