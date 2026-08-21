@@ -188,3 +188,12 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - **실제 scene 재실측(같은 checkpoint): 최대 subset 비율 53.86%(WL99) → 22.91%로 개선**, 초기화 자체의 20.62%에 근접. Accept된 interface가 6,051→1,742로 급감.
 - **WL99의 patio→hedge 연결 lineage(5개 merge 전부)를 직접 추적**해 신규 bilateral 인증서로 재평가한 결과, **5개 전부 기각**(2개는 명시적 편측 지지)됨을 확인 — 실제로 두 seed가 최종적으로 분리됨도 확인.
 - 신규 focused 테스트 14개, 전체 regression 1158 passed 1 skipped(+14). Worklog 99 문서의 coverage identity 표기 오탈자도 정정. **architecture 최종 판단은 이 배치에서 내리지 않는다.**
+
+## 2026-08-21 Rejected-interface attribution 및 region-adaptive support 실험 — support starvation 기각 (arch/2dgs-coverage-first-surface)
+
+- [Worklog 101](worklogs/101_region_support_starvation_attribution.md)은 Worklog 100의 낮은 merge 수(1,742/1,763,096)가 "conservative 초기화 → 작은 fragment의 same-region 이웃 부족 → support 불가 → 영원히 병합 못함"이라는 순환 의존 때문인지 측정했다. Rejected interface를 non-overlapping이 아닌 multi-label로 완전 귀속(`insufficient_region_support_*`, `interface_unique_support_failure`, `directional_residual_failure_*`, `bilateral_smooth_fraction_failure` 등)하고 region 크기별(1/2-4/5-8/9-16/17-32/33-64/>64) support 통계를 냈다.
+- **측정: support만 해결되면 나머지 기하 테스트를 전부 통과했을 interface는 0.29%(5,186/1,761,354)뿐** — support 부족은 흔하지만(특히 singleton region은 구조적으로 0%) 대부분의 rejection은 interface 자체가 너무 작아서(unique surfel count 98.5%, extent 87.0% 위반) support와 무관하게 이미 기각 대상이다. **Support starvation은 material하지 않다고 판정.**
+- 그럼에도 가설을 직접 검증하기 위해 region-adaptive support(고정 global k=8 마스킹 대신, 기존 `spatial_connect_spacing_multiplier`로 bounded된 same-region 지역 검색)를 구현·실측했다(`torch_region_adaptive_support_merge.py`, Worklog 100 모듈은 전혀 수정 안 함, merge threshold 전부 동일).
+- **실제 scene 재실측: 최대 subset 비율이 22.91%(WL100)→42.13%로 거의 두 배가 되는 실질적 percolation 위험을 발견.** Worklog 100이 막았던 특정 patio↔hedge 연결(WL99의 5-merge lineage)은 여전히 차단됐지만, 산울타리(hedge) 내부에서 새로운 거대 병합이 발생했다(시각 검토로 확인).
+- **두 독립적 증거(material하지 않음 + percolation 재발)가 같은 결론을 가리켜 adaptive support를 채택하지 않는다.** Worklog 100(`SUPPORT_MODE_FIXED_MASKED_KNN`)이 유일한 baseline으로 유지된다.
+- 신규 focused 테스트 12개(FIXED 모드가 WL100과 완전히 동일함을 재현 테스트로 고정 포함), 전체 regression 1170 passed 1 skipped(+12). **architecture 최종 판단은 이 배치에서 내리지 않는다.**
