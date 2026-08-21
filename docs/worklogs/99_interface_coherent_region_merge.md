@@ -101,7 +101,7 @@ Checkpoint: `output/arch_2dgs_coverage_first_surface/2dgs_run1/30000`(Worklog 96
 
 ## 11. Coverage identity
 
-`assigned == unassigned == 0`, `multiply_owned == 0`, `subset_sizes_match_ownership_map`, 전부 True — 실제 scene, 합성 fixture 모두 확인.
+`assigned == total_surfels`, `unassigned == 0`, `multiply_owned == 0`, `subset_sizes_match_ownership_map`, 전부 True — 실제 scene, 합성 fixture 모두 확인.
 
 ## 12. Review export
 

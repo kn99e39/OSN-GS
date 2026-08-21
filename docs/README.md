@@ -180,3 +180,11 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - 합성 fixture(원통 과분열 복원, 크리즈/평행시트/zigzag 체인 분리 유지, 단일 edge 지지 부족)는 전부 설계 의도대로 통과.
 - **실제 scene 재실측(같은 checkpoint): 테이블 상판 곡면은 하나의 region으로 성공적으로 복원됐으나(다만 정확한 공로 귀속은 미확정), 배경(파티오+잔디+울타리)이 다시 53.86%짜리 거대 subset으로 합쳐졌다** — WL98(94.51%)보다는 낫지만 WL97(20.84%)보다는 나쁘다.
 - 신규 focused 테스트 14개 + WL97 회귀 테스트 1개, 전체 regression 1144 passed 1 skipped. **혼재된 결과를 정직하게 보고 — architecture 판단 없음.**
+
+## 2026-08-21 Region-conditioned bilateral interface Surfel Region merge — 뚜렷한 개선 (arch/2dgs-coverage-first-surface)
+
+- [Worklog 100](worklogs/100_bilateral_interface_region_merge.md)은 Worklog 99가 재발시킨 percolation이 WL98의 `min(r_i->j, r_j->i)`(편측 허용) residual을 region merge라는 더 강한 주장에 그대로 재사용했기 때문이라는 가설을 검증했다. 나머지(초기화·candidate graph·지지/extent floor·threshold 공식·과반 0.5)는 전부 Worklog 99와 동일하게 고정한 채, per-edge 증거만 **region-conditioned**(자기 region 이웃만으로 local shape operator 재적합) + **bilateral**(양방향 모두 통과해야 smooth)로 교체했다(`torch_bilateral_interface_region_merge.py`).
+- 구현 중 실제 버그 발견·수정: threshold를 매 라운드 재계산하면 완전히 균일한 크리즈(분산 0)가 median+MAD 붕괴로 100% smooth로 오분류됨을 합성 fixture로 발견 — WL98/99처럼 **한 번만, 큰(same-region 내부 포함) 모집단에서** 계산하도록 정정.
+- **실제 scene 재실측(같은 checkpoint): 최대 subset 비율 53.86%(WL99) → 22.91%로 개선**, 초기화 자체의 20.62%에 근접. Accept된 interface가 6,051→1,742로 급감.
+- **WL99의 patio→hedge 연결 lineage(5개 merge 전부)를 직접 추적**해 신규 bilateral 인증서로 재평가한 결과, **5개 전부 기각**(2개는 명시적 편측 지지)됨을 확인 — 실제로 두 seed가 최종적으로 분리됨도 확인.
+- 신규 focused 테스트 14개, 전체 regression 1158 passed 1 skipped(+14). Worklog 99 문서의 coverage identity 표기 오탈자도 정정. **architecture 최종 판단은 이 배치에서 내리지 않는다.**
