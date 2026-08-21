@@ -212,3 +212,10 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - 관계 상태는 7-way(`POSITIVE_VISIBLE_CONTINUATION`/`CUT_KNOWN_FREE_SPACE`/`CUT_OCCLUDED_DOMAIN`/`CUT_VISIBLE_GEOMETRIC_DISCONTINUITY`/`CUT_POSITIONAL_SHEET_SEPARATION`/`UNRESOLVED_OBSERVATION_CONFLICT`/`UNKNOWN_NO_POSITIVE_OBSERVATION`)로 상호 배타적이며, 다중 시야 취합에 퍼센트 threshold가 전혀 없다. 합성 fixture 10종(A-J) 전부 통과, 신규 focused 테스트 14개.
 - **실제 scene 재실측(같은 checkpoint, 161개 train camera): 최대 component 비율 92.69%(WL102) → 10.50%로 극적 개선**, 테이블/패티오가 실제로 분리됐다(시각 확인). **그러나 전체 surfel의 63.4%가 고립된 singleton이 되고 component 수가 13,585 → 768,829로 급증**했다 — spatial edge 5,132,180개 중 25.3%만 co-observation을 받았고(WL102와 정확히 일치), 그중 최종 채택된 양성 edge는 20.3%뿐이라 "양성 지지만" 원칙을 이 evidence 밀도 위에 적용하면 구조적으로 과소-연결이 불가피함을 실측이 보여줬다. hedge/배경은 스페클(수천 개 극소 component)로 심하게 단절된 반면 테이블/패티오처럼 넓고 반복 관측되는 평면은 깨끗하게 분리된 단일 component로 남았다.
 - 전체 regression 1198 passed 1 skipped(+14). **WL102·WL103 둘 다 채택하지 않는다 — 같은 축의 양 극단 모두 실제 scene에서 원하는 결과를 주지 못한, 혼재된 정직한 결과.**
+
+## 2026-08-21 Node-Level Observability Accounting — Branch A (arch/2dgs-coverage-first-surface)
+
+- [Worklog 104](worklogs/104_node_level_observability_accounting.md)는 Worklog 103을 전혀 수정하지 않고 그대로 재실행(baseline replay, 커밋된 리포트와 완전 일치)한 뒤, canonical Phase-C 규칙을 각 surfel의 자기 CENTER에 대해 161개 학습 뷰 전부와 대조하는 신규 node-level 관측성 회계(`torch_node_level_observability_accounting.py`)를 추가했다.
+- **실측: WL103 singleton의 94.5%는 자기 CENTER가 어떤 뷰에서도 `on_observed_surface`가 된 적이 없다** — pairwise edge 판정이 너무 엄격해서가 아니라 surfel 자체가 애초에 positive observed-visible evidence가 아니라는 뜻(**Branch A**). renderer-native `radii>0`와 비교하면 이 surfel의 99.98%가 평균 48개 뷰에서 여전히 투영/기여는 하고 있었으나(occlusion-aware 신호 아님, 2DGS 커널이 노출하는 유일한 per-surfel 신호), directive 지시에 따라 그 신호만으로 결론을 뒤집지 않고 한계로 기록했다.
+- Branch A에 따라 새 adjacency는 만들지 않고, `torch_primitive_ownership_visible_topology_separation.py`로 **primitive ownership(전량 보존)과 visible topology membership(component 크기>=2인 36.6%만 구조적 component)을 별개 계약으로 분리**했다 — singleton-owned surfel은 버려지지 않지만 더 이상 "Visible Surface Component"라 부르지 않는다.
+- 신규 focused 테스트 18개, 전체 regression 1216 passed 1 skipped(+18).
