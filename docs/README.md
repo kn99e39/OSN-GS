@@ -226,3 +226,10 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - **실측: Worklog 104가 "한 번도 positively observed 안 됨"(713,540개)으로 분류한 surfel의 95.4%(680,527개)가 실제로는 렌더러의 공식 alpha-compositing에 기여하고 있었다**(중앙값 20개 뷰). **Case B: Worklog 104의 Branch A가 기각된다** — Phase-C의 point-sample CENTER 질의는 학습된 2DGS 표현에 부적절한 primitive-level visibility 정의임이 실증됐다.
 - Directive 지시대로 여기서 멈췄다: 새 threshold/adjacency 없음. Rendering 불변성과 오탐 방지(진짜 가려진 surfel)를 실제 CUDA fixture로 검증했다.
 - 신규 focused 테스트 9개, 전체 regression 1225 passed 1 skipped(+9).
+
+## 2026-08-21 Renderer-Grounded Visible Adjacency — 통제된 대조, 부정적 결과 (arch/2dgs-coverage-first-surface)
+
+- [Worklog 106](worklogs/106_renderer_grounded_visible_adjacency.md)은 Worklog 105의 renderer-contribution 신호로 WL103의 Phase-C center endpoint eligibility를 대체한 신규 `torch_renderer_grounded_visible_adjacency.py`를 WL103과 정확히 동일한 candidate graph/corridor/기하 게이트로 통제 대조했다.
+- **실측: singleton 비율 63.4%→83.8%로 악화, 최대 component 10.50%→2.91%로 더 작아짐** — percolation 재발이 아니라 훨씬 심한 파편화. WL103-singleton-and-renderer-contributing 720,052개 중 11.4%만 edge를 얻었고, 남은 88.6%의 96.9%는 다중 뷰 관측 모순(co-contributing 이웃 부재는 0.14%뿐)이 원인이었다.
+- 시각적으로도 테이블·패티오·hedge 전부 파편화됨을 확인. Directive 지시대로 threshold 조정 없이 멈췄다 — 결과는 다음 아키텍처가 camera-induced adjacency로 이동해야 함을 시사하지만 구현은 다음 배치로 미룬다.
+- 신규 focused 테스트 14개, 전체 regression 1239 passed 1 skipped(+14).
