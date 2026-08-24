@@ -275,3 +275,11 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - 영역별: table_legs 88.9%(최고), table_side_curved 57.3%(최저), patio 77.8%, hedge 49.0%(최저 영역).
 - **건축 판정: NOT VIABLE**(현재 chart 구성 방식으로는) — 주원인은 동결된 위상 자체의 파편화(CANONICAL_TOPOLOGY_ISSUE), 부차 원인은 거대 blob이 미분화된 채 하나의 control grid로 강제 fit됨(CHART_PARAMETERIZATION_FAILURE). NURBS readiness 주장하지 않음.
 - 신규 focused 테스트 15개(directive 11절 A-F 계약 포함), 프로덕션/CUDA/트레이닝 코드 무수정으로 전체 pytest 재실행 안 함.
+
+## 2026-08-24 Renderer-Native Pixel Surface as NURBS Fitting Geometry — NO (arch/2dgs-coverage-first-surface)
+
+- [Worklog 112](worklogs/112_renderer_native_pixel_surface_nurbs.md)는 WL111을 정확히 보존(chart 구성/UV/고정 8×4 NURBS 무변경)하고, 3D fitting 대상만 "대표 서펠 중심"에서 "렌더러가 계산한 픽셀별 median-depth 언프로젝션 표면 점"으로 바꾼 통제 A/B 비교를 실행했다. 기존 공식 2DGS 코드-충실 언프로젝션 함수(`depths_to_points`)를 재사용, CUDA 재빌드 불필요.
+- **실측**: 유효 chart 3,963→14,900개(pixel-count 기준 지지 조건으로 완화), representative 커버리지 68.4%→71.5%, 픽셀 커버리지 93.1%→94.7%로 소폭 개선 — 그러나 **컴포넌트 단위 커버리지 분포는 중앙값·p95 모두 여전히 정확히 0%**. fitting residual 최댓값 7.9→1517.2, overlap 위치 불일치 중앙값 0.030→0.055(악화)·최댓값 8.1→1514.4로 극단 악화.
+- 영역별 커버리지는 소폭 개선(curved rim +4.9%p, hedge +5.8%p)됐으나 기하 품질 개선은 동반하지 않았다.
+- **건축 판정: NO** — 대표-중심/픽셀-표면 불일치는 WL111 실패의 주 원인이 아니다. 남은 실패는 NURBS chart capacity/granularity(거대 미분화 chart) 문제이며 이번 배치는 그것을 해결하지 못하고 악화시켰다.
+- 신규 focused 테스트 9개(실제 CUDA 언프로젝션 계약 포함), 전체 pytest 재실행 안 함.

@@ -218,6 +218,116 @@ def build_view_chart_candidates(view_index: int, component_id_map: Any, represen
     )
 
 
+@dataclass
+class ViewPixelChartSamples:
+    """Worklog 112 addition -- one training view's chart candidates using
+    DENSE PER-PIXEL renderer-native surface samples, not one mean sample per
+    representative surfel (that collapse is exactly what Worklog 111 did and
+    what this batch's directive forbids repeating, section 6). Every valid
+    renderer pixel keeps its OWN (u, v) and its OWN unprojected
+    renderer-native 3D surface point -- `representative_id` is carried along
+    for coverage ACCOUNTING only (section 4), never used as fitting geometry.
+
+    Uses the exact same :func:`label_same_component_blobs` as
+    :class:`ViewChartCandidates` on the identical `component_id_map` input,
+    so blob membership is byte-identical to what Worklog 111's
+    `build_view_chart_candidates` would produce for the same view (directive
+    section 1/5: same chart connected-component labeling, changed only the
+    3D fitting target).
+    """
+
+    view_index: int
+    blob_component_id: Any  # (B,) int64
+    pixel_blob_id: Any  # (P,) int64 -- which blob each valid pixel belongs to
+    pixel_uv: Any  # (P, 2) float32 in [0, 1]^2, normalized per-blob (same convention as WL111)
+    pixel_xyz: Any  # (P, 3) float32 -- renderer-native unprojected surface point, NOT a surfel center
+    pixel_representative_id: Any  # (P,) int64 -- accounting only, never fitting geometry
+    blob_pixel_total: Any  # (B,) int64 -- count of valid pixels per blob (the fitting-support count, section 7)
+
+    @property
+    def blob_count(self) -> int:
+        return int(self.blob_component_id.shape[0])
+
+
+def build_view_chart_pixel_samples(
+    view_index: int, component_id_map: Any, representative_id_map: Any, world_points: Any
+) -> ViewPixelChartSamples:
+    """Dense per-pixel counterpart of :func:`build_view_chart_candidates`.
+    ``world_points`` is the renderer-native unprojected surface point map,
+    ``(H, W, 3)``, produced by unprojecting the SAME forward kernel's own
+    median-crossing depth channel (`out_others[MIDDEPTH_OFFSET]`, see
+    `osn_gs.render.surfel_geometry.depths_to_points`) -- not a surfel
+    center. A pixel is valid iff its ``representative_id_map`` entry is
+    ``>= 0`` (identical validity condition to Worklog 111 and to the
+    forward kernel's own median-crossing test)."""
+
+    from osn_gs.utils.torch_ops import require_torch
+    torch = require_torch()
+
+    device = component_id_map.device
+    h, w = component_id_map.shape
+    blob_labels = label_same_component_blobs(component_id_map)
+    valid = blob_labels >= 0
+    if not bool(valid.any()):
+        empty_i = torch.zeros((0,), dtype=torch.int64, device=device)
+        empty_f = torch.zeros((0, 2), dtype=torch.float32, device=device)
+        empty_f3 = torch.zeros((0, 3), dtype=torch.float32, device=device)
+        return ViewPixelChartSamples(view_index, empty_i, empty_i, empty_f, empty_f3, empty_i, empty_i)
+
+    row_coords, col_coords = torch.meshgrid(
+        torch.arange(h, dtype=torch.float32, device=device),
+        torch.arange(w, dtype=torch.float32, device=device),
+        indexing="ij",
+    )
+    blob_flat = blob_labels[valid]
+    rep_flat = representative_id_map[valid]
+    row_flat = row_coords[valid]
+    col_flat = col_coords[valid]
+    xyz_flat = world_points[valid]
+    blob_count = int(blob_flat.max().item()) + 1
+
+    comp_flat = component_id_map[valid]
+    blob_component_id = torch.zeros((blob_count,), dtype=torch.int64, device=device)
+    blob_component_id.scatter_(0, blob_flat, comp_flat)
+
+    blob_pixel_total = torch.zeros((blob_count,), dtype=torch.int64, device=device)
+    blob_pixel_total.index_add_(0, blob_flat, torch.ones_like(blob_flat))
+
+    min_row = torch.full((blob_count,), float("inf"), device=device)
+    max_row = torch.full((blob_count,), float("-inf"), device=device)
+    min_col = torch.full((blob_count,), float("inf"), device=device)
+    max_col = torch.full((blob_count,), float("-inf"), device=device)
+    min_row.scatter_reduce_(0, blob_flat, row_flat, reduce="amin", include_self=True)
+    max_row.scatter_reduce_(0, blob_flat, row_flat, reduce="amax", include_self=True)
+    min_col.scatter_reduce_(0, blob_flat, col_flat, reduce="amin", include_self=True)
+    max_col.scatter_reduce_(0, blob_flat, col_flat, reduce="amax", include_self=True)
+    row_span = torch.clamp(max_row - min_row, min=_EPS)
+    col_span = torch.clamp(max_col - min_col, min=_EPS)
+
+    u = (row_flat - min_row[blob_flat]) / row_span[blob_flat]
+    v = (col_flat - min_col[blob_flat]) / col_span[blob_flat]
+    pixel_uv = torch.stack([u, v], dim=1).clamp(0.0, 1.0)
+
+    return ViewPixelChartSamples(
+        view_index=view_index,
+        blob_component_id=blob_component_id,
+        pixel_blob_id=blob_flat,
+        pixel_uv=pixel_uv,
+        pixel_xyz=xyz_flat,
+        pixel_representative_id=rep_flat,
+        blob_pixel_total=blob_pixel_total,
+    )
+
+
+def valid_pixel_chart_mask(view_samples: ViewPixelChartSamples, min_pixel_samples: int) -> Any:
+    """Boolean ``(blob_count,)`` mask of blobs with ``>= min_pixel_samples``
+    valid renderer-native PIXEL samples (directive section 7: fitting
+    eligibility is measured by independent pixel-surface samples, never by
+    representative-component size, section 8)."""
+
+    return view_samples.blob_pixel_total >= int(min_pixel_samples)
+
+
 def valid_chart_mask(view_charts: ViewChartCandidates, min_members: int) -> Any:
     """Boolean ``(blob_count,)`` mask of blobs with ``>= min_members``
     DISTINCT member representatives -- the mathematically-derived minimum
