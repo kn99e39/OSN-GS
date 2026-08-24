@@ -36,7 +36,7 @@ std::function<char*(size_t N)> resizeFunctional(torch::Tensor& t) {
 	return lambda;
 }
 
-std::tuple<int, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+std::tuple<int, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
 RasterizeGaussiansCUDA(
 	const torch::Tensor& background,
 	const torch::Tensor& means3D,
@@ -88,6 +88,11 @@ RasterizeGaussiansCUDA(
   // OSN-GS DIAGNOSTIC ADDITION: per-pixel global surfel index of the T>0.5
   // (median-depth) contributor, -1 where none crossed.
   torch::Tensor out_representative_id = torch::full({H, W}, -1, int_opts);
+  // OSN-GS DIAGNOSTIC ADDITION (worklog 108): per-PRIMITIVE (size P, not
+  // H*W) 0/1 flag, set iff this surfel passed every forward acceptance
+  // check for >=1 pixel in this view (the same forward execution as
+  // out_representative_id above).
+  torch::Tensor out_forward_accepted = torch::full({P}, 0, int_opts);
   
   torch::Device device(torch::kCUDA);
   torch::TensorOptions options(torch::kByte);
@@ -131,10 +136,11 @@ RasterizeGaussiansCUDA(
 		out_color.contiguous().data<float>(),
 		out_others.contiguous().data<float>(),
 		out_representative_id.contiguous().data<int>(),
+		out_forward_accepted.contiguous().data<int>(),
 		radii.contiguous().data<int>(),
 		debug);
   }
-  return std::make_tuple(rendered, out_color, out_others, radii, geomBuffer, binningBuffer, imgBuffer, out_representative_id);
+  return std::make_tuple(rendered, out_color, out_others, radii, geomBuffer, binningBuffer, imgBuffer, out_representative_id, out_forward_accepted);
 }
 
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>

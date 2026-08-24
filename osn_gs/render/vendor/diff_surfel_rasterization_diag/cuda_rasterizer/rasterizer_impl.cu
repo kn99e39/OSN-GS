@@ -218,6 +218,7 @@ int CudaRasterizer::Rasterizer::forward(
 	float* out_color,
 	float* out_others,
 	int* out_representative_id,
+	int* out_forward_accepted,
 	int* radii,
 	bool debug)
 {
@@ -338,7 +339,8 @@ int CudaRasterizer::Rasterizer::forward(
 		background,
 		out_color,
 		out_others,
-		out_representative_id), debug)
+		out_representative_id,
+		out_forward_accepted), debug)
 
 	return num_rendered;
 }

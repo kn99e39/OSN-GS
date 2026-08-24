@@ -70,7 +70,14 @@ namespace FORWARD
 		// global surfel index of the median-transmittance-crossing (T>0.5)
 		// contributor at each pixel, -1 where none crossed. Read-only,
 		// diagnostic-only -- see osn_gs/render/torch_surfel_contribution_diagnostics.py.
-		int* out_representative_id);
+		int* out_representative_id,
+		// OSN-GS DIAGNOSTIC ADDITION (worklog 108): per-PRIMITIVE (size P,
+		// not H*W) 0/1 flag -- set to 1 iff this surfel passed every forward
+		// acceptance check (depth/power/alpha/test_T) for >=1 pixel in this
+		// view, i.e. the SAME "accepted contributor" semantics as the
+		// canonical forward kernel's own compositing loop, captured in the
+		// same execution as out_representative_id above.
+		int* out_forward_accepted);
 }
 
 

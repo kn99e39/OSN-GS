@@ -249,3 +249,11 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - **그러나 패티오 거대 component 멤버의 20.4%가 hedge 인접 영역과 겹침**을 발견 — "패티오만의 순수한 표면"이라는 WL107 결론을 부분 수정. Bridge 감사: 최대 component edge의 5.5%가 구조적 bridge, 19.2%가 단일-뷰 지지.
 - **Gate: CONDITIONAL PASS** — representative backbone을 canonical topology 후보로 제안하되 패티오-hedge 경계 caveat 동반, non-representative contributor는 attach하지 않고 retained evidence로만 분류.
 - Production 코드 미변경, 신규 focused 테스트 9개, 전체 pytest 재실행 안 함.
+
+## 2026-08-24 Renderer-Native Surface Representative Graph — Gate Closure, GATE PASS (arch/2dgs-coverage-first-surface)
+
+- [Worklog 109](worklogs/109_renderer_native_topology_gate_closure.md)는 Worklog 108의 두 caveat를 실측으로 닫았다. WL107 adjacency 알고리즘은 이번에도 무수정.
+- **CAVEAT 1**: 진단 CUDA 빌드(canonical 무수정)에 `out_forward_accepted`를 추가해 representative 캡처와 **같은 forward 실행**에서 기록되게 함. 실측: `representative_and_not_forward_accepted = 0`(전수 확인) — WL108의 36,051 discrepancy는 100% forward_accepted였고, WL105 별도 backward 진단이 실제 기여를 놓친 것임을 부동소수점 추측 없이 확정.
+- **CAVEAT 2**: WL107 무수정 재실행으로 재현성 확인(36.77%/45.02% 완전 일치) 후, 89,502개(hedge의 26.2%) 패티오/hedge 중첩의 실제 그래프 프론티어(1,110개 엣지 전수)를 추출, Tarjan bridge-finding + DFS 서브트리 크기로 정확한 split-impact 계산. **frontier와 교차하는 bridge는 56,816개 중 67개(0.118%)뿐이고 최대 분리는 56개(0.013%)** — 패티오-hedge 중첩은 취약한 단일 다리가 아니라 1,043개 중복 경로로 얽힌 견고한 다중 뷰 지지(80.7%) 연결이며, 최대 component의 진짜 취약점(고영향 bridge 상위 10.7% 분리)은 경계가 아니라 각 영역 내부에 있다.
+- **GATE: PASS** — Renderer-Native Surface Representative Graph를 canonical Visible Surface Topology Backbone으로 정식 채택. 단, 최대 component가 patio-인접 구조와 hedge 식생을 다중 뷰로 함께 포함한다는 사실은 순수 geometric 위상 구성의 정직한 한계로 기록(의미론적 분리는 Trust 단계 과제). Non-representative contributor는 이번에도 attach하지 않았다.
+- Production/runtime 공유 코드 미변경(진단 CUDA 빌드만 확장), 신규 focused 테스트 5개 + 기존 5개 재검증, 전체 pytest 재실행 안 함.

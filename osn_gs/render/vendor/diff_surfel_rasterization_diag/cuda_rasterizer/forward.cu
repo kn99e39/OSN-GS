@@ -270,7 +270,8 @@ renderCUDA(
 	const float* __restrict__ bg_color,
 	float* __restrict__ out_color,
 	float* __restrict__ out_others,
-	int* __restrict__ out_representative_id)
+	int* __restrict__ out_representative_id,
+	int* __restrict__ out_forward_accepted)
 {
 	// Identify current tile and associated min/max pixel range.
 	auto block = cg::this_thread_block();
@@ -399,6 +400,18 @@ renderCUDA(
 				continue;
 			}
 
+			// OSN-GS DIAGNOSTIC ADDITION (worklog 108): this is exactly the
+			// point the primitive has passed every forward acceptance check
+			// (depth >= near, power <= 0, alpha >= 1/255, test_T >= 0.0001)
+			// -- the same "accepted contributor" semantics WL105's backward-
+			// gradient trick was trying to approximate from a SEPARATE CUDA
+			// execution path. Recorded directly here, same forward pass,
+			// same execution as median_surfel_id below. `out_forward_
+			// accepted` is sized (P,) (per-primitive, NOT per-pixel) -- a
+			// benign race (every writer stores the same value 1) needs no
+			// atomic.
+			out_forward_accepted[collected_id[j]] = 1;
+
 			float w = alpha * T;
 #if RENDER_AXUTILITY
 			// Render depth distortion map
@@ -471,7 +484,8 @@ void FORWARD::render(
 	const float* bg_color,
 	float* out_color,
 	float* out_others,
-	int* out_representative_id)
+	int* out_representative_id,
+	int* out_forward_accepted)
 {
 	renderCUDA<NUM_CHANNELS> << <grid, block >> > (
 		ranges,
@@ -488,7 +502,8 @@ void FORWARD::render(
 		bg_color,
 		out_color,
 		out_others,
-		out_representative_id);
+		out_representative_id,
+		out_forward_accepted);
 }
 
 void FORWARD::preprocess(int P, int D, int M,

@@ -43,6 +43,22 @@ directory), loaded only by this module, never imported by
 `osn_gs/core/torch_pipeline.py` or `osn_gs/core/torch_trainer.py`. Backward.cu
 is copied unmodified (this diagnostic never needs gradients); the forward
 call here is always issued under `torch.no_grad()`.
+
+Worklog 108 addition -- SAME-FORWARD accepted-contributor accounting. Worklog
+104/105's separate backward-gradient contribution diagnostic and this
+module's forward-only representative signal come from two DIFFERENT CUDA
+executions, which left an unresolved 36,051-surfel discrepancy category
+(representative without backward-diagnosed contribution). To settle whether
+that gap is renderer semantics or a cross-path artifact, this module now
+ALSO captures, in the exact SAME forward execution as `median_surfel_id`
+above, a per-PRIMITIVE (not per-pixel) 0/1 flag `forward_accepted`: set
+directly at the line `float w = alpha * T;` in `forward.cu` (immediately
+after the primitive has passed every forward acceptance check: depth >=
+near, power <= 0, alpha >= 1/255, test_T >= 0.0001 -- the canonical
+kernel's own accepted-contribution semantics, no new threshold). A benign
+race (every writer stores the same value 1) needs no atomic. This answers,
+from ONE execution rather than two, whether `MEDIAN_SURFACE_REPRESENTATIVE`
+can occur without `FORWARD_ACCEPTED_CONTRIBUTOR` in the same forward pass.
 """
 
 import math
@@ -115,10 +131,12 @@ def get_diag_extension():
 def render_with_pixel_representative(camera: Any, model: Any, background: Any | None = None) -> dict[str, Any]:
     """Diagnostic-only forward render exposing the per-pixel median-depth
     contributor's GLOBAL surfel index, `-1` where no contributor crossed
-    T=0.5. Always runs under `torch.no_grad()` -- no gradients, no autograd
-    Function, no `.grad` state touched anywhere. Calls the raw extension
-    function directly (bypassing the canonical package's autograd wrapper
-    entirely, since no backward pass is ever needed here).
+    T=0.5, and (worklog 108) a per-primitive `forward_accepted` 0/1 flag
+    captured in the SAME forward execution. Always runs under
+    `torch.no_grad()` -- no gradients, no autograd Function, no `.grad`
+    state touched anywhere. Calls the raw extension function directly
+    (bypassing the canonical package's autograd wrapper entirely, since no
+    backward pass is ever needed here).
     """
 
     torch = require_torch()
@@ -131,7 +149,8 @@ def render_with_pixel_representative(camera: Any, model: Any, background: Any | 
     tanfovy = math.tan(float(camera.FoVy) * 0.5)
     with torch.no_grad():
         (
-            _num_rendered, color, out_others, radii, _geom, _binning, _img, representative_id,
+            _num_rendered, color, out_others, radii, _geom, _binning, _img,
+            representative_id, forward_accepted,
         ) = extension.rasterize_gaussians(
             background,
             model.get_xyz,
@@ -159,4 +178,5 @@ def render_with_pixel_representative(camera: Any, model: Any, background: Any | 
         "out_others": out_others,
         "radii": radii,
         "representative_id": representative_id,
+        "forward_accepted": forward_accepted,
     }
