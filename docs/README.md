@@ -266,3 +266,12 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - **실측(그 편향에도 불구하고)**: 정확히 하나의 컴포넌트를 일관되게 co-support하는 인구는 26.2%뿐이고 48.0%는 2개 이상(중앙값 4개, 최대 609개)에 걸쳐 있으며, 63.3%가 최소 1회 POST_MEDIAN(PRE_MEDIAN 43.8%보다 큼)이다 — truncation이 이 방향을 과소평가하는 쪽으로만 작용하므로 실제 모호성은 더 클 가능성이 높다. 테이블이 가장 깨끗, 헤지/배경이 가장 layered(POST-계열 64.7%, 다중-컴포넌트 54.4%). table↔patio, 최대컴포넌트↔hedge 동시 접촉 표본은 0건.
 - **건축 결정: AMBIGUOUS/LAYERED SUPPORT** — non-representative 증거를 일괄 Visible Surface Support Evidence로 부르지 않는다. Trust는 patio/hedge 객체 정체성 분리를 담당하지 않는다는 것도 명시적으로 재확인(WL109 프레이밍 교정).
 - Production/runtime 공유 코드 미변경, 신규 focused 테스트 25개, 전체 pytest 재실행 안 함.
+
+## 2026-08-24 Representative-Only Visible NURBS Scaffold — NOT VIABLE (arch/2dgs-coverage-first-surface)
+
+- [Worklog 111](worklogs/111_representative_only_visible_nurbs.md)은 WL107/109 canonical topology(무수정)와 WL110의 AMBIGUOUS/LAYERED SUPPORT 판정(non-representative 증거 배제)을 그대로 얼려두고, 785,937개 representative만으로 scene-covering continuous visible NURBS를 만들 수 있는지 실측했다.
+- 신규 `torch_camera_observed_chart_domains.py`: 카메라 자신의 픽셀 좌표를 chart UV로 직접 사용(3D PCA/kNN 아님), scipy 정확 connected-components로 chart 후보를 만들되 서로 다른 canonical 컴포넌트는 구조적으로 절대 같은 chart를 공유할 수 없다. NURBS fit은 기존 프로젝트 기본값(8×4 control grid)을 그대로 재사용, 최소 chart 멤버 수(32)는 수학적으로 유도(튜닝 없음).
+- **실측(전체 161개 뷰, 위상 재생 완전 일치 확인)**: representative 멤버십 커버리지 68.4%, 픽셀 커버리지 93.1%로 양호해 보이지만 **컴포넌트 단위 커버리지 분포는 중앙값·p95 모두 0%** — 커버리지가 소수의 거대 컴포넌트에만 집중된다. fitting residual 중앙값 0.032이지만 최대 7.9, overlap 법선 불일치 중앙값 5.04°이지만 p95 57.9°/최대 180°에 근접 — 거대/미분화 chart의 fitting 실패.
+- 영역별: table_legs 88.9%(최고), table_side_curved 57.3%(최저), patio 77.8%, hedge 49.0%(최저 영역).
+- **건축 판정: NOT VIABLE**(현재 chart 구성 방식으로는) — 주원인은 동결된 위상 자체의 파편화(CANONICAL_TOPOLOGY_ISSUE), 부차 원인은 거대 blob이 미분화된 채 하나의 control grid로 강제 fit됨(CHART_PARAMETERIZATION_FAILURE). NURBS readiness 주장하지 않음.
+- 신규 focused 테스트 15개(directive 11절 A-F 계약 포함), 프로덕션/CUDA/트레이닝 코드 무수정으로 전체 pytest 재실행 안 함.
