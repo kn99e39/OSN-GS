@@ -240,3 +240,12 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - 신규 `torch_camera_induced_visible_adjacency.py`: 이미지-격자 인접 → 3D 국소성 필터(제약만) → 2차 기하 게이트(재사용) → **모든 뷰의 양성 관계 합집합**(occlusion이 다른 뷰의 양성을 부정하지 않음, conflict 상태 자체가 구조적으로 없음).
 - **실측(WL106 대조): singleton 83.8%→45.0%, 최대 component 2.9%→36.8%.** 시각 검토로 테이블이 패티오와 분리된 단일 component로 남고, 최대 component는 패티오 바닥의 정당한 연속 표면으로 보임을 확인(WL96-102 시절 percolation과 질적으로 다름). Hedge는 여전히 대부분 파편화.
 - Directive 지시대로 최종 architecture 성공을 자동 선언하지 않는다. 신규 focused 테스트 15개, 전체 regression 1254 passed 1 skipped(+15).
+
+## 2026-08-23 Renderer-Native Surface Representative Backbone — 조건부 통과 (arch/2dgs-coverage-first-surface)
+
+- [Worklog 108](worklogs/108_camera_induced_representative_backbone_audit.md)은 Worklog 107의 adjacency 알고리즘을 전혀 수정하지 않고, "renderer-contributing 전체"가 아니라 "renderer surface representative"라는 올바른 구조적 모집단으로 재평가하는 architecture gate/회계 감사다.
+- **회계 불일치 해소**: contributing과 representative 사이 정확히 36,051개의 예상 밖 교차 카테고리를 실측 확인(WL107의 385,998 자체는 정확, 단순 뺄셈이 discrepancy를 만듦) — 서로 다른 두 CUDA 빌드의 부동소수점 재구성 차이로 추정, 버그 증거 없음.
+- **Representative-only 회계: singleton 16.7%(vs 전체 기준 45.0%), 연결 83.3%** — 훨씬 결합력 있는 backbone. 결정론적 픽셀 anchor로 테이블-패티오 분리, hedge 3지점 모두 다른 component임을 재확인.
+- **그러나 패티오 거대 component 멤버의 20.4%가 hedge 인접 영역과 겹침**을 발견 — "패티오만의 순수한 표면"이라는 WL107 결론을 부분 수정. Bridge 감사: 최대 component edge의 5.5%가 구조적 bridge, 19.2%가 단일-뷰 지지.
+- **Gate: CONDITIONAL PASS** — representative backbone을 canonical topology 후보로 제안하되 패티오-hedge 경계 caveat 동반, non-representative contributor는 attach하지 않고 retained evidence로만 분류.
+- Production 코드 미변경, 신규 focused 테스트 9개, 전체 pytest 재실행 안 함.
