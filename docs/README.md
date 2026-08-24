@@ -233,3 +233,10 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - **실측: singleton 비율 63.4%→83.8%로 악화, 최대 component 10.50%→2.91%로 더 작아짐** — percolation 재발이 아니라 훨씬 심한 파편화. WL103-singleton-and-renderer-contributing 720,052개 중 11.4%만 edge를 얻었고, 남은 88.6%의 96.9%는 다중 뷰 관측 모순(co-contributing 이웃 부재는 0.14%뿐)이 원인이었다.
 - 시각적으로도 테이블·패티오·hedge 전부 파편화됨을 확인. Directive 지시대로 threshold 조정 없이 멈췄다 — 결과는 다음 아키텍처가 camera-induced adjacency로 이동해야 함을 시사하지만 구현은 다음 배치로 미룬다.
 - 신규 focused 테스트 14개, 전체 regression 1239 passed 1 skipped(+14).
+
+## 2026-08-21 Camera-Induced Visible Adjacency — 뚜렷한 개선, 최종 채택 아님 (arch/2dgs-coverage-first-surface)
+
+- [Worklog 107](worklogs/107_camera_induced_visible_adjacency.md)은 카메라 자신의 렌더링된 표면이 직접 surfel 인접성을 생성하는 아키텍처로 전환했다(3D edge에 카메라가 승인하는 방식에서 벗어남). 벤더 CUDA를 직접 읽어 이미 내부에 존재하는 `median_contributor`(T>0.5 crossing)를 노출하는 **진단 전용 CUDA 빌드**(원본 미수정 형제 디렉터리)를 만들고, rendering 불변성과 오탐 방지를 실제 CUDA로 검증했다.
+- 신규 `torch_camera_induced_visible_adjacency.py`: 이미지-격자 인접 → 3D 국소성 필터(제약만) → 2차 기하 게이트(재사용) → **모든 뷰의 양성 관계 합집합**(occlusion이 다른 뷰의 양성을 부정하지 않음, conflict 상태 자체가 구조적으로 없음).
+- **실측(WL106 대조): singleton 83.8%→45.0%, 최대 component 2.9%→36.8%.** 시각 검토로 테이블이 패티오와 분리된 단일 component로 남고, 최대 component는 패티오 바닥의 정당한 연속 표면으로 보임을 확인(WL96-102 시절 percolation과 질적으로 다름). Hedge는 여전히 대부분 파편화.
+- Directive 지시대로 최종 architecture 성공을 자동 선언하지 않는다. 신규 focused 테스트 15개, 전체 regression 1254 passed 1 skipped(+15).
