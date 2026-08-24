@@ -156,3 +156,68 @@ class SurfelRepresentativeDiagnosticsTest(unittest.TestCase):
                     int(forward_accepted[surfel_id].item()), 1,
                     f"surfel {surfel_id} is a representative but was not forward_accepted",
                 )
+
+    def test_diagnostic_rendering_still_matches_canonical_after_contrib_provenance_addition(self):
+        """Worklog 110: `out_contrib_ids`/`out_contrib_post_median`/
+        `out_contrib_count` were threaded through the same forward.cu
+        kernel a third time. Re-verify render invariance again."""
+
+        camera = _tilted_camera()
+        model = _single_surfel()
+        rasterizer = OSNSurfelRasterizer(SurfelRasterizerConfig())
+        canonical = rasterizer.render(camera, model)
+        diag = render_with_pixel_representative(camera, model)
+        torch.testing.assert_close(diag["render"], canonical["render"].detach())
+
+    def test_single_visible_surfel_is_pre_or_at_median_never_post(self):
+        """A single surfel covering a pixel is trivially its own (only)
+        accepted contributor there, so it is always at-or-before the
+        median crossing (contrib_post_median=0) -- there is no earlier
+        contributor to have already crossed T=0.5."""
+
+        camera = _tilted_camera()
+        model = _single_surfel()
+        diag = render_with_pixel_representative(camera, model)
+        contrib_ids = diag["contrib_ids"]
+        contrib_post_median = diag["contrib_post_median"]
+        valid = contrib_ids >= 0
+        self.assertTrue(bool(valid.any()))
+        self.assertTrue(bool((contrib_ids[valid] == 0).all()))
+        self.assertTrue(bool((contrib_post_median[valid] == 0).all()))
+
+    def test_occluded_weakly_transmitted_contributor_is_post_median(self):
+        """Direct traversal-order evidence for the same fixture as
+        `test_occluded_but_weakly_transmitted_surfel_can_still_be_forward_
+        accepted`: the near surfel (id 0) is accepted at-or-before the
+        median (it crosses/is the median itself, contrib_post_median=0);
+        the far, visually-occluded surfel (id 1) is accepted STRICTLY
+        AFTER the median crossing (contrib_post_median=1) -- exactly the
+        renderer-order distinction worklog 110 exists to make explicit,
+        not surface-representative status."""
+
+        model = _multi_flat_surfel([(2.0, 0.99, 4.0), (5.0, 0.99, 4.0)])
+        camera = _identity_camera()
+        diag = render_with_pixel_representative(camera, model)
+        contrib_ids = diag["contrib_ids"]
+        contrib_post_median = diag["contrib_post_median"]
+
+        near_valid = contrib_ids == 0
+        far_valid = contrib_ids == 1
+        self.assertTrue(bool(near_valid.any()))
+        self.assertTrue(bool(far_valid.any()))
+        self.assertTrue(bool((contrib_post_median[near_valid] == 0).all()))
+        self.assertTrue(bool((contrib_post_median[far_valid] == 1).all()))
+
+    def test_contrib_count_matches_number_of_distinct_accepted_contributors(self):
+        """`contrib_count` is the true, uncapped per-pixel accepted count --
+        for the 2-surfel occlusion fixture (both accepted at every covered
+        pixel), it must be exactly 2 wherever both surfels cover the pixel."""
+
+        model = _multi_flat_surfel([(2.0, 0.99, 4.0), (5.0, 0.99, 4.0)])
+        camera = _identity_camera()
+        diag = render_with_pixel_representative(camera, model)
+        rep = diag["representative_id"]
+        contrib_count = diag["contrib_count"]
+        covered = rep >= 0
+        self.assertTrue(bool(covered.any()))
+        self.assertTrue(bool((contrib_count[covered] == 2).all()))

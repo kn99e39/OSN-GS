@@ -77,7 +77,15 @@ namespace FORWARD
 		// view, i.e. the SAME "accepted contributor" semantics as the
 		// canonical forward kernel's own compositing loop, captured in the
 		// same execution as out_representative_id above.
-		int* out_forward_accepted);
+		int* out_forward_accepted,
+		// OSN-GS DIAGNOSTIC ADDITION (worklog 110): bounded per-pixel
+		// accepted-contributor provenance -- (H, W, OSN_GS_MAX_CONTRIB_SLOTS)
+		// global surfel ids (-1 = unused slot) and matching pre/post-median
+		// flags (see config.h and forward.cu for the exact traversal-order
+		// semantics), plus the true uncapped per-pixel accepted count.
+		int* out_contrib_ids,
+		int* out_contrib_post_median,
+		int* out_contrib_count);
 }
 
 

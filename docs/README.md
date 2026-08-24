@@ -257,3 +257,12 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - **CAVEAT 2**: WL107 무수정 재실행으로 재현성 확인(36.77%/45.02% 완전 일치) 후, 89,502개(hedge의 26.2%) 패티오/hedge 중첩의 실제 그래프 프론티어(1,110개 엣지 전수)를 추출, Tarjan bridge-finding + DFS 서브트리 크기로 정확한 split-impact 계산. **frontier와 교차하는 bridge는 56,816개 중 67개(0.118%)뿐이고 최대 분리는 56개(0.013%)** — 패티오-hedge 중첩은 취약한 단일 다리가 아니라 1,043개 중복 경로로 얽힌 견고한 다중 뷰 지지(80.7%) 연결이며, 최대 component의 진짜 취약점(고영향 bridge 상위 10.7% 분리)은 경계가 아니라 각 영역 내부에 있다.
 - **GATE: PASS** — Renderer-Native Surface Representative Graph를 canonical Visible Surface Topology Backbone으로 정식 채택. 단, 최대 component가 patio-인접 구조와 hedge 식생을 다중 뷰로 함께 포함한다는 사실은 순수 geometric 위상 구성의 정직한 한계로 기록(의미론적 분리는 Trust 단계 과제). Non-representative contributor는 이번에도 attach하지 않았다.
 - Production/runtime 공유 코드 미변경(진단 CUDA 빌드만 확장), 신규 focused 테스트 5개 + 기존 5개 재검증, 전체 pytest 재실행 안 함.
+
+## 2026-08-24 Non-Representative Renderer Evidence — Role Attribution, AMBIGUOUS/LAYERED SUPPORT (arch/2dgs-coverage-first-surface)
+
+- [Worklog 110](worklogs/110_nonrepresentative_evidence_attribution.md)은 WL109가 GATE PASS로 확정한 canonical topology(`torch_camera_induced_visible_adjacency.py`)를 전혀 수정하지 않고, representative가 되지 못한 채 forward-accept된 395,676개 서펠의 역할을 귀속(attribution)만 했다 — attachment는 이번 배치에서 하지 않았다.
+- 진단 CUDA 빌드(canonical 무수정)에 픽셀당 bounded slot 배열(K=16, `contrib_count`로 truncation 항상 감지 가능)을 추가해, 커널이 이미 median-crossing 체크에 쓰는 running transmittance `T`를 그대로 재사용해 새 threshold 없이 PRE_MEDIAN/POST_MEDIAN을 분류하고, 같은 픽셀의 representative를 통해 contributor↔canonical-component co-support를 스트리밍 방식(전체 픽셀×서펠 행렬 없음)으로 집계했다.
+- **핵심 발견 — 심각한 truncation**: 전체 픽셀·뷰 슬롯의 **97.4%(42,660,905/43,817,760)**가 K=16 캡을 넘었고, 슬롯은 depth 오름차순으로 채워지므로 truncation은 항상 "더 단순한 쪽"(단일 컴포넌트, PRE_MEDIAN)으로만 표본을 편향시킨다 — 휴리스틱으로 대체하지 않고 이 한계를 그대로 보고했다(directive Section 5).
+- **실측(그 편향에도 불구하고)**: 정확히 하나의 컴포넌트를 일관되게 co-support하는 인구는 26.2%뿐이고 48.0%는 2개 이상(중앙값 4개, 최대 609개)에 걸쳐 있으며, 63.3%가 최소 1회 POST_MEDIAN(PRE_MEDIAN 43.8%보다 큼)이다 — truncation이 이 방향을 과소평가하는 쪽으로만 작용하므로 실제 모호성은 더 클 가능성이 높다. 테이블이 가장 깨끗, 헤지/배경이 가장 layered(POST-계열 64.7%, 다중-컴포넌트 54.4%). table↔patio, 최대컴포넌트↔hedge 동시 접촉 표본은 0건.
+- **건축 결정: AMBIGUOUS/LAYERED SUPPORT** — non-representative 증거를 일괄 Visible Surface Support Evidence로 부르지 않는다. Trust는 patio/hedge 객체 정체성 분리를 담당하지 않는다는 것도 명시적으로 재확인(WL109 프레이밍 교정).
+- Production/runtime 공유 코드 미변경, 신규 focused 테스트 25개, 전체 pytest 재실행 안 함.

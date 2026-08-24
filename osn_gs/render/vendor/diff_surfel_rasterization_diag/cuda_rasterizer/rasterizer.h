@@ -52,6 +52,9 @@ namespace CudaRasterizer
 			float* out_others,
 			int* out_representative_id,
 			int* out_forward_accepted,
+			int* out_contrib_ids,
+			int* out_contrib_post_median,
+			int* out_contrib_count,
 			int* radii = nullptr,
 			bool debug = false);
 

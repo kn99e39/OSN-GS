@@ -59,6 +59,23 @@ kernel's own accepted-contribution semantics, no new threshold). A benign
 race (every writer stores the same value 1) needs no atomic. This answers,
 from ONE execution rather than two, whether `MEDIAN_SURFACE_REPRESENTATIVE`
 can occur without `FORWARD_ACCEPTED_CONTRIBUTOR` in the same forward pass.
+
+Worklog 110 addition -- bounded per-pixel accepted-contributor provenance.
+Worklog 109 established that FORWARD_ACCEPTED_CONTRIBUTOR != VISIBLE SURFACE
+SUPPORT: a primitive can be accepted through residual transmittance while
+lying behind the pixel's median representative. To attribute the role of
+these 395,676 accepted-non-representative surfels (worklog 109's real-scene
+count) without inventing a heuristic, this module now ALSO captures, in the
+same forward execution, each accepted contributor's traversal relation to
+its pixel's median crossing: `T > 0.5` at acceptance (before this
+contributor's own alpha update) means at-or-before the median crossing;
+`T <= 0.5` means strictly after. This is recorded into a bounded per-pixel
+slot array (`OSN_GS_MAX_CONTRIB_SLOTS` = 16, `config.h`) -- a sparse/
+streamed representation, never a full (H*W*P) matrix -- with a matching
+uncapped `contrib_count` so truncation is always detectable rather than
+silently absorbed. See `torch_nonrepresentative_evidence_attribution.py`
+(worklog 110) for how this is turned into contributor<->representative
+co-support accounting.
 """
 
 import math
@@ -131,12 +148,20 @@ def get_diag_extension():
 def render_with_pixel_representative(camera: Any, model: Any, background: Any | None = None) -> dict[str, Any]:
     """Diagnostic-only forward render exposing the per-pixel median-depth
     contributor's GLOBAL surfel index, `-1` where no contributor crossed
-    T=0.5, and (worklog 108) a per-primitive `forward_accepted` 0/1 flag
-    captured in the SAME forward execution. Always runs under
-    `torch.no_grad()` -- no gradients, no autograd Function, no `.grad`
-    state touched anywhere. Calls the raw extension function directly
-    (bypassing the canonical package's autograd wrapper entirely, since no
-    backward pass is ever needed here).
+    T=0.5, a per-primitive `forward_accepted` 0/1 flag captured in the SAME
+    forward execution (worklog 108), and (worklog 110) bounded per-pixel
+    accepted-contributor provenance: `contrib_ids` (H, W, K) global surfel
+    ids (-1 = unused slot, K = `OSN_GS_MAX_CONTRIB_SLOTS` in config.h),
+    `contrib_post_median` (H, W, K) matching 0/1 flags (1 = this event's
+    running transmittance T was already <= 0.5 when accepted, i.e. strictly
+    after this pixel's median crossing; 0 = at-or-before), and
+    `contrib_count` (H, W) the TRUE uncapped per-pixel accepted-contributor
+    count (compare against K to detect slot-array truncation -- always
+    visible, never silently hidden). Always runs under `torch.no_grad()` --
+    no gradients, no autograd Function, no `.grad` state touched anywhere.
+    Calls the raw extension function directly (bypassing the canonical
+    package's autograd wrapper entirely, since no backward pass is ever
+    needed here).
     """
 
     torch = require_torch()
@@ -150,7 +175,7 @@ def render_with_pixel_representative(camera: Any, model: Any, background: Any | 
     with torch.no_grad():
         (
             _num_rendered, color, out_others, radii, _geom, _binning, _img,
-            representative_id, forward_accepted,
+            representative_id, forward_accepted, contrib_ids, contrib_post_median, contrib_count,
         ) = extension.rasterize_gaussians(
             background,
             model.get_xyz,
@@ -177,6 +202,9 @@ def render_with_pixel_representative(camera: Any, model: Any, background: Any | 
         "render": color,
         "out_others": out_others,
         "radii": radii,
+        "contrib_ids": contrib_ids,
+        "contrib_post_median": contrib_post_median,
+        "contrib_count": contrib_count,
         "representative_id": representative_id,
         "forward_accepted": forward_accepted,
     }

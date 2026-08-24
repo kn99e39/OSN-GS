@@ -271,7 +271,10 @@ renderCUDA(
 	float* __restrict__ out_color,
 	float* __restrict__ out_others,
 	int* __restrict__ out_representative_id,
-	int* __restrict__ out_forward_accepted)
+	int* __restrict__ out_forward_accepted,
+	int* __restrict__ out_contrib_ids,
+	int* __restrict__ out_contrib_post_median,
+	int* __restrict__ out_contrib_count)
 {
 	// Identify current tile and associated min/max pixel range.
 	auto block = cg::this_thread_block();
@@ -305,6 +308,11 @@ renderCUDA(
 	uint32_t contributor = 0;
 	uint32_t last_contributor = 0;
 	float C[CHANNELS] = { 0 };
+	// OSN-GS DIAGNOSTIC ADDITION (worklog 110): per-pixel accepted-
+	// contributor slot cursor (this thread owns exactly one pixel and
+	// processes its contributor list sequentially, so a plain register
+	// counter is race-free -- no atomic needed).
+	int contrib_slot_count = 0;
 
 
 #if RENDER_AXUTILITY
@@ -412,6 +420,28 @@ renderCUDA(
 			// atomic.
 			out_forward_accepted[collected_id[j]] = 1;
 
+			// OSN-GS DIAGNOSTIC ADDITION (worklog 110): record this accepted
+			// contributor's global surfel id and its pre/post-median
+			// traversal relation into a bounded per-pixel slot array (see
+			// OSN_GS_MAX_CONTRIB_SLOTS, config.h) -- a sparse/streamed
+			// representation, never a full (H*W*P) matrix. `T` here is
+			// still the value from BEFORE this contributor's own alpha
+			// update, exactly the same value the `if (T > 0.5)` median-
+			// crossing check below reads -- so `T > 0.5` means this event
+			// happened at-or-before the pixel's median crossing, `T <=
+			// 0.5` means strictly after (some earlier contributor at this
+			// pixel already crossed T=0.5). Overflow past
+			// OSN_GS_MAX_CONTRIB_SLOTS is truncated in the slot array but
+			// always visible via `out_contrib_count`, which is written
+			// uncapped.
+			if (contrib_slot_count < OSN_GS_MAX_CONTRIB_SLOTS)
+			{
+				int slot = pix_id * OSN_GS_MAX_CONTRIB_SLOTS + contrib_slot_count;
+				out_contrib_ids[slot] = collected_id[j];
+				out_contrib_post_median[slot] = (T <= 0.5f) ? 1 : 0;
+			}
+			contrib_slot_count++;
+
 			float w = alpha * T;
 #if RENDER_AXUTILITY
 			// Render depth distortion map
@@ -450,6 +480,7 @@ renderCUDA(
 	{
 		final_T[pix_id] = T;
 		n_contrib[pix_id] = last_contributor;
+		out_contrib_count[pix_id] = contrib_slot_count;  // OSN-GS DIAGNOSTIC ADDITION -- uncapped true count
 		for (int ch = 0; ch < CHANNELS; ch++)
 			out_color[ch * H * W + pix_id] = C[ch] + T * bg_color[ch];
 
@@ -485,7 +516,10 @@ void FORWARD::render(
 	float* out_color,
 	float* out_others,
 	int* out_representative_id,
-	int* out_forward_accepted)
+	int* out_forward_accepted,
+	int* out_contrib_ids,
+	int* out_contrib_post_median,
+	int* out_contrib_count)
 {
 	renderCUDA<NUM_CHANNELS> << <grid, block >> > (
 		ranges,
@@ -503,7 +537,10 @@ void FORWARD::render(
 		out_color,
 		out_others,
 		out_representative_id,
-		out_forward_accepted);
+		out_forward_accepted,
+		out_contrib_ids,
+		out_contrib_post_median,
+		out_contrib_count);
 }
 
 void FORWARD::preprocess(int P, int D, int M,
