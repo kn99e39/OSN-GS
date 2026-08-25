@@ -293,3 +293,18 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - 영역별: table_top 75.5%, table_side_curved 62.2%(순수 A), patio 79.9%(최고지만 극단값 대부분 발생), hedge 54.8%(순수 A, 최저).
 - 4개 원인을 단일로 강제하지 않고 서로 다른 통계량/컴포넌트 규모대에 정확히 배정. 건축 결정/새 표현 메커니즘 구현 없음.
 - 신규 focused 테스트 12개(순수 로직), 프로덕션/CUDA 코드 무수정으로 전체 pytest 재실행 안 함.
+
+## 2026-08-25 Local Rank-Complete NURBS Chart Network — LOCAL_CHART_UNIT_NOT_VIABLE (arch/2dgs-coverage-first-surface)
+
+- [Worklog 114](worklogs/114_local_rank_complete_chart_network.md)는 WL107/109 위상·WL112 픽셀-표면 기하·고정 8×4 NURBS를 동결하고, chart **단위**만 "blob=chart 하나"(WL112)에서 "blob → pole-of-inaccessibility 시드 + BFS 성장 → 고정 8×4 design matrix가 처음 full column rank에 도달하는 지점에서 닫힘 → 여러 local chart"로 교체했다.
+- **통제 비교(위상/대표는 전체 161개 뷰, chart 성장+fit만 8개 뷰 stride 표집 — 명시적 범위 축소)**: chart 수 889→14,137(15.9배), residual 중앙값 9배·p95 8배 개선, 구멍 있는 chart 비율 46.1%→15.7%, aspect ratio p95 3.36→1.22로 도메인 모양 뚜렷이 개선.
+- **그러나 representative 커버리지가 11.7% 감소(다섯 영역 전부)하고 overlap 법선 불일치가 크게 악화(중앙값 5.8°→18.2°, p95 59.3°→96.5°)했다.** WL113의 D(렌더러 median-depth 국소 불안정) 이상치가 새 방법에서도 동일 패턴으로 지속됨을 확인.
+- **건축 판정: LOCAL_CHART_UNIT_NOT_VIABLE** — fit 품질/도메인 모양 개선이 coverage 하락·overlap 악화라는 대가 없이 오지 않았다.
+- 신규 focused 테스트 9개, 프로덕션/CUDA 코드 무수정으로 전체 pytest 재실행 안 함.
+
+## 2026-08-25 Design-Intent/Specification/Implementation Traceability Audit — 감사만 수행, 구현 없음 (arch/2dgs-coverage-first-surface)
+
+- [Worklog 115](worklogs/115_design_intent_specification_implementation_traceability_audit.md)는 WL107-113의 RESEARCH INTENT → SPECIFICATION → IMPLEMENTATION → OBSERVED RESULT 인과 사슬을 감사했다(구현/튜닝 없음).
+- **결론: 감사 범위에서 순수 INTENT-level 실패나 IMPLEMENTATION DEVIATION은 발견되지 않았다.** 관측된 실패는 압도적으로 SPECIFICATION-INDUCED(chart 단위 정의, 사각형 UV 도메인 — `torch_nurbs.py`에 이미 존재하나 미사용인 `uv_support_mask` 발견, per-view 비병합)이거나 의도적 통제 조건(고정 8×4 용량)이거나 렌더러 자체 현상(D)이다.
+- WL114의 rank-complete local chart 제안을 사전 감사해 "full column rank(대수적)"가 "유효한 local geometric chart(기하적)"를 보장하지 않는다는 간극을 지적했고, WL114의 실측이 이를 직접 확인했다.
+- Design debt 목록과 증명된 canonical contract vs 미해결 표현 선택을 분리 정리. 코드 변경 없음.
