@@ -283,3 +283,12 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - 영역별 커버리지는 소폭 개선(curved rim +4.9%p, hedge +5.8%p)됐으나 기하 품질 개선은 동반하지 않았다.
 - **건축 판정: NO** — 대표-중심/픽셀-표면 불일치는 WL111 실패의 주 원인이 아니다. 남은 실패는 NURBS chart capacity/granularity(거대 미분화 chart) 문제이며 이번 배치는 그것을 해결하지 못하고 악화시켰다.
 - 신규 focused 테스트 9개(실제 CUDA 언프로젝션 계약 포함), 전체 pytest 재실행 안 함.
+
+## 2026-08-25 Chart Representation Contract Diagnostic — 4개 원인 각기 다른 증상에 배정, 건축 결정 없음 (arch/2dgs-coverage-first-surface)
+
+- [Worklog 113](worklogs/113_chart_representation_contract_diagnostic.md)은 WL112를 튜닝하지 않고 chart 세분화도 구현하지 않은 채, WL107/109 위상·WL111 blob 구성·WL112 픽셀-표면 기하·고정 8×4 NURBS를 전부 동결하고 "카메라-관측 blob 하나 = 사각형 NURBS chart 하나"가 왜 실패하는지 순수 진단했다.
+- **zero-coverage 컴포넌트 153,600개 전부(100%)가 `NO_VIEW_BLOB_REACHES_32_PIXEL_SAMPLES`**(A. SUPPORT_LIMITED, fit 실패 경로 0건). fitted chart의 bbox occupancy 중앙값 0.5, 43.5%가 구멍 보유, 구멍 있는 chart의 residual이 없는 chart보다 2.6배 높음(B. RECTANGULAR_DOMAIN_FAILURE). full-rank chart의 residual이 rank-deficient chart보다 오히려 높음(C. FIXED_NURBS_CAPACITY_FAILURE, 소수 거대 컴포넌트에 국한).
+- **극단값 역추적**: residual 극단(최대 1517)은 patio 최대 컴포넌트의 거대·holey chart(B+C 결합)에서, overlap 극단(최대 1514)은 작은 컴포넌트의 chart 내부 렌더러 depth 국소 이상값(D. NUMERICAL/GRAZING_SURFACE_FAILURE)에서 — 서로 겹치지 않는 별개 메커니즘.
+- 영역별: table_top 75.5%, table_side_curved 62.2%(순수 A), patio 79.9%(최고지만 극단값 대부분 발생), hedge 54.8%(순수 A, 최저).
+- 4개 원인을 단일로 강제하지 않고 서로 다른 통계량/컴포넌트 규모대에 정확히 배정. 건축 결정/새 표현 메커니즘 구현 없음.
+- 신규 focused 테스트 12개(순수 로직), 프로덕션/CUDA 코드 무수정으로 전체 pytest 재실행 안 함.
