@@ -7,6 +7,7 @@
 - [Architecture](architecture.md): 프레임워크 수준의 설계 결정
 - [현재 구현 파이프라인](current_framework.md): 논문·연구 보조용으로 현재 동작하는 Gaussian–canonical visible-NURBS–ADC lifecycle과 구현 수식을 설명
 - [NURBS Construction](nurbs_construction.md): NURBS 중간 표현과 구현 계약
+- [output/ 폴더 관리 규약](output_folder_conventions.md): gitignore된 `output/`의 번호 매김·`confirmed/` 이동·preview_png 통합 규칙(참조용 유일 문서)
 
 ## 현재 상태
 

@@ -85,7 +85,7 @@ directive 11절 지시대로 단일 원인으로 강제하지 않는다:
 
 ## 14. 검토용 export 경로
 
-`output/113_osn_gs_chart_contract_diagnostic/`(WL113 종료 후 폴더 번호 규약 적용, [[feedback_output_folder_numbering]]) 아래 10개 뷰(`iteration_0000001/point_cloud.ply`, `render.ppm`, `preview_png/render.png`, `README.md`): `ORIGINAL_2DGS_SCENE`, `COMPONENT_SUPPORT_ATTRIBUTION`, `ZERO_COVERAGE_CAUSE`, `CHART_DOMAIN_OCCUPANCY`, `CHART_DOMAIN_HOLES`, `NURBS_CAPACITY_RANK_DEFICIT`, `EXTREME_RESIDUAL_PROVENANCE`, `TABLE_CONTRACT_DIAGNOSTIC`, `CURVED_CONTRACT_DIAGNOSTIC`, `HEDGE_CONTRACT_DIAGNOSTIC`. 전체 JSON 리포트: `output/113_osn_gs_chart_contract_diagnostic/chart_representation_contract_diagnostic_report.json`.
+`output/113_osn_gs_chart_contract_diagnostic/`(WL113 종료 후 폴더 번호 규약 적용, [[feedback_output_folder_numbering]]) 아래 10개 뷰 폴더(`iteration_0000001/point_cloud.ply`, `render.ppm`, `README.md`): `ORIGINAL_2DGS_SCENE`, `COMPONENT_SUPPORT_ATTRIBUTION`, `ZERO_COVERAGE_CAUSE`, `CHART_DOMAIN_OCCUPANCY`, `CHART_DOMAIN_HOLES`, `NURBS_CAPACITY_RANK_DEFICIT`, `EXTREME_RESIDUAL_PROVENANCE`, `TABLE_CONTRACT_DIAGNOSTIC`, `CURVED_CONTRACT_DIAGNOSTIC`, `HEDGE_CONTRACT_DIAGNOSTIC`. 미리보기 PNG는 뷰마다 흩어두지 않고 [[feedback_output_folder_numbering]]/[[reference_output_folder_conventions]] 규약대로 배치 최상위 `preview_png/<뷰이름>.png` 한 폴더에 모았다. 전체 JSON 리포트: `output/113_osn_gs_chart_contract_diagnostic/chart_representation_contract_diagnostic_report.json`.
 
 ## 15. 테스트
 

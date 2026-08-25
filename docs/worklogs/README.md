@@ -2,6 +2,8 @@
 
 이 디렉터리는 현재 의사결정과 구현을 계속하는 데 필요한 최소 기록만 보존한다. 이전 실험, 폐기된 방법론, 과거 게이트의 세부 경과는 작업 디렉터리에서 제거했으며 필요할 때 Git 이력으로 복구한다.
 
+각 worklog가 만드는 실측 export는 `output/`(gitignore됨) 아래 번호가 매겨진 폴더에 쌓인다 — 폴더 명명·`confirmed/` 이동·preview_png 배치 규약은 [output/ 폴더 관리 규약](../output_folder_conventions.md)을 참조한다.
+
 ## 유지 기록
 
 - `1_phase_g_uncertain_gaussian_proposal_foundation.md`: 불확실 Gaussian proposal 기반과 Gate G 승인 근거
