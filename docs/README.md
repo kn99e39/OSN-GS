@@ -308,3 +308,12 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - **결론: 감사 범위에서 순수 INTENT-level 실패나 IMPLEMENTATION DEVIATION은 발견되지 않았다.** 관측된 실패는 압도적으로 SPECIFICATION-INDUCED(chart 단위 정의, 사각형 UV 도메인 — `torch_nurbs.py`에 이미 존재하나 미사용인 `uv_support_mask` 발견, per-view 비병합)이거나 의도적 통제 조건(고정 8×4 용량)이거나 렌더러 자체 현상(D)이다.
 - WL114의 rank-complete local chart 제안을 사전 감사해 "full column rank(대수적)"가 "유효한 local geometric chart(기하적)"를 보장하지 않는다는 간극을 지적했고, WL114의 실측이 이를 직접 확인했다.
 - Design debt 목록과 증명된 canonical contract vs 미해결 표현 선택을 분리 정리. 코드 변경 없음.
+
+## 2026-08-25 Visible-NURBS Representation Contract Recovery Audit — 기존 fitter/trimming/multi-patch 재발견, 코드 변경 없음 (arch/2dgs-coverage-first-surface)
+
+- [Worklog 116](worklogs/116_visible_nurbs_representation_contract_recovery_audit.md)은 WL114를 그 정확한 후보에 대한 유효한 negative 결과로 받아들이되 일반화하지 않고, `osn_gs/surface/torch_nurbs.py`를 정밀 감사했다.
+- **핵심 발견**: 기존 정규화 fitter는 full-rank 관측 지지를 요구한 적이 없다(Tikhonov 항이 항상 solvable하게 만듦) — "full column rank == 유효한 chart"라는 WL114의 폐쇄 규칙을 명시적으로 폐기.
+- 이미 존재하지만 미사용인 두 메커니즘 발견: `uv_support_mask`(UV trimming, materialization만 해결·fitting coupling은 미해결임을 코드 자체 docstring으로 확인) / `fit_coupled_patch_graph_lsq`(shared-boundary 공동 fitting multi-patch, 옛 annulus 계보에만 존재).
+- 고정 8×4는 코드베이스 전체에 6개의 서로 다른 resolution 기본값이 이미 있어 architecture 법칙이었던 적이 없다.
+- WL113 A/B/C/D 재분류, WL114를 "locality는 유용하다" vs "disjoint rank-closed 추출은 실패했다"로 분리 재해석 — overlap 악화를 "seam 증가" 대신 "coupling 부재"로 더 정확히 귀속.
+- 다음 배치를 이끌 단일 질문 도출: `uv_support_mask` 적용만으로 실패 B가 충분한가, coupled fitting이 필요한가. 코드 변경 없음.
