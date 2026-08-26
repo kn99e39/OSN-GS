@@ -317,3 +317,13 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - 고정 8×4는 코드베이스 전체에 6개의 서로 다른 resolution 기본값이 이미 있어 architecture 법칙이었던 적이 없다.
 - WL113 A/B/C/D 재분류, WL114를 "locality는 유용하다" vs "disjoint rank-closed 추출은 실패했다"로 분리 재해석 — overlap 악화를 "seam 증가" 대신 "coupling 부재"로 더 정확히 귀속.
 - 다음 배치를 이끌 단일 질문 도출: `uv_support_mask` 적용만으로 실패 B가 충분한가, coupled fitting이 필요한가. 코드 변경 없음.
+
+## 2026-08-26 Holey-Chart Fitting-Coupling Attribution — MIXED/INCONCLUSIVE, 거대 chart는 정반대 방향 (arch/2dgs-coverage-first-surface)
+
+- [Worklog 117](worklogs/117_holey_chart_fitting_coupling_attribution.md)은 WL113의 "구멍 있는 chart 2.6배 나쁜 residual" 상관관계가 진짜 fitting-coupling 실패(B2)인지 chart 규모의 대리 변수였는지 전체 161개 뷰로 가렸다.
+- **B1 검증**: 14,900개 chart 전부에서 `uv_support_mask` 부여가 fit을 비트단위로 전혀 바꾸지 않음을 확인(0건 위반).
+- **B2**: 일반 chart는 약한 실재 hole-근접 상관(중앙값 -0.055~-0.098)이 있으나, 규모로 층화하면 원시 비율은 중간 구간에서 아티팩트로 부풀고 최대 규모 구간에서는 1.3배로 줄거나 0.85배로 **역전**된다.
+- **핵심 발견**: residual 극단값을 지배해 온 거대 patio chart 10개 중 8개는 residual이 hole 경계에서 **멀수록 나쁘다** — B2와 정반대.
+- 합성 대조군: 평면 무정보, 곡면은 꼬리 품질만 유의미하게 나빠짐.
+- **판정: MIXED/INCONCLUSIVE** — 스크립트의 자동 판정을 그대로 따르지 않고 신호 크기를 재검토해 방향성 있게 교정: 일반 chart엔 약한 B2 신호, 최대-영향 거대 chart는 scale/capacity가 더 유력. Coupled fitting 미구현.
+- 신규 focused 테스트 15개, 프로덕션 코드 무수정.
