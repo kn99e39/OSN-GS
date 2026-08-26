@@ -327,3 +327,11 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - 합성 대조군: 평면 무정보, 곡면은 꼬리 품질만 유의미하게 나빠짐.
 - **판정: MIXED/INCONCLUSIVE** — 스크립트의 자동 판정을 그대로 따르지 않고 신호 크기를 재검토해 방향성 있게 교정: 일반 chart엔 약한 B2 신호, 최대-영향 거대 chart는 scale/capacity가 더 유력. Coupled fitting 미구현.
 - 신규 focused 테스트 15개, 프로덕션 코드 무수정.
+
+## 2026-08-26 Visible-NURBS Evidence Contract Closure — domain mismatch 확인, ARM A(현재)가 일관되게 우수 (arch/2dgs-coverage-first-surface)
+
+- [Worklog 118](worklogs/118_visible_nurbs_evidence_contract_closure.md)은 WL117을 조건부 수용한 뒤, WL117의 hole-거리 분석(post-fit UV)과 WL113의 원 관측(camera-raster domain)이 서로 다른 도메인을 측정했다는 점을 명시적으로 닫았다.
+- Sibling 진단 CUDA에 median 이벤트의 low-pass provenance(rho3d/rho2d/s) 4개 필드 추가(canonical 무수정, 렌더링 불변성 재검증 통과).
+- **핵심 발견**: 같은 해상도에서 camera-domain·fitted-domain hole 판정이 51.1% 불일치(15.8% vs 64.4%); 고정 UV(ARM B) 대비 현재 foot-point 보정(ARM A)이 모든 영역에서 residual 2.9~3배(최대 1500배) 개선; normal 부호 반전은 불일치의 2.7%만 설명; chart 내부 representative spread가 cross-chart 변위의 85.7%에 달함; low-pass 지배는 작은-chart D-outlier(44.3%)에서만 뚜렷하고 거대 chart(20-29%)에서는 아님.
+- Equal-count 합성 대조군으로 "hole topology가 단순 샘플 수 감소를 넘어서는 효과가 있는가"에 곡면·foot-point 경로 한정 "예"로 답함.
+- 신규 focused 테스트 15개(CUDA 3개 포함) 전부 통과, canonical 코드 무수정.

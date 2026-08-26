@@ -36,7 +36,7 @@ std::function<char*(size_t N)> resizeFunctional(torch::Tensor& t) {
 	return lambda;
 }
 
-std::tuple<int, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+std::tuple<int, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
 RasterizeGaussiansCUDA(
 	const torch::Tensor& background,
 	const torch::Tensor& means3D,
@@ -102,6 +102,13 @@ RasterizeGaussiansCUDA(
   torch::Tensor out_contrib_ids = torch::full({H, W, OSN_GS_MAX_CONTRIB_SLOTS}, -1, int_opts);
   torch::Tensor out_contrib_post_median = torch::full({H, W, OSN_GS_MAX_CONTRIB_SLOTS}, 0, int_opts);
   torch::Tensor out_contrib_count = torch::full({H, W}, 0, int_opts);
+  // OSN-GS DIAGNOSTIC ADDITION (worklog 118): low-pass provenance at the
+  // exact same T>0.5 median event -- see forward.cu/forward.h. -1 fill
+  // (rho3d/rho2d) matches "no median event at this pixel".
+  torch::Tensor out_median_rho3d = torch::full({H, W}, -1.0, float_opts);
+  torch::Tensor out_median_rho2d = torch::full({H, W}, -1.0, float_opts);
+  torch::Tensor out_median_s_u = torch::full({H, W}, 0.0, float_opts);
+  torch::Tensor out_median_s_v = torch::full({H, W}, 0.0, float_opts);
 
   torch::Device device(torch::kCUDA);
   torch::TensorOptions options(torch::kByte);
@@ -149,10 +156,14 @@ RasterizeGaussiansCUDA(
 		out_contrib_ids.contiguous().data<int>(),
 		out_contrib_post_median.contiguous().data<int>(),
 		out_contrib_count.contiguous().data<int>(),
+		out_median_rho3d.contiguous().data<float>(),
+		out_median_rho2d.contiguous().data<float>(),
+		out_median_s_u.contiguous().data<float>(),
+		out_median_s_v.contiguous().data<float>(),
 		radii.contiguous().data<int>(),
 		debug);
   }
-  return std::make_tuple(rendered, out_color, out_others, radii, geomBuffer, binningBuffer, imgBuffer, out_representative_id, out_forward_accepted, out_contrib_ids, out_contrib_post_median, out_contrib_count);
+  return std::make_tuple(rendered, out_color, out_others, radii, geomBuffer, binningBuffer, imgBuffer, out_representative_id, out_forward_accepted, out_contrib_ids, out_contrib_post_median, out_contrib_count, out_median_rho3d, out_median_rho2d, out_median_s_u, out_median_s_v);
 }
 
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>

@@ -222,6 +222,10 @@ int CudaRasterizer::Rasterizer::forward(
 	int* out_contrib_ids,
 	int* out_contrib_post_median,
 	int* out_contrib_count,
+	float* out_median_rho3d,
+	float* out_median_rho2d,
+	float* out_median_s_u,
+	float* out_median_s_v,
 	int* radii,
 	bool debug)
 {
@@ -346,7 +350,11 @@ int CudaRasterizer::Rasterizer::forward(
 		out_forward_accepted,
 		out_contrib_ids,
 		out_contrib_post_median,
-		out_contrib_count), debug)
+		out_contrib_count,
+		out_median_rho3d,
+		out_median_rho2d,
+		out_median_s_u,
+		out_median_s_v), debug)
 
 	return num_rendered;
 }

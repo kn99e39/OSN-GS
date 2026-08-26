@@ -221,3 +221,57 @@ class SurfelRepresentativeDiagnosticsTest(unittest.TestCase):
         covered = rep >= 0
         self.assertTrue(bool(covered.any()))
         self.assertTrue(bool((contrib_count[covered] == 2).all()))
+
+    def test_diagnostic_rendering_still_matches_canonical_after_median_lowpass_provenance_addition(self):
+        """Worklog 118: `median_rho3d`/`median_rho2d`/`median_s_u`/
+        `median_s_v` were threaded through the same forward.cu kernel a
+        fourth time, at the exact same T>0.5 site. Re-verify render
+        invariance again."""
+
+        camera = _tilted_camera()
+        model = _single_surfel()
+        rasterizer = OSNSurfelRasterizer(SurfelRasterizerConfig())
+        canonical = rasterizer.render(camera, model)
+        diag = render_with_pixel_representative(camera, model)
+        torch.testing.assert_close(diag["render"], canonical["render"].detach())
+
+    def test_median_lowpass_fields_set_only_where_representative_exists(self):
+        """`median_rho3d`/`median_rho2d` use the same -1 sentinel convention
+        as `representative_id`: set at covered pixels, -1 at uncovered ones
+        (never a stale/garbage value at pixels with no median event)."""
+
+        camera = _tilted_camera()
+        model = _single_surfel(scale=0.3)  # small footprint, most of the frame uncovered
+        diag = render_with_pixel_representative(camera, model)
+        rep = diag["representative_id"]
+        rho3d = diag["median_rho3d"]
+        rho2d = diag["median_rho2d"]
+        covered = rep >= 0
+        self.assertTrue(bool(covered.any()))
+        self.assertTrue(bool((~covered).any()))
+        self.assertTrue(bool((rho3d[~covered] == -1).all()))
+        self.assertTrue(bool((rho2d[~covered] == -1).all()))
+        self.assertTrue(bool((rho3d[covered] >= 0).all()))
+        self.assertTrue(bool((rho2d[covered] >= 0).all()))
+
+    def test_median_s_matches_the_depth_formula_at_the_same_event(self):
+        """The captured surfel-local intersection `(s_u, s_v)` must be
+        exactly the pair the SAME event's `median_depth` is derived from --
+        for a surfel lying flat in a plane parallel to the image (the
+        `_single_surfel` fixture, oriented via `_tilted_camera`), depth is
+        an affine function of `(s_u, s_v)`; this test only asserts internal
+        consistency (finite, matches rho3d = s_u^2 + s_v^2 within floating
+        tolerance), not a specific numeric depth (fixture-geometry-
+        dependent and already covered by other tests)."""
+
+        camera = _tilted_camera()
+        model = _single_surfel()
+        diag = render_with_pixel_representative(camera, model)
+        rep = diag["representative_id"]
+        rho3d = diag["median_rho3d"]
+        s_u = diag["median_s_u"]
+        s_v = diag["median_s_v"]
+        covered = rep >= 0
+        self.assertTrue(bool(covered.any()))
+        reconstructed_rho3d = s_u[covered] ** 2 + s_v[covered] ** 2
+        torch.testing.assert_close(reconstructed_rho3d, rho3d[covered], atol=1e-4, rtol=1e-3)

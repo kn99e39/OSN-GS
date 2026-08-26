@@ -55,6 +55,10 @@ namespace CudaRasterizer
 			int* out_contrib_ids,
 			int* out_contrib_post_median,
 			int* out_contrib_count,
+			float* out_median_rho3d,
+			float* out_median_rho2d,
+			float* out_median_s_u,
+			float* out_median_s_v,
 			int* radii = nullptr,
 			bool debug = false);
 

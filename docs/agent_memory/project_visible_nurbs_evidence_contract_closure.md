@@ -1,0 +1,33 @@
+---
+name: project_visible_nurbs_evidence_contract_closure
+description: "OSN-GS worklog 118 -- closed WL117's camera-vs-fitted UV domain mismatch, proved foot-point correction is uniformly better than fixed UV, added CUDA low-pass provenance capture, decomposed overlap-position error into within-chart footprint spread"
+metadata: 
+  node_type: memory
+  type: project
+  originSessionId: 06f8c1f6-8e00-47ed-9b87-f3ca26aeaf84
+  modified: 2026-08-26T05:23:29.426Z
+---
+
+Worklog 118 (branch `arch/2dgs-coverage-first-surface`): closes measurement-semantics ambiguities left by WL112-117 before choosing among domain-aware fitting / capacity adaptation / coupled fitting. Accepts WL117 conditionally (hole-proximity doesn't explain giant-patio failure survives; "B2 doesn't exist" and "capacity proven dominant" are NOT concluded).
+
+**New CUDA capability (sibling diagnostic build only, canonical vendored kernel untouched)**: added `median_rho3d`/`median_rho2d`/`median_s_u`/`median_s_v` output fields at the exact T>0.5 median-event capture site in `forward.cu`. Confirmed by direct code inspection: `depth` is ALWAYS derived from `s` (true ray-plane intersection) regardless of whether rho3d or rho2d was the accepted minimum -- the commented-out `depth = (rho3d<=rho2d) ? depth : Tw.z` fallback is NOT active. Real-scene measurement showed `s` can become numerically catastrophic (observed up to 8.6e22) when rho2d dominates (a genuinely degenerate ray-plane intersection, p.z near zero), directly explaining how D-outlier extreme depths arise.
+
+**Key finding 1 (domain mismatch, the headline correction)**: at the SAME 24x24 uv-binned resolution, camera-domain and fitted-domain (post-foot-point) hole detection DISAGREE on hole presence for 51.1% of all 14,900 charts (camera 15.8% has-hole vs fitted 64.4% has-hole -- 4x difference). WL117's B2 within-chart correlation analysis used the fitted-domain definition, which is NOT the same population WL113 originally called "holey" (camera-raster domain). IoU median only 0.735.
+
+**Key finding 2 (fixed-UV A/B)**: ARM A (current: camera UV -> LSQ -> foot-point correction) vs ARM B (fixed camera UV, ONE regularized solve via the EXISTING `_solve_control_grid_lsq`, no reparameterization) -- ARM A is uniformly better across every region and every statistic (2.9-3x median/p95 residual improvement, up to 1500x for table_legs). Foot-point correction is genuinely, consistently valuable.
+
+**Key finding 3 (normal sign-invariance)**: signed vs sign-invariant (acos(abs(dot))) normal discrepancy median is nearly identical (5.37 vs 5.37 degrees); p95 drops modestly (61.06 -> 52.84 degrees, ~13%); only 2.7% of chart pairs have signed discrepancy >90 degrees. Sign-flip artifacts explain only a small fraction of WL112/114's reported normal disagreement -- most is genuine.
+
+**Key finding 4 (position correspondence)**: within-chart representative finite-support spread (median 0.0468) is 85.7% as large as the historical cross-chart overlap-position-discrepancy metric (median 0.0546) that WL111-114 reported as "surface disagreement." A large fraction of that historical metric may be measurement ambiguity (one surfel's own multi-pixel footprint spread), not genuine cross-chart surface disagreement. "Same representative id = same physical point" is explicitly falsified.
+
+**Key finding 5 (D-outlier low-pass attribution)**: chart-mean low-pass-dominated-event fraction is 21.7% population median; the 9 giant patio D-outlier charts show only 20.7-28.8% (not elevated); the ONE small-chart D-outlier (chart 10592, table_side_curved, 271px, the same chart WL113/114 repeatedly flagged) shows 44.3% -- confirming low-pass dominance explains the SMALL-chart D phenomenon specifically, not the giant-chart residual extremes (which remain scale/capacity-attributed per WL117).
+
+**Key finding 6 (equal-count synthetic control, corrects WL117's confound)**: for curved geometry under the foot-point-correction path, an enclosed hole (B) shows measurably worse tail residual (p95 +22%, max +55%) than a dispersed removal of the SAME retained sample count (C) -- a real hole-topology effect beyond mere sample-count reduction. This effect disappears (even reverses slightly) under the fixed-UV path, suggesting the harm is specifically about how foot-point reparameterization behaves near holes. Planar geometry shows no effect either way (uninformative negative control, zero curvature is trivially representable).
+
+**Mid-run performance fix**: the first implementation computed within-chart representative footprint spread via a Python for-loop over every distinct representative inside every chart -- serialized on CPU, left GPU at ~16% utilization, identified via user question ("왜캐 느린거야? GPU 안쓰고 CPU 쓰는거야?") at 63% through the run. Replaced with a fully vectorized `index_add_`/`scatter_reduce_` group-mean + group-max-deviation computation; verified numerically identical to the loop version (differences only from numpy-vs-torch median tie-breaking convention, not the core computation). The in-flight run finished on the old (slower but correct) code; the fix applies from the next run onward.
+
+**Standing feedback captured this session**: [[feedback_include_subset_visualization]] -- always include a canonical subset/component-membership visualization as a fixed export, same as ORIGINAL_2DGS_SCENE, from Worklog 119 onward.
+
+Which WL112-117 conclusions survive/weaken: WL109 GATE PASS and WL112's core verdict survive untouched; WL117's "hole doesn't explain giant-patio failure" survives (independently reconfirmed via low-pass, not just distance-to-hole); WL117's B2 within-chart correlation is weakened (measured on a different domain than WL113 defined, magnitude/interpretation now uncertain); the historical overlap-position-discrepancy interpretation as "surface disagreement" is substantially weakened (finding 4); the normal-disagreement-as-architecture-failure interpretation is weakened but not eliminated (13% attributable to sign, 87% genuine). Nothing was fully invalidated -- corrections adjusted magnitude/interpretation, not direction.
+
+29 new/updated focused tests (17 CUDA representative-diagnostics incl. 3 new, 12 pure-logic for the new devtools helpers), all passing. No production code touched (sibling CUDA diagnostic extension only). Real-scene script `scripts/devtools/visible_nurbs_evidence_contract_closure.py`, report at `output/118_osn_gs_nurbs_evidence_contract_closure/visible_nurbs_evidence_contract_closure_report.json` (all 161 views, 14,900 charts matching WL112/113/117 exactly), 8 named review exports plus a supplementary `CANONICAL_SUBSET_MEMBERSHIP` view added per the new standing feedback.

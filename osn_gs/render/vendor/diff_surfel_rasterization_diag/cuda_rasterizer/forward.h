@@ -85,7 +85,19 @@ namespace FORWARD
 		// semantics), plus the true uncapped per-pixel accepted count.
 		int* out_contrib_ids,
 		int* out_contrib_post_median,
-		int* out_contrib_count);
+		int* out_contrib_count,
+		// OSN-GS DIAGNOSTIC ADDITION (worklog 118): the exact low-pass-filter
+		// provenance of the median-transmittance-crossing (T>0.5) event at
+		// each pixel -- rho3d (true ray-plane intersection distance in the
+		// surfel's own local uv system) and rho2d (screen-space low-pass
+		// floor), plus the surfel-local intersection coordinates `s` that
+		// `depth` is itself derived from at that same event. -1 where no
+		// contributor crossed T=0.5. Never used to change acceptance/depth;
+		// read-only, diagnostic-only.
+		float* out_median_rho3d,
+		float* out_median_rho2d,
+		float* out_median_s_u,
+		float* out_median_s_v);
 }
 
 

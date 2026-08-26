@@ -157,7 +157,15 @@ def render_with_pixel_representative(camera: Any, model: Any, background: Any | 
     after this pixel's median crossing; 0 = at-or-before), and
     `contrib_count` (H, W) the TRUE uncapped per-pixel accepted-contributor
     count (compare against K to detect slot-array truncation -- always
-    visible, never silently hidden). Always runs under `torch.no_grad()` --
+    visible, never silently hidden). Also exposes (worklog 118) the exact
+    low-pass provenance of the median event itself: `median_rho3d`/
+    `median_rho2d` (H, W) -- the true ray-plane-intersection distance and
+    the screen-space low-pass floor whose `min()` gates acceptance -- and
+    `median_s_u`/`median_s_v` (H, W), the surfel-local intersection
+    coordinates `median_depth` is itself always derived from, regardless of
+    which of rho3d/rho2d was the selected minimum. -1 fill (rho3d/rho2d)
+    where no contributor crossed T=0.5, matching `representative_id`'s own
+    -1 convention. Always runs under `torch.no_grad()` --
     no gradients, no autograd Function, no `.grad` state touched anywhere.
     Calls the raw extension function directly (bypassing the canonical
     package's autograd wrapper entirely, since no backward pass is ever
@@ -176,6 +184,7 @@ def render_with_pixel_representative(camera: Any, model: Any, background: Any | 
         (
             _num_rendered, color, out_others, radii, _geom, _binning, _img,
             representative_id, forward_accepted, contrib_ids, contrib_post_median, contrib_count,
+            median_rho3d, median_rho2d, median_s_u, median_s_v,
         ) = extension.rasterize_gaussians(
             background,
             model.get_xyz,
@@ -207,4 +216,8 @@ def render_with_pixel_representative(camera: Any, model: Any, background: Any | 
         "contrib_count": contrib_count,
         "representative_id": representative_id,
         "forward_accepted": forward_accepted,
+        "median_rho3d": median_rho3d,
+        "median_rho2d": median_rho2d,
+        "median_s_u": median_s_u,
+        "median_s_v": median_s_v,
     }

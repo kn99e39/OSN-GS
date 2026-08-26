@@ -274,7 +274,11 @@ renderCUDA(
 	int* __restrict__ out_forward_accepted,
 	int* __restrict__ out_contrib_ids,
 	int* __restrict__ out_contrib_post_median,
-	int* __restrict__ out_contrib_count)
+	int* __restrict__ out_contrib_count,
+	float* __restrict__ out_median_rho3d,
+	float* __restrict__ out_median_rho2d,
+	float* __restrict__ out_median_s_u,
+	float* __restrict__ out_median_s_v)
 {
 	// Identify current tile and associated min/max pixel range.
 	auto block = cg::this_thread_block();
@@ -325,6 +329,14 @@ renderCUDA(
 	float median_depth = {0};
 	// float median_weight = {0};
 	float median_contributor = {-1};
+	// OSN-GS DIAGNOSTIC ADDITION (worklog 118): low-pass provenance at the
+	// same T>0.5 event, see the capture site below. -1 means never set
+	// (no contributor crossed T=0.5 at this pixel), matching median_depth's
+	// own uninitialized-sentinel convention.
+	float median_rho3d = {-1};
+	float median_rho2d = {-1};
+	float median_s_u = {0};
+	float median_s_v = {0};
 	// OSN-GS DIAGNOSTIC ADDITION: global surfel index at the T>0.5 crossing,
 	// captured directly from collected_id[j] at the same point median_depth/
 	// median_contributor are set below -- no reconstruction from point_list
@@ -458,6 +470,19 @@ renderCUDA(
 				// median_weight = w;
 				median_contributor = contributor;
 				median_surfel_id = collected_id[j];  // OSN-GS DIAGNOSTIC ADDITION
+				// OSN-GS DIAGNOSTIC ADDITION (worklog 118): capture the exact
+				// rho3d/rho2d/s that this SAME event's `depth` (above) was
+				// derived from. `depth` itself is ALWAYS computed from `s`
+				// (the true ray-plane intersection) regardless of whether
+				// rho3d or rho2d was the selected minimum for `power`/alpha
+				// -- this capture lets Python-side diagnostics check whether
+				// extreme median_depth samples correlate with rho2d < rho3d
+				// (the low-pass branch dominating acceptance) without ever
+				// changing that selection or `depth` itself.
+				median_rho3d = rho3d;
+				median_rho2d = rho2d;
+				median_s_u = s.x;
+				median_s_v = s.y;
 			}
 			// Render normal map
 			for (int ch=0; ch<3; ch++) N[ch] += normal[ch] * w;
@@ -495,6 +520,10 @@ renderCUDA(
 		out_others[pix_id + DISTORTION_OFFSET * H * W] = distortion;
 		// out_others[pix_id + MEDIAN_WEIGHT_OFFSET * H * W] = median_weight;
 		out_representative_id[pix_id] = median_surfel_id;  // OSN-GS DIAGNOSTIC ADDITION
+		out_median_rho3d[pix_id] = median_rho3d;  // OSN-GS DIAGNOSTIC ADDITION (worklog 118)
+		out_median_rho2d[pix_id] = median_rho2d;
+		out_median_s_u[pix_id] = median_s_u;
+		out_median_s_v[pix_id] = median_s_v;
 #endif
 	}
 }
@@ -519,7 +548,11 @@ void FORWARD::render(
 	int* out_forward_accepted,
 	int* out_contrib_ids,
 	int* out_contrib_post_median,
-	int* out_contrib_count)
+	int* out_contrib_count,
+	float* out_median_rho3d,
+	float* out_median_rho2d,
+	float* out_median_s_u,
+	float* out_median_s_v)
 {
 	renderCUDA<NUM_CHANNELS> << <grid, block >> > (
 		ranges,
@@ -540,7 +573,11 @@ void FORWARD::render(
 		out_forward_accepted,
 		out_contrib_ids,
 		out_contrib_post_median,
-		out_contrib_count);
+		out_contrib_count,
+		out_median_rho3d,
+		out_median_rho2d,
+		out_median_s_u,
+		out_median_s_v);
 }
 
 void FORWARD::preprocess(int P, int D, int M,
