@@ -335,3 +335,12 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - **핵심 발견**: 같은 해상도에서 camera-domain·fitted-domain hole 판정이 51.1% 불일치(15.8% vs 64.4%); 고정 UV(ARM B) 대비 현재 foot-point 보정(ARM A)이 모든 영역에서 residual 2.9~3배(최대 1500배) 개선; normal 부호 반전은 불일치의 2.7%만 설명; chart 내부 representative spread가 cross-chart 변위의 85.7%에 달함; low-pass 지배는 작은-chart D-outlier(44.3%)에서만 뚜렷하고 거대 chart(20-29%)에서는 아님.
 - Equal-count 합성 대조군으로 "hole topology가 단순 샘플 수 감소를 넘어서는 효과가 있는가"에 곡면·foot-point 경로 한정 "예"로 답함.
 - 신규 focused 테스트 15개(CUDA 3개 포함) 전부 통과, canonical 코드 무수정.
+
+## 2026-08-26 Visible-NURBS Geometry / UV Control Correction — METRIC G/C가 정반대 방향, 진짜 trade-off 발견 (arch/2dgs-coverage-first-surface)
+
+- [Worklog 119](worklogs/119_visible_nurbs_geometry_uv_control_correction.md)는 WL118의 fixed-UV A/B가 solve 횟수(2 vs 1)와 evaluation UV 의미론이 arm마다 달라 공정한 통제가 아니었음을 정정했다.
+- **핵심 발견**: solve 횟수를 동일하게 맞추고 METRIC G(기하 오차)/METRIC C(camera-correspondence 오차)를 분리 평가하자, foot-point 보정(ARM A)은 METRIC G에서 모든 영역 우수(0.79~0.86배)하지만 METRIC C에서는 고정 UV(ARM B)가 모든 영역 우수(1.09~1.69배) — 방향이 갈리는 진짜 trade-off이며, WL118의 "ARM A가 일관 우수"는 서로 다른 metric을 섞어 비교한 인공물이었다.
+- Renderer의 median-surfel 직접 교차점(G2) 재구성이 G0/G1과 소수점 6자리까지 일치함을 실측 검증(canonical 무수정, 순수 Python).
+- Pixel 단위 D-outlier 귀속: 모집단 수준 low-pass 지배 pixel은 residual 2.1배 높고 top-1000의 54%를 차지하지만, 역사적으로 반복 지목된 단일 극단 chart(10592)는 branch가 섞여 있어 chart 단위 fit 퇴화가 원인임을 확인.
+- 실행 시간 73.7분(WL118의 1.6배)은 directive가 요구한 arm별 독립 재평가 비용임을 CPU 통제 벤치마크로 확인(버그 아님; 발견된 실제 버그 1건은 전체의 ~1%만 기여).
+- 신규 focused 테스트 14개 전부 통과, canonical 코드 무수정.
