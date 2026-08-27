@@ -232,6 +232,19 @@ int CudaRasterizer::Rasterizer::forward(
 	int* out_query_terminated,
 	int* out_query_reached,
 	int* out_query_prefix_count,
+	// OSN-GS DIAGNOSTIC ADDITION (worklog 121) -- see forward.h.
+	float* out_query_resolution_depth,
+	float* out_query_termination_alpha,
+	int* out_query_late_front_count,
+	int* out_pixel_inversion_count,
+	float* out_pixel_max_backward_jump,
+	// OSN-GS DIAGNOSTIC ADDITION (worklog 122) -- see forward.h.
+	const int* primitive_component,
+	const int* primitive_representative_class,
+	int* out_post_median_counts,
+	float* out_post_median_weights,
+	float* out_total_accepted_weight,
+	float* out_post_median_depth_stats,
 	int* radii,
 	bool debug)
 {
@@ -365,7 +378,18 @@ int CudaRasterizer::Rasterizer::forward(
 		out_query_T,
 		out_query_terminated,
 		out_query_reached,
-		out_query_prefix_count), debug)
+		out_query_prefix_count,
+		out_query_resolution_depth,
+		out_query_termination_alpha,
+		out_query_late_front_count,
+		out_pixel_inversion_count,
+		out_pixel_max_backward_jump,
+		primitive_component,
+		primitive_representative_class,
+		out_post_median_counts,
+		out_post_median_weights,
+		out_total_accepted_weight,
+		out_post_median_depth_stats), debug)
 
 	return num_rendered;
 }

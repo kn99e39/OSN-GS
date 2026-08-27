@@ -35,4 +35,23 @@
 // render passes -- never by dropping queries.
 #define OSN_GS_MAX_QUERY_SLOTS 8
 
+// OSN-GS DIAGNOSTIC ADDITION (worklog 122): number of post-median
+// accounting categories. EXHAUSTIVE per-pixel aggregates -- deliberately
+// not a bounded contributor list, because worklog 110 measured 97.4% of
+// its 16-slot arrays as truncated and that truncation would bias this
+// measurement. Categories:
+//   0 all post-median accepted contributors
+//   1 same frozen visible component as the median representative
+//   2 different visible component
+//   3 unresolved component provenance
+//   4 contributor is itself a median representative in THIS view
+//   5 ... in another training view only
+//   6 ... never a median representative anywhere
+//   7 accepted through the rho2d screen-space low-pass branch
+//   8 per-pixel depth is IN FRONT of the median depth despite being
+//     post-median in canonical traversal order (the centre-depth sort is
+//     not monotone in per-pixel intersection depth -- worklog 121)
+//   9 per-pixel depth is at or behind the median depth
+#define OSN_GS_POST_MEDIAN_CATEGORIES 10
+
 #endif

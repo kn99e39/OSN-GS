@@ -366,3 +366,10 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - Dependency-terminal chart batching은 2.06배 잠재 speedup을 보였지만 509/512 charts가 초기 continuous 기준을 넘고 8개 chart에서 research winner/tie 관계가 바뀌어 미채택했다. 통과한 3개는 애초 oversize serial charts였다.
 - SciPy cKDTree exact 후보는 full scene에서 70.552→0.647초(108.98배)였지만 neighbor row 136,277개, candidate edges, accepted edges, partition roots 1,251개가 reference와 달라 contract mismatch로 미채택했다.
 - Production/default backend 변경은 없고, focused suite 89개 및 전체 회귀 1,422 passed/22 skipped/18 subtests가 통과했다. CUDA Graph·multi-stream·custom chart CUDA kernel은 구현하지 않았다.
+
+## 2026-08-27 Worklog 119-4 Reference-Exact KNN Semantics Attribution — outcome C
+
+- [Worklog 119-4](worklogs/119-4_reference_exact_knn_semantics_attribution.md)는 WL119 exact `torch.cdist` KNN을 변경하지 않고 full-scene 136,277 mismatch 행을 완전 귀속했다.
+- 동일 환경 reference는 neighbor/order/distance/graph/root까지 exact 반복됐고 production default는 explicit MM과 exact였다. 그러나 114,812행은 order-only, 10,466행은 raw MM tie membership 교환, 10,999행은 derived float32 MM error bound 내 membership 역전이었다(`F=0`, `H=0`).
+- reference ranking은 production GEMM shape/chunk와 정확한 `topk(K)` tie 선택에 결합돼 있다. 축소 candidate/pair-MM은 이를 깨끗하게 재현할 correctness proof가 없어 Attribution Gate를 실패했으며, accelerated backend와 production 변경은 구현하지 않았다.
+- 최종 판정: `C. REFERENCE SEMANTICS TOO IMPLEMENTATION-COUPLED FOR A CLEAN EXACT REPLACEMENT`. focused tests `28 passed`; attribution-only 지시대로 full suite는 실행하지 않았다.

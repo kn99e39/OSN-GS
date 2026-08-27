@@ -284,7 +284,20 @@ renderCUDA(
 	float* __restrict__ out_query_T,
 	int* __restrict__ out_query_terminated,
 	int* __restrict__ out_query_reached,
-	int* __restrict__ out_query_prefix_count)
+	int* __restrict__ out_query_prefix_count,
+	// OSN-GS DIAGNOSTIC ADDITION (worklog 121, D value provenance) -- see forward.h.
+	float* __restrict__ out_query_resolution_depth,
+	float* __restrict__ out_query_termination_alpha,
+	int* __restrict__ out_query_late_front_count,
+	int* __restrict__ out_pixel_inversion_count,
+	float* __restrict__ out_pixel_max_backward_jump,
+	// OSN-GS DIAGNOSTIC ADDITION (worklog 122) -- see forward.h.
+	const int* __restrict__ primitive_component,
+	const int* __restrict__ primitive_representative_class,
+	int* __restrict__ out_post_median_counts,
+	float* __restrict__ out_post_median_weights,
+	float* __restrict__ out_total_accepted_weight,
+	float* __restrict__ out_post_median_depth_stats)
 {
 	// Identify current tile and associated min/max pixel range.
 	auto block = cg::this_thread_block();
@@ -351,6 +364,29 @@ renderCUDA(
 		}
 	}
 	int accepted_prefix_count = 0;
+	// OSN-GS DIAGNOSTIC ADDITION (worklog 121): traversal-order vs physical-
+	// depth fidelity. The canonical tile list is sorted by each surfel's
+	// CENTRE camera-space z, so the per-pixel ray/plane intersection depths of
+	// ACCEPTED events need not be monotone along the traversal. These counters
+	// measure that directly; nothing canonical reads them.
+	int q_late_front[OSN_GS_MAX_QUERY_SLOTS];
+	for (int q = 0; q < OSN_GS_MAX_QUERY_SLOTS; q++) q_late_front[q] = -1;
+	float max_accepted_depth = -1.0f;
+	int accepted_inversion_count = 0;
+	float accepted_max_backward_jump = 0.0f;
+	// OSN-GS DIAGNOSTIC ADDITION (worklog 122): exhaustive post-median
+	// accounting registers. Nothing canonical reads them.
+	int post_median_counts[OSN_GS_POST_MEDIAN_CATEGORIES];
+	float post_median_weights[OSN_GS_POST_MEDIAN_CATEGORIES];
+	for (int c = 0; c < OSN_GS_POST_MEDIAN_CATEGORIES; c++)
+	{
+		post_median_counts[c] = 0;
+		post_median_weights[c] = 0.0f;
+	}
+	float total_accepted_weight = 0.0f;
+	float post_median_depth_sum = 0.0f;
+	float post_median_depth_min = 0.0f;
+	float post_median_depth_max = 0.0f;
 
 
 #if RENDER_AXUTILITY
@@ -472,6 +508,15 @@ renderCUDA(
 							out_query_terminated[slot] = reached_here ? 0 : 1;
 							out_query_reached[slot] = reached_here ? 1 : 0;
 							out_query_prefix_count[slot] = accepted_prefix_count;
+							// OSN-GS DIAGNOSTIC ADDITION (worklog 121): this contributor
+							// IS the resolution event either way. `alpha` is recorded only
+							// for slots the termination actually cut off, so host code can
+							// rebuild the canonical `test_T = T_pre * (1 - alpha)` that was
+							// compared against 0.0001f -- T_pre itself is NOT that quantity.
+							out_query_resolution_depth[slot] = depth;
+							out_query_termination_alpha[slot] = reached_here ? -1.0f : alpha;
+							out_query_late_front_count[slot] = 0;
+							q_late_front[q] = 0;
 							q_pending[q] = false;
 						}
 					}
@@ -529,6 +574,28 @@ renderCUDA(
 			// the surfel's UNBOUNDED plane, so a candidate that never passes
 			// the alpha cutoff can report an arbitrary intersection depth; a
 			// probe must not be resolved by one of those.
+			// OSN-GS DIAGNOSTIC ADDITION (worklog 121): accepted-event depth-order
+			// fidelity, and late FRONT events for slots that already resolved.
+			// Both are measured BEFORE this contributor can resolve anything, so a
+			// slot never counts its own resolution event as late.
+			if (max_accepted_depth >= 0.0f && depth < max_accepted_depth)
+			{
+				accepted_inversion_count++;
+				float backward_jump = max_accepted_depth - depth;
+				if (backward_jump > accepted_max_backward_jump)
+					accepted_max_backward_jump = backward_jump;
+			}
+			if (depth > max_accepted_depth)
+				max_accepted_depth = depth;
+			for (int q = 0; q < OSN_GS_MAX_QUERY_SLOTS; q++)
+			{
+				if (q_late_front[q] >= 0 && !q_pending[q] && depth < q_depth[q])
+				{
+					q_late_front[q]++;
+					out_query_late_front_count[pix_id * OSN_GS_MAX_QUERY_SLOTS + q] = q_late_front[q];
+				}
+			}
+
 			if (q_active > 0)
 			{
 				for (int q = 0; q < OSN_GS_MAX_QUERY_SLOTS; q++)
@@ -540,6 +607,10 @@ renderCUDA(
 						out_query_terminated[slot] = 0;
 						out_query_reached[slot] = 1;
 						out_query_prefix_count[slot] = accepted_prefix_count;
+						// OSN-GS DIAGNOSTIC ADDITION (worklog 121)
+						out_query_resolution_depth[slot] = depth;
+						out_query_late_front_count[slot] = 0;
+						q_late_front[q] = 0;
 						q_pending[q] = false;
 						q_active--;
 					}
@@ -581,6 +652,58 @@ renderCUDA(
 			// Render normal map
 			for (int ch=0; ch<3; ch++) N[ch] += normal[ch] * w;
 #endif
+
+			// OSN-GS DIAGNOSTIC ADDITION (worklog 122): exhaustive post-median
+			// contributor accounting. `T` is still the pre-update value, so
+			// `T <= 0.5` is exactly worklog 110's own post-median test, and the
+			// median block above has already finalised median_depth /
+			// median_surfel_id for any contributor reaching here with T <= 0.5.
+			// Reads nothing canonical into a canonical computation; writes only
+			// into diagnostic buffers.
+			total_accepted_weight += w;
+			if (T <= 0.5f)
+			{
+				float depth_offset = depth - median_depth;
+				if (post_median_counts[0] == 0)
+				{
+					post_median_depth_min = depth_offset;
+					post_median_depth_max = depth_offset;
+				}
+				else
+				{
+					if (depth_offset < post_median_depth_min) post_median_depth_min = depth_offset;
+					if (depth_offset > post_median_depth_max) post_median_depth_max = depth_offset;
+				}
+				post_median_depth_sum += depth_offset;
+				post_median_counts[0]++;
+				post_median_weights[0] += w;
+				if (primitive_component != nullptr)
+				{
+					int median_component = (median_surfel_id >= 0) ? primitive_component[median_surfel_id] : -1;
+					int contributor_component = primitive_component[collected_id[j]];
+					int category = (median_component < 0 || contributor_component < 0)
+						? 3 : ((contributor_component == median_component) ? 1 : 2);
+					post_median_counts[category]++;
+					post_median_weights[category] += w;
+				}
+				if (primitive_representative_class != nullptr)
+				{
+					int representative_class = primitive_representative_class[collected_id[j]];
+					int category = (representative_class == 2) ? 4 : ((representative_class == 1) ? 5 : 6);
+					post_median_counts[category]++;
+					post_median_weights[category] += w;
+				}
+				if (rho2d < rho3d)
+				{
+					post_median_counts[7]++;
+					post_median_weights[7] += w;
+				}
+				// Traversal-order post-median does NOT imply physically behind:
+				// the canonical tile list is sorted by surfel CENTRE depth.
+				int depth_side = (depth_offset < 0.0f) ? 8 : 9;
+				post_median_counts[depth_side]++;
+				post_median_weights[depth_side] += w;
+			}
 
 			// Eq. (3) from 3D Gaussian splatting paper.
 			for (int ch = 0; ch < CHANNELS; ch++)
@@ -634,6 +757,20 @@ renderCUDA(
 				out_query_prefix_count[slot] = accepted_prefix_count;
 			}
 		}
+		// OSN-GS DIAGNOSTIC ADDITION (worklog 121): per-pixel accepted-event
+		// depth-order fidelity for this pixel's whole canonical traversal.
+		out_pixel_inversion_count[pix_id] = accepted_inversion_count;
+		out_pixel_max_backward_jump[pix_id] = accepted_max_backward_jump;
+		// OSN-GS DIAGNOSTIC ADDITION (worklog 122)
+		for (int c = 0; c < OSN_GS_POST_MEDIAN_CATEGORIES; c++)
+		{
+			out_post_median_counts[pix_id * OSN_GS_POST_MEDIAN_CATEGORIES + c] = post_median_counts[c];
+			out_post_median_weights[pix_id * OSN_GS_POST_MEDIAN_CATEGORIES + c] = post_median_weights[c];
+		}
+		out_total_accepted_weight[pix_id] = total_accepted_weight;
+		out_post_median_depth_stats[pix_id * 3 + 0] = post_median_depth_sum;
+		out_post_median_depth_stats[pix_id * 3 + 1] = post_median_depth_min;
+		out_post_median_depth_stats[pix_id * 3 + 2] = post_median_depth_max;
 	}
 }
 
@@ -667,7 +804,20 @@ void FORWARD::render(
 	float* out_query_T,
 	int* out_query_terminated,
 	int* out_query_reached,
-	int* out_query_prefix_count)
+	int* out_query_prefix_count,
+	// OSN-GS DIAGNOSTIC ADDITION (worklog 121) -- see forward.h.
+	float* out_query_resolution_depth,
+	float* out_query_termination_alpha,
+	int* out_query_late_front_count,
+	int* out_pixel_inversion_count,
+	float* out_pixel_max_backward_jump,
+	// OSN-GS DIAGNOSTIC ADDITION (worklog 122) -- see forward.h.
+	const int* primitive_component,
+	const int* primitive_representative_class,
+	int* out_post_median_counts,
+	float* out_post_median_weights,
+	float* out_total_accepted_weight,
+	float* out_post_median_depth_stats)
 {
 	renderCUDA<NUM_CHANNELS> << <grid, block >> > (
 		ranges,
@@ -697,7 +847,18 @@ void FORWARD::render(
 		out_query_T,
 		out_query_terminated,
 		out_query_reached,
-		out_query_prefix_count);
+		out_query_prefix_count,
+		out_query_resolution_depth,
+		out_query_termination_alpha,
+		out_query_late_front_count,
+		out_pixel_inversion_count,
+		out_pixel_max_backward_jump,
+		primitive_component,
+		primitive_representative_class,
+		out_post_median_counts,
+		out_post_median_weights,
+		out_total_accepted_weight,
+		out_post_median_depth_stats);
 }
 
 void FORWARD::preprocess(int P, int D, int M,

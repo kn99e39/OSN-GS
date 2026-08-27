@@ -36,7 +36,7 @@ std::function<char*(size_t N)> resizeFunctional(torch::Tensor& t) {
 	return lambda;
 }
 
-std::tuple<int, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+std::tuple<int, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
 RasterizeGaussiansCUDA(
 	const torch::Tensor& background,
 	const torch::Tensor& means3D,
@@ -62,7 +62,11 @@ RasterizeGaussiansCUDA(
 	// <= 0 is unused. Pass an EMPTY tensor to disable the probe entirely,
 	// in which case the four query outputs come back at their fill values
 	// and the kernel takes exactly the canonical path.
-	const torch::Tensor& query_depths)
+	const torch::Tensor& query_depths,
+	// OSN-GS DIAGNOSTIC ADDITION (worklog 122): per-primitive provenance for
+	// post-median accounting. Either may be EMPTY to disable its categories.
+	const torch::Tensor& primitive_component,
+	const torch::Tensor& primitive_representative_class)
 {
   if (means3D.ndimension() != 2 || means3D.size(1) != 3) {
 	AT_ERROR("means3D must have dimensions (num_points, 3)");
@@ -126,6 +130,30 @@ RasterizeGaussiansCUDA(
   torch::Tensor out_query_terminated = torch::full({H, W, OSN_GS_MAX_QUERY_SLOTS}, -1, int_opts);
   torch::Tensor out_query_reached = torch::full({H, W, OSN_GS_MAX_QUERY_SLOTS}, -1, int_opts);
   torch::Tensor out_query_prefix_count = torch::full({H, W, OSN_GS_MAX_QUERY_SLOTS}, -1, int_opts);
+  // OSN-GS DIAGNOSTIC ADDITION (worklog 121, D value provenance). Same -1
+  // "never written" convention as the four outputs above; the two per-pixel
+  // depth-order counters are always written, so they start at 0.
+  torch::Tensor out_query_resolution_depth = torch::full({H, W, OSN_GS_MAX_QUERY_SLOTS}, -1.0, float_opts);
+  torch::Tensor out_query_termination_alpha = torch::full({H, W, OSN_GS_MAX_QUERY_SLOTS}, -1.0, float_opts);
+  torch::Tensor out_query_late_front_count = torch::full({H, W, OSN_GS_MAX_QUERY_SLOTS}, -1, int_opts);
+  torch::Tensor out_pixel_inversion_count = torch::full({H, W}, 0, int_opts);
+  torch::Tensor out_pixel_max_backward_jump = torch::full({H, W}, 0.0, float_opts);
+  // OSN-GS DIAGNOSTIC ADDITION (worklog 122): exhaustive post-median
+  // accounting. Always written, so these start at 0 rather than -1.
+  torch::Tensor out_post_median_counts = torch::full({H, W, OSN_GS_POST_MEDIAN_CATEGORIES}, 0, int_opts);
+  torch::Tensor out_post_median_weights = torch::full({H, W, OSN_GS_POST_MEDIAN_CATEGORIES}, 0.0, float_opts);
+  torch::Tensor out_total_accepted_weight = torch::full({H, W}, 0.0, float_opts);
+  torch::Tensor out_post_median_depth_stats = torch::full({H, W, 3}, 0.0, float_opts);
+  const bool component_enabled = primitive_component.numel() > 0;
+  const bool representative_enabled = primitive_representative_class.numel() > 0;
+  if (component_enabled) {
+    CHECK_INPUT(primitive_component);
+    if (primitive_component.numel() != P) { AT_ERROR("primitive_component must be empty or have P elements"); }
+  }
+  if (representative_enabled) {
+    CHECK_INPUT(primitive_representative_class);
+    if (primitive_representative_class.numel() != P) { AT_ERROR("primitive_representative_class must be empty or have P elements"); }
+  }
   if (query_enabled)
   {
     CHECK_INPUT(query_depths);
@@ -189,10 +217,21 @@ RasterizeGaussiansCUDA(
 		out_query_terminated.contiguous().data<int>(),
 		out_query_reached.contiguous().data<int>(),
 		out_query_prefix_count.contiguous().data<int>(),
+		out_query_resolution_depth.contiguous().data<float>(),
+		out_query_termination_alpha.contiguous().data<float>(),
+		out_query_late_front_count.contiguous().data<int>(),
+		out_pixel_inversion_count.contiguous().data<int>(),
+		out_pixel_max_backward_jump.contiguous().data<float>(),
+		component_enabled ? primitive_component.contiguous().data<int>() : nullptr,
+		representative_enabled ? primitive_representative_class.contiguous().data<int>() : nullptr,
+		out_post_median_counts.contiguous().data<int>(),
+		out_post_median_weights.contiguous().data<float>(),
+		out_total_accepted_weight.contiguous().data<float>(),
+		out_post_median_depth_stats.contiguous().data<float>(),
 		radii.contiguous().data<int>(),
 		debug);
   }
-  return std::make_tuple(rendered, out_color, out_others, radii, geomBuffer, binningBuffer, imgBuffer, out_representative_id, out_forward_accepted, out_contrib_ids, out_contrib_post_median, out_contrib_count, out_median_rho3d, out_median_rho2d, out_median_s_u, out_median_s_v, out_query_T, out_query_terminated, out_query_reached, out_query_prefix_count);
+  return std::make_tuple(rendered, out_color, out_others, radii, geomBuffer, binningBuffer, imgBuffer, out_representative_id, out_forward_accepted, out_contrib_ids, out_contrib_post_median, out_contrib_count, out_median_rho3d, out_median_rho2d, out_median_s_u, out_median_s_v, out_query_T, out_query_terminated, out_query_reached, out_query_prefix_count, out_query_resolution_depth, out_query_termination_alpha, out_query_late_front_count, out_pixel_inversion_count, out_pixel_max_backward_jump, out_post_median_counts, out_post_median_weights, out_total_accepted_weight, out_post_median_depth_stats);
 }
 
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>

@@ -124,7 +124,57 @@ namespace FORWARD
 		float* out_query_T,
 		int* out_query_terminated,
 		int* out_query_reached,
-		int* out_query_prefix_count);
+		int* out_query_prefix_count,
+		// OSN-GS DIAGNOSTIC ADDITION (worklog 121, D value provenance).
+		// Purely additive: none of the outputs above is read, written, or
+		// ordered differently because of these.
+		//   out_query_resolution_depth  -- per-pixel `depth` of the accepted
+		//                                  (or termination) event that resolved
+		//                                  the slot; -1 if never resolved.
+		//   out_query_termination_alpha -- the canonical `alpha` at the
+		//                                  termination event, written ONLY for
+		//                                  slots whose verdict is terminated=1,
+		//                                  so `test_T = T_pre * (1 - alpha)` can
+		//                                  be reconstructed host-side; -1 else.
+		//   out_query_late_front_count  -- accepted events processed AFTER the
+		//                                  slot resolved whose own per-pixel
+		//                                  depth is still < the query depth
+		//                                  (traversal-order vs physical-depth
+		//                                  gap); 0 when resolved with none, -1
+		//                                  when never resolved.
+		//   out_pixel_inversion_count   -- (H, W) accepted events whose depth is
+		//                                  below the running max accepted depth.
+		//   out_pixel_max_backward_jump -- (H, W) largest such backward step.
+		float* out_query_resolution_depth,
+		float* out_query_termination_alpha,
+		int* out_query_late_front_count,
+		int* out_pixel_inversion_count,
+		float* out_pixel_max_backward_jump,
+		// OSN-GS DIAGNOSTIC ADDITION (worklog 122, candidate B frontier
+		// validation). Exhaustive accounting of accepted contributors that
+		// occur AFTER the canonical median-surface event, using the SAME
+		// post-median test worklog 110 already uses (`T <= 0.5` at
+		// acceptance, T pre-update). Purely additive.
+		//   primitive_component            (P,) frozen visible component id
+		//                                  per surfel, -1 unresolved; empty
+		//                                  disables categories 1-3.
+		//   primitive_representative_class (P,) 2 = median representative in
+		//                                  THIS view, 1 = in another view
+		//                                  only, 0 = never; empty disables 4-6.
+		//   out_post_median_counts         (H, W, 8) per-category counts
+		//   out_post_median_weights        (H, W, 8) per-category sum of the
+		//                                  canonical compositing weight w=alpha*T
+		//   out_total_accepted_weight      (H, W) sum of w over ALL accepted
+		//                                  contributors, so a post-median
+		//                                  contribution FRACTION is computable
+		//   out_post_median_depth_stats    (H, W, 3) sum / min / max of
+		//                                  (contributor depth - median depth)
+		const int* primitive_component,
+		const int* primitive_representative_class,
+		int* out_post_median_counts,
+		float* out_post_median_weights,
+		float* out_total_accepted_weight,
+		float* out_post_median_depth_stats);
 }
 
 

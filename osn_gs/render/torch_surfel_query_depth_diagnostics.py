@@ -42,6 +42,60 @@ directory's own `.cu`/`.h` files:
   output  `query_prefix_count`    (H, W, K) accepted contributors composited
                                   before resolution (provenance only)
 
+Worklog 121 added five further PURELY ADDITIVE outputs. They are diagnostics of
+the four above, never inputs to them, and `TestQDepthWorklog121Additivity`
+asserts that every pre-existing output stays bit-identical with them present:
+
+  output  `query_resolution_depth`  (H, W, K) the per-pixel `depth` of the
+                                    accepted (or termination) event that
+                                    resolved the slot; -1 if never resolved
+  output  `query_termination_alpha` (H, W, K) the canonical `alpha` at the
+                                    termination event, written ONLY for slots
+                                    whose verdict is terminated = 1, so the
+                                    canonical `test_T = T_pre * (1 - alpha)`
+                                    can be rebuilt host-side; -1 otherwise
+  output  `query_late_front_count`  (H, W, K) accepted events processed AFTER
+                                    the slot resolved whose own per-pixel depth
+                                    is STILL in front of the query depth --
+                                    the direct measure of the traversal-order
+                                    vs physical-depth gap; 0 when resolved with
+                                    none, -1 when never resolved
+  output  `pixel_inversion_count`   (H, W) accepted events whose depth fell
+                                    below the running maximum accepted depth
+  output  `pixel_max_backward_jump` (H, W) the largest such backward step
+
+Worklog 122 added an EXHAUSTIVE post-median contributor accounting, again purely
+additive, for the candidate B frontier validation. Two optional per-primitive
+inputs (`primitive_component`, `primitive_representative_class`) and four outputs:
+
+  output  `post_median_counts`   (H, W, 8) per-category counts of accepted
+                                 contributors occurring AFTER the canonical
+                                 median-surface event, using worklog 110's own
+                                 post-median test (`T <= 0.5` at acceptance,
+                                 T pre-update). Categories, see config.h:
+                                 0 all / 1 same frozen visible component as the
+                                 median representative / 2 different component /
+                                 3 unresolved component / 4 representative in
+                                 THIS view / 5 in another view only / 6 never a
+                                 representative / 7 rho2d low-pass branch
+  output  `post_median_weights`  (H, W, 8) matching sums of the canonical
+                                 compositing weight `w = alpha * T`
+  output  `total_accepted_weight`(H, W) sum of `w` over ALL accepted
+                                 contributors, so a post-median CONTRIBUTION
+                                 FRACTION is computable
+  output  `post_median_depth_stats` (H, W, 3) sum / min / max of
+                                 (contributor depth - median depth)
+
+This is deliberately an exhaustive aggregate rather than a bounded list: worklog
+110 measured 97.4% of its 16-slot contributor arrays as truncated, and that
+truncation would bias any post-median mass measurement.
+
+IMPORTANT semantics, stated precisely because worklog 120 was imprecise about
+them: `query_T` is the PRE-UPDATE traversal transmittance at the recorded
+resolution event. When `query_terminated == 1`, the quantity the canonical kernel
+actually compared against 0.0001f is `query_T * (1 - query_termination_alpha)`,
+NOT `query_T` itself -- `query_T` is not bounded by 1e-4 at a termination event.
+
 A probe is resolved ONLY at a contributor the canonical kernel ACCEPTS (one that
 passed `depth >= near_n`, `power <= 0`, `alpha >= 1/255` and the termination
 test), never at an arbitrary tile-list candidate. The reason is a real property
@@ -150,6 +204,8 @@ def render_with_query_depth_probe(
     model: Any,
     query_depths: Any | None = None,
     background: Any | None = None,
+    primitive_component: Any | None = None,
+    primitive_representative_class: Any | None = None,
 ) -> dict[str, Any]:
     """One diagnostic forward render.
 
@@ -161,8 +217,11 @@ def render_with_query_depth_probe(
     (`depths_to_points` unprojects it as a z-depth, not a ray distance).
 
     Returns every field `render_with_pixel_representative` returns, under the
-    same keys and with the same semantics, PLUS `query_T`,
-    `query_terminated`, `query_reached` and `query_prefix_count`.
+    same keys and with the same semantics, PLUS `query_T`, `query_terminated`,
+    `query_reached`, `query_prefix_count`, and the worklog 121 additions
+    `query_resolution_depth`, `query_termination_alpha`,
+    `query_late_front_count`, `pixel_inversion_count` and
+    `pixel_max_backward_jump`.
     """
 
     torch = require_torch()
@@ -175,6 +234,14 @@ def render_with_query_depth_probe(
         query_tensor = empty
     else:
         query_tensor = query_depths.to(device=model.device, dtype=torch.float32).contiguous()
+    component_tensor = (
+        empty if primitive_component is None
+        else primitive_component.to(device=model.device, dtype=torch.int32).contiguous()
+    )
+    representative_tensor = (
+        empty if primitive_representative_class is None
+        else primitive_representative_class.to(device=model.device, dtype=torch.int32).contiguous()
+    )
 
     tanfovx = math.tan(float(camera.FoVx) * 0.5)
     tanfovy = math.tan(float(camera.FoVy) * 0.5)
@@ -184,6 +251,9 @@ def render_with_query_depth_probe(
             representative_id, forward_accepted, contrib_ids, contrib_post_median, contrib_count,
             median_rho3d, median_rho2d, median_s_u, median_s_v,
             query_T, query_terminated, query_reached, query_prefix_count,
+            query_resolution_depth, query_termination_alpha, query_late_front_count,
+            pixel_inversion_count, pixel_max_backward_jump,
+            post_median_counts, post_median_weights, total_accepted_weight, post_median_depth_stats,
         ) = extension.rasterize_gaussians(
             background,
             model.get_xyz,
@@ -205,6 +275,8 @@ def render_with_query_depth_probe(
             False,  # prefiltered
             False,  # debug
             query_tensor,
+            component_tensor,
+            representative_tensor,
         )
 
     return {
@@ -224,4 +296,13 @@ def render_with_query_depth_probe(
         "query_terminated": query_terminated,
         "query_reached": query_reached,
         "query_prefix_count": query_prefix_count,
+        "query_resolution_depth": query_resolution_depth,
+        "query_termination_alpha": query_termination_alpha,
+        "query_late_front_count": query_late_front_count,
+        "pixel_inversion_count": pixel_inversion_count,
+        "pixel_max_backward_jump": pixel_max_backward_jump,
+        "post_median_counts": post_median_counts,
+        "post_median_weights": post_median_weights,
+        "total_accepted_weight": total_accepted_weight,
+        "post_median_depth_stats": post_median_depth_stats,
     }
