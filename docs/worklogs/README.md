@@ -269,3 +269,5 @@
 
 - [Worklog 126: WL123 Fixed Observed/Occluded Gaussian Visualization](126_wl123_fixed_observed_occluded_gaussian_visualization.md)
   - WL125 계약을 실제 WL123 checkpoint에 적용했다. Gaussian 중심 1,190,469개를 provenance 없는 arbitrary world-space query로 161 view 전수 분류하여, 동일 Gaussian row의 `ORIGINAL_SCENE`과 `OBSERVED_OCCLUDED`를 생성했다(798,304 observed / 391,457 occluded / 708 unresolved, marker·조명·overlay 0).
+- [Worklog 127: Novel-View Observed/Occluded Inspection Correction](127_novel_view_observed_occluded_inspection_correction.md)
+  - WL126의 train-camera preview가 global `OCCLUDED` 검토에 부적절함을 교정했다. frozen 161-view 분류는 바꾸지 않고, query set 밖의 outer-orbit novel camera에서 같은 Gaussian만 다시 색칠해 렌더링했다.

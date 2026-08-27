@@ -46,7 +46,7 @@ from observed_occluded.shared import (  # noqa: E402
 
 _ITERATION_DIR = "iteration_0000001"
 _REPORT_NAME = "wl123_fixed_observed_occluded_visualization_report.json"
-_WORKLOG = "126_wl123_fixed_observed_occluded_gaussian_visualization.md"
+_WORKLOG = "127_novel_view_observed_occluded_inspection_correction.md"
 
 # Fixed Worklog 125 palette.  It encodes a query classification only; it does
 # not claim physical first hit, surface ownership, trust, or continuity.
@@ -86,6 +86,81 @@ def state_colours(global_state: torch.Tensor) -> torch.Tensor:
     return colours
 
 
+
+def novel_inspection_candidates(cameras: list[Any], positions: torch.Tensor) -> list[Any]:
+    """Make a deterministic outer orbit, separate from the 161 query views.
+
+    The state contract is evaluated only against ``cameras``. These cameras are
+    render-only review poses: they are outside the capture radius and no member
+    is one of the dataset cameras. A review pose can consequently expose
+    Gaussian centres occluded relative to every frozen query view.
+    """
+
+    from osn_gs.data.colmap_scene import projection_matrix
+    from osn_gs.render.torch_fallback import TorchCamera
+
+    device = positions.device
+    target = torch.quantile(positions.to(torch.float32), 0.5, dim=0)
+    centres = torch.stack([camera.camera_center.to(device=device, dtype=torch.float32) for camera in cameras])
+    capture_radius = torch.quantile(torch.linalg.vector_norm(centres - target, dim=1), 0.90)
+    scene_radius = torch.quantile(torch.linalg.vector_norm(positions - target, dim=1), 0.90)
+    radius = torch.maximum(capture_radius * 1.20, scene_radius * 1.25)
+
+    # COLMAP camera y is down. Average opposite y axes to obtain a stable up
+    # vector, then make a deterministic horizontal frame.
+    down_axes = torch.stack([camera.world_view_transform.T[:3, :3][1].to(device) for camera in cameras])
+    up = -down_axes.mean(dim=0)
+    up = up / torch.linalg.vector_norm(up).clamp_min(1e-8)
+    seed = centres[0] - target
+    seed = seed - up * torch.dot(seed, up)
+    if float(torch.linalg.vector_norm(seed)) < 1e-6:
+        seed = torch.tensor((1.0, 0.0, 0.0), device=device)
+        seed = seed - up * torch.dot(seed, up)
+    axis_x = seed / torch.linalg.vector_norm(seed).clamp_min(1e-8)
+    axis_y = torch.linalg.cross(up, axis_x, dim=0)
+    axis_y = axis_y / torch.linalg.vector_norm(axis_y).clamp_min(1e-8)
+
+    reference = min(cameras, key=lambda camera: str(camera.image_name))
+    projection = projection_matrix(0.01, 100.0, reference.FoVx, reference.FoVy, device=str(device)).transpose(0, 1).contiguous()
+    candidates = []
+    # Fixed before rendering: eight azimuths half a sector away from the first
+    # capture ray, each at two elevations. These are not query views.
+    for elevation_degrees in (12.0, 28.0):
+        elevation = float(np.deg2rad(elevation_degrees))
+        for index in range(8):
+            azimuth = 2.0 * np.pi * (index + 0.5) / 8.0
+            horizontal = np.cos(azimuth) * axis_x + np.sin(azimuth) * axis_y
+            outward = np.cos(elevation) * horizontal + np.sin(elevation) * up
+            centre = target + radius * outward
+            forward = target - centre
+            forward = forward / torch.linalg.vector_norm(forward).clamp_min(1e-8)
+            right = torch.linalg.cross(up, forward, dim=0)
+            right = right / torch.linalg.vector_norm(right).clamp_min(1e-8)
+            down = torch.linalg.cross(forward, right, dim=0)
+            rotation = torch.stack((right, down, forward), dim=0)
+            translation = -rotation @ centre
+            conventional = torch.eye(4, dtype=torch.float32, device=device)
+            conventional[:3, :3] = rotation
+            conventional[:3, 3] = translation
+            world_view = conventional.T.contiguous()
+            candidates.append(TorchCamera(
+                image_height=reference.image_height, image_width=reference.image_width,
+                world_view_transform=world_view,
+                full_proj_transform=world_view @ projection,
+                camera_center=centre, FoVx=reference.FoVx, FoVy=reference.FoVy,
+                image_name=f"NOVEL_OUTER_ORBIT_e{int(elevation_degrees):02d}_a{index:02d}",
+            ))
+    return candidates
+
+
+def red_dominant_pixel_count(image: torch.Tensor) -> int:
+    """Presentation-only review score; never feeds classification."""
+
+    rgb = image.detach()
+    red = (rgb[0] > rgb[1] * 1.15) & (rgb[0] > rgb[2] * 1.15) & (rgb[0] > 0.10)
+    return int(red.sum().item())
+
+
 def _tensor_sha256(tensor: torch.Tensor) -> str:
     return hashlib.sha256(tensor.detach().cpu().contiguous().numpy().tobytes()).hexdigest()
 
@@ -97,7 +172,7 @@ def _write_view_readme(folder: Path, body: str, count: int) -> None:
         "분류 계약: Worklog 123의 frozen Candidate B `depth <= stored_median_depth`와 "
         "frozen ANY-OBSERVED global aggregation. Gaussian 중심은 임의 world-space 질의이며 "
         "renderer-event provenance를 붙이지 않았다.\n"
-        "변경 금지: Gaussian 행 수·위치·scale·rotation·opacity·카메라·조명은 바꾸지 않았고, "
+        "변경 금지: Gaussian 행 수·위치·scale·rotation·opacity·조명은 바꾸지 않았고, "
         "epsilon/ULP band도 없다.\n"
         f"Gaussian 수: {count:,} (두 view 동일) · 전체 리포트: `../{_REPORT_NAME}` · "
         f"Worklog: `docs/worklogs/{_WORKLOG}`\n"
@@ -177,9 +252,7 @@ def main() -> None:
             raise AssertionError("state colouring changed the Gaussian row count")
 
         rasterizer = OSNSurfelRasterizer(SurfelRasterizerConfig())
-        preview_camera = min(cameras, key=lambda camera: str(camera.image_name))
-        _progress(f"rendering fixed pair from {preview_camera.image_name}")
-        original_render = rasterizer.render(preview_camera, model)["render"]
+        review_candidates = novel_inspection_candidates(cameras, positions)
 
         # The temporary override changes ONLY appearance tensors in memory. It
         # is restored byte-for-byte before this process exits; checkpoint and
@@ -191,11 +264,18 @@ def main() -> None:
             model._features_dc.copy_(_rgb_to_f_dc(colours).unsqueeze(1))
             model._features_rest.zero_()
             model.active_sh_degree = 0
-            classified_render = rasterizer.render(preview_camera, model)["render"]
+            candidate_renders = [(camera, rasterizer.render(camera, model)["render"]) for camera in review_candidates]
+            preview_camera, classified_render = max(candidate_renders, key=lambda entry: red_dominant_pixel_count(entry[1]))
+            red_candidate_scores = {
+                str(camera.image_name): red_dominant_pixel_count(render)
+                for camera, render in candidate_renders
+            }
         finally:
             model._features_dc.copy_(original_dc)
             model._features_rest.copy_(original_rest)
             model.active_sh_degree = original_degree
+        _progress(f"rendering fixed pair from novel inspection camera {preview_camera.image_name}")
+        original_render = rasterizer.render(preview_camera, model)["render"]
 
     geometry_hashes_after = {
         "xyz": _tensor_sha256(model.get_xyz),
@@ -223,11 +303,11 @@ def main() -> None:
 
     _write_view_readme(original_folder, """# ORIGINAL_SCENE
 
-학습된 2DGS Gaussian **전부**를 같은 preview 카메라에서 원래 학습된 SH appearance로 렌더링했다. 색상 부호화·추가 Gaussian·광원·overlay가 없다.
+학습된 2DGS Gaussian **전부**를 renderer query에 쓰지 않은 novel outer-orbit inspection camera에서 원래 학습된 SH appearance로 렌더링했다. 색상 부호화·추가 Gaussian·광원·overlay가 없다.
 """, count)
     _write_view_readme(classified_folder, """# OBSERVED_OCCLUDED
 
-`ORIGINAL_SCENE`와 정확히 같은 Gaussian 행을 렌더링했다. 위치·shape·opacity는 원본 그대로이며, 오직 Gaussian 색상만 Worklog 123 frozen global query state로 교체했다.
+`ORIGINAL_SCENE`와 정확히 같은 Gaussian 행을 renderer query에 쓰지 않은 novel outer-orbit inspection camera에서 렌더링했다. 위치·shape·opacity는 원본 그대로이며, 오직 Gaussian 색상만 Worklog 123 frozen global query state로 교체했다.
 
 - 초록: global `OBSERVED`
 - 빨강: global `OCCLUDED`
@@ -250,10 +330,15 @@ def main() -> None:
         "UNRESOLVED": int((state_np == STATE_UNRESOLVED).sum()),
     }
     report: dict[str, Any] = {
-        "batch": "Worklog 126 — fixed Gaussian visualization of Worklog 123 query contract",
+        "batch": "Worklog 127 — novel-view fixed Gaussian visualization of Worklog 123 query contract",
         "checkpoint": str(arguments.checkpoint),
         "camera_meta": camera_meta,
         "preview_camera": str(preview_camera.image_name),
+        "novel_inspection_camera": {
+            "not_in_frozen_query_camera_set": True,
+            "construction": "fixed 8 azimuth x 2 elevation outer-orbit candidates; selected only for visible red review area",
+            "red_dominant_pixel_scores": red_candidate_scores,
+        },
         "classification": {
             "query": "each existing checkpoint Gaussian centre as arbitrary world-space x",
             "renderer_event_provenance": "absent for every centre; no identity is invented",

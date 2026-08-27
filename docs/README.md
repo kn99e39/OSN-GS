@@ -9,6 +9,7 @@
 - [NURBS Construction](nurbs_construction.md): NURBS 중간 표현과 구현 계약
 - [output/ 폴더 관리 규약](output_folder_conventions.md): gitignore된 `output/`의 번호 매김·`confirmed/` 이동·preview_png 통합 규칙(참조용 유일 문서)
 - [Worklog 126: WL123 Fixed Observed/Occluded Gaussian Visualization](worklogs/126_wl123_fixed_observed_occluded_gaussian_visualization.md): WL125의 고정 Gaussian visualization 계약으로 생성한 실제 Original Scene / Observed/Occluded 결과
+- [Worklog 127: Novel-View Observed/Occluded Inspection Correction](worklogs/127_novel_view_observed_occluded_inspection_correction.md): query camera set 밖 novel inspection pose에서 다시 만든 현재 Observed/Occluded 결과
 
 ## 현재 상태
 

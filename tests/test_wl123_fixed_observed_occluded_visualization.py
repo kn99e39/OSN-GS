@@ -37,3 +37,18 @@ def test_exporter_explicitly_forbids_marker_and_lighting_semantics():
     assert '"marker_gaussians_added": 0' in source
     assert '"lighting_added": False' in source
     assert "renderer_event_provenance\": \"absent for every centre" in source
+
+
+def test_novel_inspection_camera_is_separate_from_query_cameras():
+    from osn_gs.render.torch_fallback import TorchCamera
+
+    cameras = [
+        TorchCamera(16, 16, torch.eye(4), torch.eye(4), torch.tensor((3.0, 0.0, 0.0)), 0.7, 0.7, "QUERY_A"),
+        TorchCamera(16, 16, torch.eye(4), torch.eye(4), torch.tensor((-3.0, 0.0, 0.0)), 0.7, 0.7, "QUERY_B"),
+    ]
+    positions = torch.tensor(((0.0, 0.0, 0.0), (0.3, 0.1, 0.2), (-0.2, -0.1, 0.1)))
+    candidates = MODULE.novel_inspection_candidates(cameras, positions)
+    assert len(candidates) == 16
+    assert all(candidate.image_name.startswith("NOVEL_OUTER_ORBIT_") for candidate in candidates)
+    query_centres = torch.stack([camera.camera_center for camera in cameras])
+    assert all(float(torch.cdist(candidate.camera_center.reshape(1, 3), query_centres).min()) > 1e-3 for candidate in candidates)
