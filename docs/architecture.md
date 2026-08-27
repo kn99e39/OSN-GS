@@ -530,3 +530,31 @@ Initial Gaussians -> one-time density-adaptive voxel bootstrap -> initial patch 
 - Worklog 94는 4개 고정 surface-evidence representation(RAW_CENTER_BASELINE/CENTER_LATENT_SURFACE/COVARIANCE_SURFEL_SUPPORT/HYBRID_LATENT_PLUS_SUPPORT)을 같은 7개 real region·같은 unmodified Worklog 89 constructor 체인(`materialize_chart_unit_cut_boundaries`/`evaluate_fit` 그대로 재사용)으로 fallback 없이 비교한 단일 architecture-decision 배치다. Region ownership/ADC/training/Worklog 82 threshold/NURBS capacity/PCA-UV는 모두 미변경이다.
 - Checkpoint 2900/final 실측: COVARIANCE_SURFEL_SUPPORT는 RAW_CENTER_BASELINE과 수치가 정확히 동일했고(constructor가 covariance normal만 읽음을 확인), HYBRID는 CENTER_LATENT_SURFACE와 거의 동일했다(position이 topology를 지배). Latent 기반 두 representation은 recoverable evidence를 2.8~5.1배 늘렸지만 valid_supported는 네 representation 전부 0.2% 미만, unresolved는 83.7~88.0%로 여전히 압도적이었다.
 - **Decision 3**: 네 representation 모두 coherent evidence 대다수를 unresolved/unsafe로 남긴다. Constructor-level 재설계를 중단하고, 다음 architecture target은 training 중 visible geometric evidence 생성 자체(upstream)로 옮긴다.
+
+
+## Fixed Gaussian Visualization Contract
+
+2026-08-27부터 Gaussian visualization은 아래 고정 계약을 따른다. 이는 scientific state를 시각적으로 표시하기 위한 review contract이며, renderer에 광원이나 별도 appearance model을 추가하는 설계가 아니다.
+
+### 필수 산출물
+
+모든 Gaussian visualization batch는 동일한 checkpoint·iteration·camera·resolution·background·renderer 조건으로 다음 두 결과를 반드시 포함한다.
+
+| 결과 | 고정 의미 |
+|---|---|
+| Original Scene (ORIGINAL_SCENE/render.ppm) | 해당 환경에 이미 존재하는 동일 Gaussian set을 원래 학습된 색상/SH, position, scale/covariance, rotation, opacity 그대로 렌더링한다. 색상 변경, Gaussian 추가, 조명·shading·emissive 효과를 금지한다. |
+| Observed/Occluded (OBSERVED_OCCLUDED/render.ppm) | Original Scene과 동일한 Gaussian row와 geometry를 사용한다. position, scale/covariance, rotation, opacity, ordering, camera, renderer는 바꾸지 않고 Gaussian 색상만 상태 map으로 덮어쓴다. |
+
+고정 상태 색상은 다음과 같다.
+
+- OBSERVED: green (0.10, 0.85, 0.35)
+- OCCLUDED: red (0.92, 0.18, 0.18)
+- UNRESOLVED 또는 상태 미결정: gray (0.60, 0.60, 0.62)
+
+상태를 계산하지 못한 Gaussian을 임의로 Observed/Occluded로 분류하지 않는다. Occluded Space를 표현할 validated Gaussian/volumetric representation이 없으면 추가 marker Gaussian을 만들지 않는다. 승인된 volumetric representation이 나중에 생기는 경우에만 별도 OCCLUDED_VOLUMETRIC 결과를 추가할 수 있으며, 고정 두 결과를 대체하지 않는다.
+
+### 시각화 항목 고정 규칙
+
+추가 frontier, topology, identity, residual 그림은 필수 두 결과를 포함한 뒤에만 추가할 수 있다. 추가 결과마다 별도 legend, 상태 정의, 동일 Gaussian row 여부를 기록한다. 배치마다 임의로 다른 결과 조합·색상표·marker 정책을 선택하지 않는다.
+
+이 계약은 기존 historical output을 다시 쓰지 않는다. 다만 WL123의 EVENT_IDENTITY_EFFECT처럼 장면 색상을 덮고 query 위치에 marker Gaussian을 추가한 결과는 canonical Original Scene 또는 Observed/Occluded 결과로 간주하지 않는다.

@@ -263,3 +263,6 @@
 
 - [Worklog 124: Canonical Architecture Reduction Audit](124_canonical_architecture_reduction_audit.md)
   - Worklog 96–123 evidence와 실제 current import/call graph를 분리했다. smallest defensible canonical core는 world-space x + optional exact renderer-event provenance + stored median frontier + frozen aggregation이다. visible topology/NURBS는 provisional, occluded-side/uncertain materialization은 premature/open으로 남겼고 production code와 public exports는 변경하지 않았다.
+
+- [Worklog 125: Fixed Gaussian Visualization Contract](125_fixed_gaussian_visualization_contract.md)
+  - 모든 Gaussian visualization에 Original Scene과 Observed/Occluded를 고정 포함하고, 동일 Gaussian의 색상만 상태별로 바꾸며 광원·추가 marker Gaussian·임의 overlay를 금지하는 계약을 확정했다.
