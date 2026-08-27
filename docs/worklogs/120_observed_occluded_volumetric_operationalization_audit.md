@@ -434,7 +434,8 @@ table / curved table side / patio / hedge 네 영역이 프리뷰 안에서 모�
 ## 20. Exact Branch / Commit / Commands / Output Paths
 
 **브랜치**: `arch/2dgs-coverage-first-surface`
-**작업 시작 시점 커밋 SHA**: `9cd93e51c1c26c57f625d6fc3905540081d5b48c` ("Worklog 119: Visible-NURBS geometry/UV control correction ...")
+**작업 시작 시점 커밋 SHA(부모)**: `9cd93e51c1c26c57f625d6fc3905540081d5b48c` ("Worklog 119: Visible-NURBS geometry/UV control correction ...")
+**이 배치의 커밋 SHA**: `1f8e5b6` ("Worklog 120: Observed/Occluded volumetric operationalization audit -- all four candidates fail, no winner"). 사용자 지시에 따라 동시 진행 중이던 다른 에이전트의 worklog 119-1/119-2/119-3 변경분도 같은 커밋에 함께 담았다(아래 파일 목록의 `M` 항목 및 `torch_exact_knn_performance.py`/`torch_nurbs_performance_batch.py`/`wl119_*` 계열). 커밋 직전 두 작업 영역을 모두 덮는 테스트 166개(WL120 60개 + 렌더러/NURBS 스위트 100개 + 성능 트랙 6개)가 전부 통과했다.
 
 **이 배치가 추가한 파일 (전부 신규, 추적 중인 파일은 0개 수정)**:
 ```
