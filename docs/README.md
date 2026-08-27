@@ -373,3 +373,8 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - 동일 환경 reference는 neighbor/order/distance/graph/root까지 exact 반복됐고 production default는 explicit MM과 exact였다. 그러나 114,812행은 order-only, 10,466행은 raw MM tie membership 교환, 10,999행은 derived float32 MM error bound 내 membership 역전이었다(`F=0`, `H=0`).
 - reference ranking은 production GEMM shape/chunk와 정확한 `topk(K)` tie 선택에 결합돼 있다. 축소 candidate/pair-MM은 이를 깨끗하게 재현할 correctness proof가 없어 Attribution Gate를 실패했으며, accelerated backend와 production 변경은 구현하지 않았다.
 - 최종 판정: `C. REFERENCE SEMANTICS TOO IMPLEMENTATION-COUPLED FOR A CLEAN EXACT REPLACEMENT`. focused tests `28 passed`; attribution-only 지시대로 full suite는 실행하지 않았다.
+
+## 2026-08-27 Query-contract closure
+
+- [Worklog 123: Volumetric Frontier Query Contract Closure](worklogs/123_volumetric_frontier_query_contract_closure.md)
+  - world-space 3D를 canonical volumetric query로 유지하고 renderer median-event provenance를 source-view exact identity로 보존하는 계약을 닫았다. exhaustive source identity 0/43,817,760 contradiction, cross-view historical global contradiction 19/19 rescue, generic P1-excluded stability 1,118/1,590,240 diagnostic disagreement을 확인했으며 최종 verdict는 A다. Candidate B·topology·epsilon/tolerance는 변경하지 않았다.
