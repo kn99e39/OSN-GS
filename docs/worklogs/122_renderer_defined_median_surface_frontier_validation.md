@@ -343,7 +343,8 @@ section 1에 전부 열거했다. **새 threshold·tolerance·epsilon은 하나�
 ## 16. Exact Branch / Commit / Commands / Outputs
 
 **브랜치**: `arch/2dgs-coverage-first-surface`
-**보존된 역사적 기준 커밋**: `fdfb8ad60b6233ea8364a09ea3467c18e600a246` (Worklog 120). Worklog 121은 같은 작업 트리에 미커밋 상태로 보존되어 있으며 이 배치가 그 아티팩트를 참조 전용으로 읽는다.
+**보존된 역사적 기준 커밋**: `fdfb8ad60b6233ea8364a09ea3467c18e600a246` (Worklog 120).
+**이 배치의 커밋 SHA**: `fafade1` -- Worklog 121과 함께 하나의 커밋에 담겼다(두 배치가 누적된 뒤 커밋되었기 때문이며, 이후 배치부터는 배치당 1커밋으로 진행한다). 이 배치는 WL121의 `value_space_supplemental_bank.npz`를 참조 전용으로 읽는다.
 
 **추가한 파일**:
 ```
