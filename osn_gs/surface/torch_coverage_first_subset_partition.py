@@ -244,6 +244,7 @@ class CandidateGraph:
     spatial_edge_mask: Any  # (E_c,) bool -- passed the local-spacing distance test
     normal_compatible_mask: Any  # (E_c,) bool -- passed |dot(n_i, n_j)| >= floor
     normal_alignment: Any  # (E_c,) float -- the raw |dot(n_i, n_j)| value for every candidate edge
+    neighbor_index: Any | None = None  # optional exact (N, k) rows for downstream reuse
 
     @property
     def accepted_edges(self) -> Any:
@@ -258,6 +259,7 @@ def build_candidate_graph(
     orientation: SurfaceOrientationEvidence,
     config: CoverageFirstPartitionConfig,
     *,
+    retain_neighbor_index: bool = False,
     progress: Callable[[str], None] | None = None,
 ) -> CandidateGraph:
     """kNN spatial adjacency + local-spacing gate + normal compatibility --
@@ -289,6 +291,10 @@ def build_candidate_graph(
             spatial_edge_mask=empty_bool,
             normal_compatible_mask=empty_bool,
             normal_alignment=torch.zeros((0,), dtype=positions.dtype, device=device),
+            neighbor_index=(
+                torch.zeros((count, 0), dtype=torch.int64, device=device)
+                if retain_neighbor_index else None
+            ),
         )
 
     chunk_size = int(config.knn_chunk_size) or _auto_chunk_size(count, device)
@@ -306,7 +312,7 @@ def build_candidate_graph(
     # exact for count < 3e9 and far cheaper at scene scale.
     key = left * int(count) + right
     unique_key = torch.unique(key)
-    del key, rows, left, right, neighbor_index
+    del key, rows, left, right
     candidate_left = torch.div(unique_key, count, rounding_mode="floor")
     candidate_right = unique_key - candidate_left * count
     candidate_edges = torch.stack((candidate_left, candidate_right), dim=1)
@@ -330,6 +336,7 @@ def build_candidate_graph(
         spatial_edge_mask=spatial_edge_mask,
         normal_compatible_mask=normal_compatible_mask,
         normal_alignment=alignment,
+        neighbor_index=neighbor_index if retain_neighbor_index else None,
     )
 
 

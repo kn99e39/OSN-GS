@@ -344,3 +344,25 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - Pixel 단위 D-outlier 귀속: 모집단 수준 low-pass 지배 pixel은 residual 2.1배 높고 top-1000의 54%를 차지하지만, 역사적으로 반복 지목된 단일 극단 chart(10592)는 branch가 섞여 있어 chart 단위 fit 퇴화가 원인임을 확인.
 - 실행 시간 73.7분(WL118의 1.6배)은 directive가 요구한 arm별 독립 재평가 비용임을 CPU 통제 벤치마크로 확인(버그 아님; 발견된 실제 버그 1건은 전체의 ~1%만 기여).
 - 신규 focused 테스트 14개 전부 통과, canonical 코드 무수정.
+
+## 2026-08-26 Worklog 119 GPU Utilization / Host Serialization Audit — CURRENT EXECUTION-GRANULARITY LIMIT
+
+- [별도 감사 worklog](worklogs/119-1_gpu_utilization_host_serialization_audit.md)는 활성 full run을 보호한 뒤 동일 checkpoint/GPU 조건의 8-view/512-chart OLD/FIXED A/B와 1초 nvidia-smi sampling을 수행했다.
+- known pixel-record scalar serialization을 bulk NumPy helper로 유지한 결과 exact-equivalence focused test 포함 14개가 통과했고, OLD/FIXED pixel_records count는 각각 42,998로 동일했다.
+- chart loop는 43.840초에서 43.087초로 약 1.7% 개선됐지만 GPU util은 평균 15.21%/15.76%, p95 16%로 낮은 수준이 유지됐다. total wall time 개선은 약 0.5%였다.
+- profiler에서는 topology replay _knn이 141.312초로 지배했고, named pixel-record helper 128 calls cumulative는 0.015초였다. G0/G1/G2 및 WL118 representative spread는 vectorized path로 확인했다.
+- 최종 귀속은 CURRENT EXECUTION-GRANULARITY LIMIT이다. 여러 chart solve batching은 별도 architecture 배치의 가설로 남겼으며 이번 배치에는 구현하지 않았다. 1.5~2.5배 wall-clock 개선은 현재 근거로 확정하지 않는다.
+## 2026-08-26 Worklog 119-2 Exact-Semantics Performance Optimization — 약 2배 단축
+
+- [Worklog 119-2](worklogs/119-2_exact_semantics_performance_optimization.md)는 WL119 수학/topology/chart/NURBS/solve 계약을 유지하면서 완전 중복 연산만 제거했다.
+- 동일 exact KNN을 2회에서 1회로 재사용하고, ARM A 중복 Metric G projection, 불필요 basis derivative, projector 동일-UV 재평가, ARM B normal-system 재조립, 중복 blob labeling/전체 image scan, chart scalar sync를 제거했다.
+- 동일 8-view/512-chart에서 total 185.494→93.006초(1.994배), chart loop 43.087→21.342초(2.019배), 11.883→23.990 charts/s. 주요 report section은 exact 동일하고 focused tests 83개 통과.
+- chart GPU median은 여전히 16%이며, 최종 profile의 89.2%는 한 번 남은 O(N²) exact KNN이다. 남은 chart 병목은 execution-granularity limit이고, 다음 구조적 후보는 exact spatial-neighbor architecture 또는 projection/basis batching이다.
+
+## 2026-08-27 Worklog 119-3 Performance Track Phase 1~4 — 잠재 성능 확인, equivalence gate로 미채택
+
+- [Worklog 119-3](worklogs/119-3_performance_track_phase_1_4.md)은 Main Architecture Track 및 WL119 scientific result와 독립된 Performance Track이다. 기존 serial chart path와 `torch.cdist` KNN을 immutable reference로 유지했다.
+- 실제 8-view/512-chart corpus는 206,889 pixels(min/median/p95/max 32/60/486.2/114,571)이며 deterministic bucket plan과 top-10 pathological chart를 기록했다. Runtime OOM splitting과 silent fallback은 사용하지 않았다.
+- Dependency-terminal chart batching은 2.06배 잠재 speedup을 보였지만 509/512 charts가 초기 continuous 기준을 넘고 8개 chart에서 research winner/tie 관계가 바뀌어 미채택했다. 통과한 3개는 애초 oversize serial charts였다.
+- SciPy cKDTree exact 후보는 full scene에서 70.552→0.647초(108.98배)였지만 neighbor row 136,277개, candidate edges, accepted edges, partition roots 1,251개가 reference와 달라 contract mismatch로 미채택했다.
+- Production/default backend 변경은 없고, focused suite 89개 및 전체 회귀 1,422 passed/22 skipped/18 subtests가 통과했다. CUDA Graph·multi-stream·custom chart CUDA kernel은 구현하지 않았다.

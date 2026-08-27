@@ -82,11 +82,11 @@ from osn_gs.surface.torch_camera_induced_visible_adjacency import (
 )
 from osn_gs.surface.torch_camera_observed_chart_domains import (
     build_view_chart_pixel_samples,
-    label_same_component_blobs,
     valid_pixel_chart_mask,
 )
 from osn_gs.surface.torch_coverage_first_subset_partition import CoverageFirstPartitionConfig, _connected_component_roots, build_candidate_graph
 from osn_gs.surface.torch_nurbs import (
+    _lsq_normal_system,
     _solve_control_grid_lsq,
     fit_torch_visible_surface,
     fit_torch_visible_surface_lsq,
@@ -228,9 +228,19 @@ def fit_fixed_uv_equal_solves(
     if int(points.shape[0]) <= 1:
         return surface, uv_fixed
     with torch.no_grad():
+        normal_system = _lsq_normal_system(
+            points, uv_fixed, surface, smoothness_lambda, tikhonov_lambda, chunk_size, None
+        )
         for _ in range(max(1, int(correction_rounds))):
             surface.control_grid = _solve_control_grid_lsq(
-                points, uv_fixed, surface, smoothness_lambda, tikhonov_lambda, chunk_size, None
+                points,
+                uv_fixed,
+                surface,
+                smoothness_lambda,
+                tikhonov_lambda,
+                chunk_size,
+                None,
+                preassembled_normal_system=normal_system,
             )
     return surface, uv_fixed
 
@@ -245,10 +255,8 @@ def geometric_point_to_surface_error(surface, points: torch.Tensor, chunk_size: 
     on the given final surface, then point-to-surface residual. Returns
     ``(residual, uv_eval)``. Does not write `surface.control_grid`."""
 
-    control_before = surface.control_grid.detach().clone()
     uv_eval = project_torch_points_to_nurbs(points, surface, iterations=PROJECTION_ITERATIONS, chunk_size=chunk_size)
     residual = (surface.evaluate(uv_eval) - points).norm(dim=-1)
-    assert torch.equal(surface.control_grid, control_before), "geometric evaluation must not mutate the fitted surface"
     return residual, uv_eval
 
 
@@ -256,9 +264,7 @@ def camera_correspondence_error(surface, points: torch.Tensor, uv_camera: torch.
     """METRIC C: residual at the ORIGINAL, immutable camera UV -- never
     reprojected. Does not write `surface.control_grid`."""
 
-    control_before = surface.control_grid.detach().clone()
     residual = (surface.evaluate(uv_camera) - points).norm(dim=-1)
-    assert torch.equal(surface.control_grid, control_before), "camera-correspondence evaluation must not mutate the fitted surface"
     return residual
 
 
@@ -389,6 +395,84 @@ def run_equal_count_synthetic_contracts_corrected() -> dict[str, Any]:
     return results
 
 
+
+def _write_performance_chart_corpus(
+    output_path: Path,
+    per_view_rep_remapped: list[torch.Tensor],
+    per_view_world_points_g0: list[torch.Tensor],
+    subset_ids: torch.Tensor,
+    max_charts: int | None,
+    source_metadata: dict[str, Any],
+) -> None:
+    """Emit an ordered WL119 chart corpus for the independent Performance Track.
+
+    This opt-in branch does not execute or alter the serial scientific path.
+    Membership, IDs, row-major pixel order, camera UV, and world points are
+    retained so both performance arms consume one immutable input artifact.
+    """
+
+    charts: list[dict[str, Any]] = []
+    stop = False
+    for view_index, (rep_cpu, world_cpu) in enumerate(
+        zip(per_view_rep_remapped, per_view_world_points_g0)
+    ):
+        if stop:
+            break
+        rep_gpu = rep_cpu.to(subset_ids.device)
+        world_gpu = world_cpu.to(subset_ids.device)
+        valid = rep_gpu >= 0
+        component_map = torch.where(
+            valid, subset_ids[rep_gpu.clamp(min=0)], torch.full_like(rep_gpu, -1)
+        )
+        samples = build_view_chart_pixel_samples(
+            view_index, component_map, rep_gpu, world_gpu
+        )
+        if samples.blob_count == 0:
+            continue
+        valid_blob_ids = torch.nonzero(
+            valid_pixel_chart_mask(samples, MIN_PIXEL_SAMPLES), as_tuple=False
+        ).reshape(-1).tolist()
+        order = samples.pixel_order_by_blob
+        grouped_uv = samples.pixel_uv[order]
+        grouped_xyz = samples.pixel_xyz[order]
+        grouped_rep = samples.pixel_representative_id[order]
+        grouped_row = samples.pixel_row[order].detach().cpu()
+        grouped_col = samples.pixel_col[order].detach().cpu()
+        offsets = samples.blob_pixel_offset.detach().cpu()
+        components = samples.blob_component_id.detach().cpu()
+        for local_blob in valid_blob_ids:
+            if max_charts is not None and len(charts) >= max_charts:
+                stop = True
+                break
+            start, end = int(offsets[local_blob]), int(offsets[local_blob + 1])
+            charts.append({
+                "chart_id": len(charts),
+                "view_index": view_index,
+                "local_blob_id": int(local_blob),
+                "component_id": int(components[local_blob]),
+                "pixel_count": end - start,
+                "pixel_row": grouped_row[start:end].clone(),
+                "pixel_col": grouped_col[start:end].clone(),
+                "representative_id": grouped_rep[start:end].detach().cpu().clone(),
+                "camera_uv": grouped_uv[start:end].detach().cpu().clone(),
+                "world_points": grouped_xyz[start:end].detach().cpu().clone(),
+            })
+    lengths = [int(chart["pixel_count"]) for chart in charts]
+    payload = {
+        "schema": "wl119-performance-chart-corpus-v1",
+        "source": source_metadata,
+        "chart_count": len(charts),
+        "point_count": sum(lengths),
+        "chart_lengths": lengths,
+        "charts": charts,
+    }
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save(payload, output_path)
+    _progress(
+        f"performance corpus -> {output_path} charts={len(charts)} "
+        f"points={sum(lengths)}"
+    )
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--checkpoint", required=True, type=Path)
@@ -402,6 +486,10 @@ def main() -> None:
     parser.add_argument("--preview-camera-images", default=None)
     parser.add_argument("--max-views", type=int, default=0)
     parser.add_argument("--max-charts", type=int, default=0)
+    parser.add_argument(
+        "--performance-corpus-out", type=Path, default=None,
+        help="opt-in Performance Track corpus export; serial WL119 fitting is not run",
+    )
     arguments = parser.parse_args()
 
     started = time.time()
@@ -461,7 +549,9 @@ def main() -> None:
         local_config = CoverageFirstPartitionConfig()
         config = CameraInducedAdjacencyConfig(local=local_config)
         _progress("[WL107/109 replay, unchanged] build_candidate_graph")
-        graph = build_candidate_graph(orientation, config.local, progress=_progress)
+        graph = build_candidate_graph(
+            orientation, config.local, retain_neighbor_index=True, progress=_progress
+        )
 
     _progress("[full-scene sweep] representative_id + median_depth + rho3d/rho2d/s + G0/G1/G2 world points per view")
     per_view_rep_remapped: list[torch.Tensor] = []
@@ -568,7 +658,13 @@ def main() -> None:
         raw_pairs, _raw_view_support = accumulate_image_space_pairs(count, per_view_rep_gpu, progress=_progress)
         local_pairs, _local_mask = filter_by_3d_locality(raw_pairs, count, graph)
         _progress("[WL107/109 replay, unchanged] apply_secondary_geometric_gate")
-        geometry = apply_secondary_geometric_gate(local_pairs, orientation, config, progress=_progress)
+        geometry = apply_secondary_geometric_gate(
+            local_pairs,
+            orientation,
+            config,
+            neighbor_index=graph.neighbor_index,
+            progress=_progress,
+        )
         positive_edges = local_pairs[geometry["kept_mask"]]
         roots = _connected_component_roots(count, positive_edges, config.local)
         unique_roots, inverse, counts = torch.unique(roots, return_inverse=True, return_counts=True)
@@ -621,6 +717,24 @@ def main() -> None:
     region_labels_list = list(ANCHOR_FRACTIONS.keys())
     for region_index, label in enumerate(region_labels_list):
         region_of_representative[region_masks[label]] = region_index
+    region_of_representative_cpu = region_of_representative.detach().cpu()
+
+    if arguments.performance_corpus_out is not None:
+        _write_performance_chart_corpus(
+            arguments.performance_corpus_out,
+            per_view_rep_remapped,
+            per_view_world_points_g0,
+            subset_ids,
+            int(arguments.max_charts) if int(arguments.max_charts) > 0 else None,
+            {
+                "checkpoint": str(arguments.checkpoint),
+                "source_path": str(arguments.source_path),
+                "images": arguments.images,
+                "max_views": int(arguments.max_views),
+                "max_charts": int(arguments.max_charts),
+            },
+        )
+        return
 
     # --- main chart loop ---
     chart_records: list[dict[str, Any]] = []
@@ -633,6 +747,9 @@ def main() -> None:
     global_chart_id = 0
     max_charts = int(arguments.max_charts) if int(arguments.max_charts) > 0 else None
     stop = False
+    chart_loop_started = time.perf_counter()
+    chart_loop_start_epoch = time.time()
+    _progress(f"[chart timing] start_epoch={chart_loop_start_epoch:.6f}")
 
     for view_index, (rep_remapped_cpu, world_points_cpu) in enumerate(zip(per_view_rep_remapped, per_view_world_points_g0)):
         if stop:
@@ -653,17 +770,27 @@ def main() -> None:
             continue
         mask_valid = valid_pixel_chart_mask(vs, MIN_PIXEL_SAMPLES)
         valid_blob_ids = torch.nonzero(mask_valid, as_tuple=False).reshape(-1).tolist()
-        blob_labels_np = label_same_component_blobs(comp_map).detach().cpu().numpy()
+        grouped_order = vs.pixel_order_by_blob
+        grouped_uv = vs.pixel_uv[grouped_order]
+        grouped_xyz = vs.pixel_xyz[grouped_order]
+        grouped_representative_id = vs.pixel_representative_id[grouped_order]
+        grouped_row_cpu = vs.pixel_row[grouped_order].detach().cpu()
+        grouped_col_cpu = vs.pixel_col[grouped_order].detach().cpu()
+        blob_offset_cpu = vs.blob_pixel_offset.detach().cpu()
+        blob_component_id_cpu = vs.blob_component_id.detach().cpu()
 
         for local_blob in valid_blob_ids:
             if max_charts is not None and global_chart_id >= max_charts:
                 stop = True
                 break
-            pixel_sel = vs.pixel_blob_id == local_blob
-            uv_camera = vs.pixel_uv[pixel_sel]
-            pixel_xyz = vs.pixel_xyz[pixel_sel]
-            pixel_rep_ids = vs.pixel_representative_id[pixel_sel]
-            component_id = int(vs.blob_component_id[local_blob].item())
+            pixel_start = int(blob_offset_cpu[local_blob])
+            pixel_end = int(blob_offset_cpu[local_blob + 1])
+            uv_camera = grouped_uv[pixel_start:pixel_end]
+            pixel_xyz = grouped_xyz[pixel_start:pixel_end]
+            pixel_rep_ids = grouped_representative_id[pixel_start:pixel_end]
+            rows_t = grouped_row_cpu[pixel_start:pixel_end]
+            cols_t = grouped_col_cpu[pixel_start:pixel_end]
+            component_id = int(blob_component_id_cpu[local_blob])
 
             with torch.no_grad():
                 # ARM A -- CURRENT (camera UV init -> LSQ -> foot-point correction)
@@ -672,7 +799,7 @@ def main() -> None:
                     degree_u=DEGREE_U, degree_v=DEGREE_V, initial_uv=uv_camera,
                     correction_rounds=CORRECTION_ROUNDS, projection_iterations=PROJECTION_ITERATIONS,
                 )
-                normals_a = surface_a.normals(uv_footpoint)
+                fitted_a_at_footpoint, normals_a = surface_a.evaluate_with_normals(uv_footpoint)
 
                 # ARM B -- CORRECTED fixed camera UV, SAME solve count, UV NEVER reprojected
                 surface_b, uv_fixed_returned = fit_fixed_uv_equal_solves(
@@ -682,7 +809,10 @@ def main() -> None:
                 assert uv_fixed_returned is uv_camera or torch.equal(uv_fixed_returned, uv_camera)
 
                 # METRIC G -- geometric point-to-surface error, both final surfaces, common evaluation
-                residual_g_a, uv_geo_a = geometric_point_to_surface_error(surface_a, pixel_xyz)
+                # The final ARM A correction round already projected these exact
+                # points on this exact final surface.
+                uv_geo_a = uv_footpoint
+                residual_g_a = (surface_a.evaluate(uv_geo_a) - pixel_xyz).norm(dim=-1)
                 residual_g_b, uv_geo_b = geometric_point_to_surface_error(surface_b, pixel_xyz)
 
                 # METRIC C -- camera-correspondence error, both final surfaces, SAME original uv_camera
@@ -691,11 +821,30 @@ def main() -> None:
 
             uv_displacement = (uv_footpoint - uv_camera).norm(dim=-1)
             control_grid_diff = (surface_a.control_grid - surface_b.control_grid).norm(dim=-1).mean()
-            smoothness_a = float(surface_a.smoothness().item())
-            smoothness_b = float(surface_b.smoothness().item())
+            scalar_values = torch.stack([
+                residual_g_a.median(), residual_g_a.quantile(0.95), residual_g_a.max(),
+                residual_g_b.median(), residual_g_b.quantile(0.95), residual_g_b.max(),
+                residual_c_a.median(), residual_c_a.quantile(0.95), residual_c_a.max(),
+                residual_c_b.median(), residual_c_b.quantile(0.95), residual_c_b.max(),
+                control_grid_diff, surface_a.smoothness(), surface_b.smoothness(),
+            ]).detach().cpu().numpy()
+            (
+                residual_g_a_median, residual_g_a_p95, residual_g_a_max,
+                residual_g_b_median, residual_g_b_p95, residual_g_b_max,
+                residual_c_a_median, residual_c_a_p95, residual_c_a_max,
+                residual_c_b_median, residual_c_b_p95, residual_c_b_max,
+                control_grid_diff_mean, smoothness_a, smoothness_b,
+            ) = [float(value) for value in scalar_values]
 
             # --- domain/support behavior (as WL118, using ARM A's foot-point domain) ---
-            blob_mask_np = blob_labels_np == local_blob
+            rows_np_all = rows_t.numpy()
+            cols_np_all = cols_t.numpy()
+            row_min, row_max = int(rows_np_all.min()), int(rows_np_all.max())
+            col_min, col_max = int(cols_np_all.min()), int(cols_np_all.max())
+            blob_mask_np = np.zeros(
+                (row_max - row_min + 1, col_max - col_min + 1), dtype=np.bool_
+            )
+            blob_mask_np[rows_np_all - row_min, cols_np_all - col_min] = True
             camera_domain_shape = blob_domain_shape(blob_mask_np)
             camera_mask = TorchOSNGSPipeline._uv_occupancy_mask(uv_camera.detach(), TRIM_RESOLUTION, TRIM_DILATION)
             fitted_mask = TorchOSNGSPipeline._uv_occupancy_mask(uv_footpoint.detach(), TRIM_RESOLUTION, TRIM_DILATION)
@@ -707,8 +856,6 @@ def main() -> None:
             iou = (intersection / union) if union > 0 else 1.0
 
             # --- section 7/8: low-pass provenance + pixel-level D attribution ---
-            rows_t = torch.from_numpy(np.nonzero(blob_mask_np)[0]).to(torch.int64)
-            cols_t = torch.from_numpy(np.nonzero(blob_mask_np)[1]).to(torch.int64)
             chart_rho3d = rho3d_cpu[rows_t, cols_t]
             chart_rho2d = rho2d_cpu[rows_t, cols_t]
             chart_branch = classify_median_event_branch(chart_rho3d, chart_rho2d)
@@ -767,24 +914,25 @@ def main() -> None:
             group_max_deviation = torch.zeros((rep_count,), device=device)
             group_max_deviation.scatter_reduce_(0, inverse_rep, deviation, reduce="amax", include_self=True)
             multi_member = group_counts > 1
-            within_chart_spread_median = float(np.median(group_max_deviation[multi_member].cpu().numpy())) if bool(multi_member.any()) else 0.0
+            spread_values = group_max_deviation[multi_member].detach().cpu().numpy()
+            within_chart_spread_median = float(np.median(spread_values)) if spread_values.size else 0.0
 
             sum_point = torch.zeros((rep_count, 3), device=device)
             sum_normal = torch.zeros((rep_count, 3), device=device)
             member_counts = torch.zeros((rep_count,), device=device)
-            fitted_a_at_footpoint = surface_a.evaluate(uv_footpoint)
             sum_point.index_add_(0, inverse_rep, fitted_a_at_footpoint)
             sum_normal.index_add_(0, inverse_rep, normals_a)
             member_counts.index_add_(0, inverse_rep, torch.ones_like(inverse_rep, dtype=torch.float32))
             mean_point = sum_point / member_counts.clamp_min(1.0)[:, None]
             mean_normal = torch.nn.functional.normalize(sum_normal, dim=-1, eps=1e-8)
 
-            all_member_ids_a.append(distinct_reps.detach().cpu())
+            distinct_reps_cpu = distinct_reps.detach().cpu()
+            all_member_ids_a.append(distinct_reps_cpu)
             all_chart_ids_a.append(torch.full((rep_count,), global_chart_id, dtype=torch.int64))
             all_fitted_points_a.append(mean_point.detach().cpu())
             all_normals_a.append(mean_normal.detach().cpu())
 
-            region_votes = region_of_representative[distinct_reps]
+            region_votes = region_of_representative_cpu[distinct_reps_cpu]
             valid_votes = region_votes[region_votes >= 0]
             region_index = int(torch.mode(valid_votes).values.item()) if int(valid_votes.numel()) > 0 else -1
             region_label = region_labels_list[region_index] if region_index >= 0 else None
@@ -802,11 +950,11 @@ def main() -> None:
                 "camera_uv_hole_count": (1 if bool(camera_holes_np.any()) else 0),
                 "fitted_domain_hole_count": (1 if bool(fitted_holes_np.any()) else 0),
                 "camera_vs_fitted_support_iou": iou,
-                "residual_g_arm_a_median": float(residual_g_a.median().item()), "residual_g_arm_a_p95": float(residual_g_a.quantile(0.95).item()), "residual_g_arm_a_max": float(residual_g_a.max().item()),
-                "residual_g_arm_b_median": float(residual_g_b.median().item()), "residual_g_arm_b_p95": float(residual_g_b.quantile(0.95).item()), "residual_g_arm_b_max": float(residual_g_b.max().item()),
-                "residual_c_arm_a_median": float(residual_c_a.median().item()), "residual_c_arm_a_p95": float(residual_c_a.quantile(0.95).item()), "residual_c_arm_a_max": float(residual_c_a.max().item()),
-                "residual_c_arm_b_median": float(residual_c_b.median().item()), "residual_c_arm_b_p95": float(residual_c_b.quantile(0.95).item()), "residual_c_arm_b_max": float(residual_c_b.max().item()),
-                "control_grid_diff_mean": float(control_grid_diff.item()),
+                "residual_g_arm_a_median": residual_g_a_median, "residual_g_arm_a_p95": residual_g_a_p95, "residual_g_arm_a_max": residual_g_a_max,
+                "residual_g_arm_b_median": residual_g_b_median, "residual_g_arm_b_p95": residual_g_b_p95, "residual_g_arm_b_max": residual_g_b_max,
+                "residual_c_arm_a_median": residual_c_a_median, "residual_c_arm_a_p95": residual_c_a_p95, "residual_c_arm_a_max": residual_c_a_max,
+                "residual_c_arm_b_median": residual_c_b_median, "residual_c_arm_b_p95": residual_c_b_p95, "residual_c_arm_b_max": residual_c_b_max,
+                "control_grid_diff_mean": control_grid_diff_mean,
                 "smoothness_arm_a": smoothness_a, "smoothness_arm_b": smoothness_b,
                 "low_pass_dominated_fraction": low_pass_dominated_fraction,
                 "within_chart_representative_spread_median": within_chart_spread_median,
@@ -815,7 +963,12 @@ def main() -> None:
         if view_index % 10 == 0:
             _progress(f"chart-fit view {view_index + 1}/{len(per_view_rep_remapped)} fitted={global_chart_id}")
 
-    _progress(f"[chart accounting] fitted={global_chart_id} pixel_records={len(pixel_records)}")
+    chart_loop_seconds = time.perf_counter() - chart_loop_started
+    chart_loop_end_epoch = time.time()
+    _progress(
+        f"[chart accounting] fitted={global_chart_id} pixel_records={len(pixel_records)} "
+        f"chart_loop_seconds={chart_loop_seconds:.6f} end_epoch={chart_loop_end_epoch:.6f}"
+    )
 
     # --- section 3/4: METRIC G vs METRIC C, both arms, reported separately ---
     def _agg(field: str) -> dict[str, Any]:
@@ -924,7 +1077,7 @@ def main() -> None:
         "normal_signed_vs_sign_invariant_corrected_interpretation": normal_comparison_summary,
         "representative_position_correspondence_corrected_interpretation": position_correspondence_summary,
         "region_results_WORKING_INTERPRETATION_ONLY": region_results,
-        "runtime_seconds": {"total": time.time() - started},
+        "runtime_seconds": {"total": time.time() - started, "chart_fitting_loop": chart_loop_seconds},
     }
 
     # --- colors / exports ---

@@ -104,6 +104,28 @@ class BuildViewChartPixelSamplesTest(unittest.TestCase):
         self.assertTrue(torch.equal(first.pixel_uv, second.pixel_uv))
         self.assertTrue(torch.equal(first.pixel_xyz, second.pixel_xyz))
 
+    def test_stable_blob_slices_match_legacy_boolean_selection_exactly(self):
+        comp = torch.tensor(
+            [[0, 1, 0, 1], [0, 1, 0, 1], [0, 1, 0, 1]], dtype=torch.int64
+        )
+        rep = torch.arange(12, dtype=torch.int64).reshape(3, 4)
+        world = torch.arange(36, dtype=torch.float32).reshape(3, 4, 3)
+        vs = build_view_chart_pixel_samples(0, comp, rep, world)
+        self.assertTrue(torch.equal(
+            vs.blob_pixel_offset[1:] - vs.blob_pixel_offset[:-1], vs.blob_pixel_total
+        ))
+        for blob_id in range(vs.blob_count):
+            legacy = torch.nonzero(vs.pixel_blob_id == blob_id, as_tuple=False).reshape(-1)
+            start = int(vs.blob_pixel_offset[blob_id])
+            end = int(vs.blob_pixel_offset[blob_id + 1])
+            grouped = vs.pixel_order_by_blob[start:end]
+            self.assertTrue(torch.equal(grouped, legacy))
+            self.assertTrue(torch.equal(vs.pixel_uv[grouped], vs.pixel_uv[legacy]))
+            self.assertTrue(torch.equal(vs.pixel_xyz[grouped], vs.pixel_xyz[legacy]))
+            self.assertTrue(torch.equal(
+                vs.pixel_representative_id[grouped], vs.pixel_representative_id[legacy]
+            ))
+
 
 class PixelSurfaceNURBSFitTest(unittest.TestCase):
     def test_planar_pixel_surface_fits_accurately(self):

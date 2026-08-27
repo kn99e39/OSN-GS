@@ -284,3 +284,25 @@ class TestDeterministicReplay:
             removed_bc = results[label]["removed_count_in_B_and_C"]
             removed_d = results[label]["notch_removed_count_in_D"]
             assert abs(removed_bc - removed_d) <= 24  # within one row's worth (cols=24)
+
+def test_fixed_uv_preassembled_normal_system_matches_reassembly_exactly():
+    from osn_gs.surface.torch_nurbs import _solve_control_grid_lsq, fit_torch_visible_surface
+
+    devices = ["cpu"] + (["cuda"] if torch.cuda.is_available() else [])
+    for device in devices:
+        points = _synthetic_curved_points(n=173, seed=23).to(device)
+        uv = pca_parameterize_points(points)
+        legacy = fit_torch_visible_surface(
+            points, resolution_u=8, resolution_v=4, degree_u=2, degree_v=2, initial_uv=uv
+        )
+        with torch.no_grad():
+            for _ in range(2):
+                legacy.control_grid = _solve_control_grid_lsq(
+                    points, uv, legacy, 1e-4, 1e-4, 4096, None
+                )
+        optimized, returned_uv = fit_fixed_uv_equal_solves(
+            points, uv, resolution_u=8, resolution_v=4, degree_u=2, degree_v=2,
+            correction_rounds=2
+        )
+        assert returned_uv is uv
+        assert torch.equal(optimized.control_grid, legacy.control_grid), device

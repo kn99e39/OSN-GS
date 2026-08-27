@@ -369,3 +369,77 @@ class MaintenanceUVRefreshTest(unittest.TestCase):
         self.assertFalse(torch.equal(state.model.surface_uv, scrambled_uv))
         self.assertEqual(state.surface_topology_version, before_topology + 1)
         self.assertEqual(report["construction_state"], "constructed")
+
+def _legacy_project_torch_points_to_nurbs(
+    points, surface, grid_u=0, grid_v=0, iterations=4, chunk_size=65536
+):
+    with torch.no_grad():
+        points = torch.as_tensor(
+            points, dtype=surface.control_grid.dtype, device=surface.control_grid.device
+        )
+        n_u = int(surface.control_grid.shape[0])
+        n_v = int(surface.control_grid.shape[1])
+        samples_u = int(grid_u) if int(grid_u) > 1 else min(max(2 * n_u, 8), 64)
+        samples_v = int(grid_v) if int(grid_v) > 1 else min(max(2 * n_v, 8), 64)
+        lin_u = torch.linspace(0.0, 1.0, samples_u, dtype=points.dtype, device=points.device)
+        lin_v = torch.linspace(0.0, 1.0, samples_v, dtype=points.dtype, device=points.device)
+        grid_uu, grid_vv = torch.meshgrid(lin_u, lin_v, indexing="ij")
+        grid_uv = torch.stack([grid_uu.reshape(-1), grid_vv.reshape(-1)], dim=-1)
+        grid_points = surface.evaluate(grid_uv)
+        results = []
+        for chunk in torch.split(points, max(1, int(chunk_size)), dim=0):
+            nearest = torch.cdist(chunk, grid_points).argmin(dim=1)
+            uv = grid_uv[nearest].clone()
+            best_uv = uv.clone()
+            best_dist = (surface.evaluate(uv) - chunk).norm(dim=1)
+            for _ in range(max(0, int(iterations))):
+                point, deriv_u, deriv_v = surface.evaluate_with_derivatives(uv)
+                residual = point - chunk
+                jacobian = torch.stack([deriv_u, deriv_v], dim=-1)
+                jtj = jacobian.transpose(1, 2) @ jacobian
+                damping = 1e-6 * jtj.diagonal(dim1=1, dim2=2).mean(dim=1).clamp_min(1e-12)
+                jtj = jtj + damping[:, None, None] * torch.eye(
+                    2, dtype=jtj.dtype, device=jtj.device
+                )
+                jtr = (jacobian.transpose(1, 2) @ residual[..., None]).squeeze(-1)
+                step = torch.linalg.solve(jtj, -jtr).clamp(min=-0.25, max=0.25)
+                uv = torch.clamp(uv + step, 0.0, 1.0)
+                dist = (surface.evaluate(uv) - chunk).norm(dim=1)
+                improved = dist < best_dist
+                best_uv[improved] = uv[improved]
+                best_dist = torch.where(improved, dist, best_dist)
+            results.append(best_uv)
+        return torch.cat(results, dim=0)
+
+
+class ProjectionImplementationEquivalenceTest(unittest.TestCase):
+    def test_values_only_basis_matches_legacy_basis_tables_exactly(self):
+        surface = _random_surface(dtype=torch.float64, seed=17)
+        torch.manual_seed(18)
+        uv = torch.rand(97, 2, dtype=torch.float64)
+        basis_u, basis_v, _, _ = surface._basis_tables(uv)
+        legacy = surface._rational_point(basis_u, basis_v)[0]
+        self.assertTrue(torch.equal(surface.evaluate(uv), legacy))
+
+    def test_projector_reuse_matches_legacy_exactly_on_cpu_and_cuda(self):
+        devices = ["cpu"] + (["cuda"] if torch.cuda.is_available() else [])
+        for device in devices:
+            dtype = torch.float32 if device == "cuda" else torch.float64
+            base = _random_surface(dtype=dtype, seed=19)
+            surface = TorchNURBSSurface(
+                control_grid=base.control_grid.to(device),
+                weights=base.weights.to(device),
+                degree_u=base.degree_u,
+                degree_v=base.degree_v,
+            )
+            torch.manual_seed(20)
+            uv = torch.rand(193, 2, dtype=dtype, device=device)
+            points = surface.evaluate(uv) + 0.01 * torch.randn(193, 3, dtype=dtype, device=device)
+            for iterations in (0, 1, 3, 6):
+                expected = _legacy_project_torch_points_to_nurbs(
+                    points, surface, iterations=iterations, chunk_size=41
+                )
+                actual = project_torch_points_to_nurbs(
+                    points, surface, iterations=iterations, chunk_size=41
+                )
+                self.assertTrue(torch.equal(actual, expected), (device, iterations))

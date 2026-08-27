@@ -172,3 +172,53 @@ def test_coverage_identity_holds_with_real_pairs():
     accounting = camera_induced_visible_adjacency_accounting(result)
     assert accounting["coverage_identity_holds"] is True
     assert accounting["assigned_surfel_count"] == accounting["input_surfel_count"]
+
+def test_candidate_graph_knn_reuse_is_exact_and_skips_recomputation(monkeypatch):
+    import osn_gs.surface.torch_camera_induced_visible_adjacency as adjacency_module
+    from osn_gs.surface.torch_coverage_first_subset_partition import build_candidate_graph
+
+    orientation, _ = _flat_two_group_orientation()
+    config = CameraInducedAdjacencyConfig(local=_LOCAL_CONFIG)
+    graph = build_candidate_graph(orientation, config.local, retain_neighbor_index=True)
+    pairs = graph.accepted_edges
+    fresh = adjacency_module.apply_secondary_geometric_gate(pairs, orientation, config)
+
+    def _unexpected_knn(*_args, **_kwargs):
+        raise AssertionError("same-k candidate graph must not recompute kNN")
+
+    monkeypatch.setattr(adjacency_module, "_knn", _unexpected_knn)
+    reused = adjacency_module.apply_secondary_geometric_gate(
+        pairs, orientation, config, neighbor_index=graph.neighbor_index
+    )
+    assert fresh.keys() == reused.keys()
+    for key in fresh:
+        if isinstance(fresh[key], torch.Tensor):
+            assert torch.equal(fresh[key], reused[key]), key
+        else:
+            assert fresh[key] == reused[key], key
+
+
+def test_candidate_graph_knn_reuse_falls_back_when_shape_k_differs(monkeypatch):
+    import osn_gs.surface.torch_camera_induced_visible_adjacency as adjacency_module
+    from osn_gs.surface.torch_coverage_first_subset_partition import build_candidate_graph
+
+    orientation, _ = _flat_two_group_orientation()
+    local = _LOCAL_CONFIG.__class__(
+        neighbor_count=4,
+        spatial_connect_spacing_multiplier=_LOCAL_CONFIG.spatial_connect_spacing_multiplier,
+        normal_compatibility_min_alignment=_LOCAL_CONFIG.normal_compatibility_min_alignment,
+    )
+    config = CameraInducedAdjacencyConfig(local=local, shape_operator_neighbor_count=2)
+    graph = build_candidate_graph(orientation, local, retain_neighbor_index=True)
+    calls = {"count": 0}
+    original = adjacency_module._knn
+
+    def _counting_knn(*args, **kwargs):
+        calls["count"] += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(adjacency_module, "_knn", _counting_knn)
+    adjacency_module.apply_secondary_geometric_gate(
+        graph.accepted_edges, orientation, config, neighbor_index=graph.neighbor_index
+    )
+    assert calls["count"] == 1

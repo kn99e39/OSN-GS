@@ -242,6 +242,10 @@ class ViewPixelChartSamples:
     pixel_uv: Any  # (P, 2) float32 in [0, 1]^2, normalized per-blob (same convention as WL111)
     pixel_xyz: Any  # (P, 3) float32 -- renderer-native unprojected surface point, NOT a surfel center
     pixel_representative_id: Any  # (P,) int64 -- accounting only, never fitting geometry
+    pixel_row: Any  # (P,) int64 -- original raster row, in the same row-major order
+    pixel_col: Any  # (P,) int64 -- original raster column, in the same row-major order
+    pixel_order_by_blob: Any  # (P,) int64 -- stable grouping index; preserves within-blob order
+    blob_pixel_offset: Any  # (B+1,) int64 -- slices into pixel_order_by_blob
     blob_pixel_total: Any  # (B,) int64 -- count of valid pixels per blob (the fitting-support count, section 7)
 
     @property
@@ -272,7 +276,19 @@ def build_view_chart_pixel_samples(
         empty_i = torch.zeros((0,), dtype=torch.int64, device=device)
         empty_f = torch.zeros((0, 2), dtype=torch.float32, device=device)
         empty_f3 = torch.zeros((0, 3), dtype=torch.float32, device=device)
-        return ViewPixelChartSamples(view_index, empty_i, empty_i, empty_f, empty_f3, empty_i, empty_i)
+        return ViewPixelChartSamples(
+            view_index=view_index,
+            blob_component_id=empty_i,
+            pixel_blob_id=empty_i,
+            pixel_uv=empty_f,
+            pixel_xyz=empty_f3,
+            pixel_representative_id=empty_i,
+            pixel_row=empty_i,
+            pixel_col=empty_i,
+            pixel_order_by_blob=empty_i,
+            blob_pixel_offset=torch.zeros((1,), dtype=torch.int64, device=device),
+            blob_pixel_total=empty_i,
+        )
 
     row_coords, col_coords = torch.meshgrid(
         torch.arange(h, dtype=torch.float32, device=device),
@@ -292,6 +308,11 @@ def build_view_chart_pixel_samples(
 
     blob_pixel_total = torch.zeros((blob_count,), dtype=torch.int64, device=device)
     blob_pixel_total.index_add_(0, blob_flat, torch.ones_like(blob_flat))
+    pixel_order_by_blob = torch.argsort(blob_flat, stable=True)
+    blob_pixel_offset = torch.cat([
+        torch.zeros((1,), dtype=torch.int64, device=device),
+        blob_pixel_total.cumsum(dim=0),
+    ])
 
     min_row = torch.full((blob_count,), float("inf"), device=device)
     max_row = torch.full((blob_count,), float("-inf"), device=device)
@@ -315,6 +336,10 @@ def build_view_chart_pixel_samples(
         pixel_uv=pixel_uv,
         pixel_xyz=xyz_flat,
         pixel_representative_id=rep_flat,
+        pixel_row=row_flat.to(torch.int64),
+        pixel_col=col_flat.to(torch.int64),
+        pixel_order_by_blob=pixel_order_by_blob,
+        blob_pixel_offset=blob_pixel_offset,
         blob_pixel_total=blob_pixel_total,
     )
 

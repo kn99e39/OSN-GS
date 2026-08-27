@@ -13,6 +13,7 @@ Gaussian geometry만 parameterize하고, occluded surface 생성은 별도 stage
 """
 
 from dataclasses import dataclass, field
+from functools import lru_cache
 from typing import Any
 
 from osn_gs.utils.torch_ops import require_torch
@@ -288,6 +289,28 @@ class TorchNURBSSurface:
         cell_v = torch.clamp((uv[:, 1] * res_v).long(), 0, res_v - 1)
         return mask[cell_u, cell_v]
 
+    def _basis_values(self, uv: Any) -> tuple[Any, Any]:
+        """Return only the two non-derivative basis tables for uv.
+
+        Point evaluation and LSQ assembly do not consume derivatives. Keeping
+        this path separate avoids constructing derivative tables that those
+        callers immediately discard while preserving the exact basis-value
+        arithmetic used by the derivative path.
+        """
+
+        torch = require_torch()
+        uv = torch.as_tensor(uv, dtype=self.control_grid.dtype, device=self.control_grid.device)
+        if uv.ndim == 1:
+            uv = uv[None, :]
+        n_u = int(self.control_grid.shape[0])
+        n_v = int(self.control_grid.shape[1])
+        knots_u, knots_v, degree_u, degree_v = self._knot_vectors_internal()
+        u = torch.clamp(uv[:, 0], 0.0, 1.0)
+        v = torch.clamp(uv[:, 1], 0.0, 1.0)
+        basis_u, _ = _bspline_basis_pair(u, degree_u, knots_u, n_u)
+        basis_v, _ = _bspline_basis_pair(v, degree_v, knots_v, n_v)
+        return basis_u, basis_v
+
     def _basis_tables(self, uv: Any) -> tuple[Any, Any, Any | None, Any | None]:
         """Return ``(basis_u, basis_v, dbasis_u, dbasis_v)`` for query ``uv``.
 
@@ -336,7 +359,7 @@ class TorchNURBSSurface:
         낮춰 안전하게 평가한다.
         """
 
-        basis_u, basis_v, _, _ = self._basis_tables(uv)
+        basis_u, basis_v = self._basis_values(uv)
         return self._rational_point(basis_u, basis_v)[0]
 
     def evaluate_with_derivatives(self, uv: Any) -> tuple[Any, Any, Any]:
@@ -422,14 +445,20 @@ class TorchNURBSSurface:
             a_vv - w_vv[:, None] * point - 2.0 * w_v[:, None] * deriv_v
         ) / denominator[:, None]
         return point, deriv_u, deriv_v, deriv_uu, deriv_uv, deriv_vv
-    def normals(self, uv: Any) -> Any:
-        """Unit surface normal ``normalize(S_u x S_v)`` at each ``uv`` query."""
+    def evaluate_with_normals(self, uv: Any) -> tuple[Any, Any]:
+        """Return surface points and unit normals from one derivative evaluation."""
 
         torch = require_torch()
-        _, deriv_u, deriv_v = self.evaluate_with_derivatives(uv)
-        return torch.nn.functional.normalize(
+        point, deriv_u, deriv_v = self.evaluate_with_derivatives(uv)
+        normal = torch.nn.functional.normalize(
             torch.cross(deriv_u, deriv_v, dim=-1), dim=-1, eps=1e-12
         )
+        return point, normal
+
+    def normals(self, uv: Any) -> Any:
+        """Return the unit surface normal at each UV query."""
+
+        return self.evaluate_with_normals(uv)[1]
 
     def smoothness(self) -> Any:
         """control grid second derivative penalty."""
@@ -625,10 +654,7 @@ def fit_torch_visible_surface(
         initial_uv, dtype=dtype, device=device
     )
 
-    u = torch.linspace(0.0, 1.0, resolution_u, dtype=dtype, device=device)
-    v = torch.linspace(0.0, 1.0, resolution_v, dtype=dtype, device=device)
-    uu, vv = torch.meshgrid(u, v, indexing="ij")
-    grid_uv = torch.stack([uu.reshape(-1), vv.reshape(-1)], dim=-1)
+    grid_uv = _regular_uv_grid(resolution_u, resolution_v, dtype, device)
 
     neighbor_count = min(points.shape[0], max(4, min(16, points.shape[0])))
     chunk_size = max(1, int(chunk_size))
@@ -650,6 +676,7 @@ def fit_torch_visible_surface(
     )
 
 
+@lru_cache(maxsize=64)
 def _second_difference_penalty(n_u: int, n_v: int, dtype: Any, device: Any) -> Any:
     """Discrete thin-plate style penalty over the flattened ``(n_u * n_v)`` control grid.
 
@@ -712,7 +739,7 @@ def _lsq_normal_system(
     chunk_size = max(1, int(chunk_size))
     for start in range(0, int(points.shape[0]), chunk_size):
         end = min(start + chunk_size, int(points.shape[0]))
-        basis_u, basis_v, _, _ = surface._basis_tables(uv[start:end])
+        basis_u, basis_v = surface._basis_values(uv[start:end])
         rows = torch.einsum("qi,qj->qij", basis_u, basis_v).reshape(end - start, n)
         chunk_points = points[start:end]
         if point_weights is not None:
@@ -735,6 +762,7 @@ def _solve_control_grid_lsq(
     tikhonov_lambda: float,
     chunk_size: int,
     point_weights: Any | None,
+    preassembled_normal_system: tuple[Any, Any, float] | None = None,
 ) -> Any:
     """Solve the regularized linear system for the control grid at fixed UVs.
 
@@ -750,16 +778,19 @@ def _solve_control_grid_lsq(
     n = n_u * n_v
     dtype, device = surface.control_grid.dtype, surface.control_grid.device
 
-    normal_matrix, normal_rhs, total_weight = _lsq_normal_system(
-        points, uv, surface, smoothness_lambda, tikhonov_lambda, chunk_size, point_weights
-    )
+    if preassembled_normal_system is None:
+        normal_matrix, normal_rhs, total_weight = _lsq_normal_system(
+            points, uv, surface, smoothness_lambda, tikhonov_lambda, chunk_size, point_weights
+        )
+    else:
+        normal_matrix, normal_rhs, total_weight = preassembled_normal_system
     scale = max(total_weight, 1e-8)
     penalty = _second_difference_penalty(n_u, n_v, dtype, device)
     seed = surface.control_grid.detach().reshape(n, 3)
     system = (
         normal_matrix / scale
         + float(smoothness_lambda) * penalty
-        + float(tikhonov_lambda) * torch.eye(n, dtype=dtype, device=device)
+        + float(tikhonov_lambda) * _identity_matrix(n, dtype, device)
     )
     rhs = normal_rhs / scale + float(tikhonov_lambda) * seed
     try:
@@ -1200,6 +1231,45 @@ def fit_coupled_wedge_ring_lsq(
     return results
 
 
+@lru_cache(maxsize=64)
+def _regular_uv_grid(samples_u: int, samples_v: int, dtype: Any, device: Any) -> Any:
+    """Return a read-only regular UV grid shared by equal shapes/devices."""
+
+    torch = require_torch()
+    lin_u = torch.linspace(0.0, 1.0, samples_u, dtype=dtype, device=device)
+    lin_v = torch.linspace(0.0, 1.0, samples_v, dtype=dtype, device=device)
+    grid_uu, grid_vv = torch.meshgrid(lin_u, lin_v, indexing="ij")
+    return torch.stack([grid_uu.reshape(-1), grid_vv.reshape(-1)], dim=-1)
+
+
+@lru_cache(maxsize=64)
+def _regular_grid_basis_values(
+    n_u: int, n_v: int, degree_u: int, degree_v: int,
+    samples_u: int, samples_v: int, dtype: Any, device: Any,
+) -> tuple[Any, Any]:
+    """Return basis values for a shared regular projection grid."""
+
+    grid_uv = _regular_uv_grid(samples_u, samples_v, dtype, device)
+    effective_u = _effective_degree(n_u, degree_u)
+    effective_v = _effective_degree(n_v, degree_v)
+    knots_u = _clamped_knot_vector(n_u, effective_u, dtype, device)
+    knots_v = _clamped_knot_vector(n_v, effective_v, dtype, device)
+    basis_u, _ = _bspline_basis_pair(
+        require_torch().clamp(grid_uv[:, 0], 0.0, 1.0), effective_u, knots_u, n_u
+    )
+    basis_v, _ = _bspline_basis_pair(
+        require_torch().clamp(grid_uv[:, 1], 0.0, 1.0), effective_v, knots_v, n_v
+    )
+    return basis_u, basis_v
+
+
+@lru_cache(maxsize=64)
+def _identity_matrix(size: int, dtype: Any, device: Any) -> Any:
+    """Return a read-only identity shared by equal shapes/devices."""
+
+    return require_torch().eye(size, dtype=dtype, device=device)
+
+
 def project_torch_points_to_nurbs(
     points: Any,
     surface: TorchNURBSSurface,
@@ -1229,11 +1299,12 @@ def project_torch_points_to_nurbs(
         n_v = int(surface.control_grid.shape[1])
         samples_u = int(grid_u) if int(grid_u) > 1 else min(max(2 * n_u, 8), 64)
         samples_v = int(grid_v) if int(grid_v) > 1 else min(max(2 * n_v, 8), 64)
-        lin_u = torch.linspace(0.0, 1.0, samples_u, dtype=points.dtype, device=points.device)
-        lin_v = torch.linspace(0.0, 1.0, samples_v, dtype=points.dtype, device=points.device)
-        grid_uu, grid_vv = torch.meshgrid(lin_u, lin_v, indexing="ij")
-        grid_uv = torch.stack([grid_uu.reshape(-1), grid_vv.reshape(-1)], dim=-1)
-        grid_points = surface.evaluate(grid_uv)
+        grid_uv = _regular_uv_grid(samples_u, samples_v, points.dtype, points.device)
+        grid_basis_u, grid_basis_v = _regular_grid_basis_values(
+            n_u, n_v, surface.degree_u, surface.degree_v,
+            samples_u, samples_v, points.dtype, points.device,
+        )
+        grid_points = surface._rational_point(grid_basis_u, grid_basis_v)[0]
 
         chunk_size = max(1, int(chunk_size))
         iterations = max(0, int(iterations))
@@ -1242,22 +1313,29 @@ def project_torch_points_to_nurbs(
             nearest = torch.cdist(chunk, grid_points).argmin(dim=1)
             uv = grid_uv[nearest].clone()
             best_uv = uv.clone()
-            best_dist = (surface.evaluate(uv) - chunk).norm(dim=1)
-            for _ in range(iterations):
+            if iterations == 0:
+                best_dist = (surface.evaluate(uv) - chunk).norm(dim=1)
+            else:
+                # Retain the point evaluated with the derivatives needed by
+                # the first iteration instead of evaluating the same UV twice.
                 point, deriv_u, deriv_v = surface.evaluate_with_derivatives(uv)
+                best_dist = (point - chunk).norm(dim=1)
+            for iteration in range(iterations):
                 residual = point - chunk
                 jacobian = torch.stack([deriv_u, deriv_v], dim=-1)
                 jtj = jacobian.transpose(1, 2) @ jacobian
                 damping = 1e-6 * jtj.diagonal(dim1=1, dim2=2).mean(dim=1).clamp_min(1e-12)
-                jtj = jtj + damping[:, None, None] * torch.eye(
-                    2, dtype=jtj.dtype, device=jtj.device
-                )
+                jtj = jtj + damping[:, None, None] * _identity_matrix(2, jtj.dtype, jtj.device)
                 jtr = (jacobian.transpose(1, 2) @ residual[..., None]).squeeze(-1)
                 step = torch.linalg.solve(jtj, -jtr)
                 # One grid cell per step keeps far-off linearizations from jumping charts.
                 step = step.clamp(min=-0.25, max=0.25)
                 uv = torch.clamp(uv + step, 0.0, 1.0)
-                dist = (surface.evaluate(uv) - chunk).norm(dim=1)
+                if iteration + 1 < iterations:
+                    point, deriv_u, deriv_v = surface.evaluate_with_derivatives(uv)
+                    dist = (point - chunk).norm(dim=1)
+                else:
+                    dist = (surface.evaluate(uv) - chunk).norm(dim=1)
                 improved = dist < best_dist
                 best_uv[improved] = uv[improved]
                 best_dist = torch.where(improved, dist, best_dist)

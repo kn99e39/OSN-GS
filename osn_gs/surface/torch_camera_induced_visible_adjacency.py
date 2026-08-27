@@ -249,6 +249,7 @@ def apply_secondary_geometric_gate(
     orientation: SurfaceOrientationEvidence,
     config: CameraInducedAdjacencyConfig,
     *,
+    neighbor_index: Any | None = None,
     progress: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
     """Step 3 (directive section 8): reused verbatim from Worklog 98/102/103/
@@ -274,9 +275,16 @@ def apply_secondary_geometric_gate(
         tangent_v = orientation.tangent_axis_v
         k_shape = min(config.resolved_shape_operator_neighbor_count(), max(count - 1, 1))
         chunk_size = int(config.local.knn_chunk_size) or _auto_chunk_size(count, device)
+        can_reuse_neighbors = (
+            neighbor_index is not None
+            and tuple(neighbor_index.shape) == (count, k_shape)
+            and neighbor_index.device == device
+        )
         if progress is not None:
-            progress(f"fitting local shape operators: k={k_shape}")
-        neighbor_index, _ = _knn(positions, k_shape, chunk_size, progress)
+            source = "reused candidate-graph kNN" if can_reuse_neighbors else "fresh kNN"
+            progress(f"fitting local shape operators: k={k_shape} ({source})")
+        if not can_reuse_neighbors:
+            neighbor_index, _ = _knn(positions, k_shape, chunk_size, progress)
         shape_operator = _fit_shape_operators(positions, normals, tangent_u, tangent_v, neighbor_index, float(config.shape_operator_ridge))
         normal_gradient_magnitude = torch.linalg.matrix_norm(shape_operator)
 
@@ -339,7 +347,9 @@ def partition_camera_induced_visible_adjacency(
     count = int(positions.shape[0])
     device = positions.device
 
-    graph = build_candidate_graph(orientation, config.local, progress=progress)
+    graph = build_candidate_graph(
+        orientation, config.local, retain_neighbor_index=True, progress=progress
+    )
 
     if count == 0 or not per_view_representative_ids:
         empty_long = torch.zeros((0,), dtype=torch.int64, device=device)
@@ -363,7 +373,13 @@ def partition_camera_induced_visible_adjacency(
     local_view_support = raw_view_support[local_mask]
     locality_rejected = raw_pair_count - int(local_pairs.shape[0])
 
-    geometry = apply_secondary_geometric_gate(local_pairs, orientation, config, progress=progress)
+    geometry = apply_secondary_geometric_gate(
+        local_pairs,
+        orientation,
+        config,
+        neighbor_index=graph.neighbor_index,
+        progress=progress,
+    )
     kept_mask = geometry["kept_mask"]
     positive_edges = local_pairs[kept_mask]
     positive_view_support = local_view_support[kept_mask]
