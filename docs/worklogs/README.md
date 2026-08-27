@@ -260,3 +260,6 @@
 
 - [Worklog 123: Volumetric Frontier Query Contract Closure](123_volumetric_frontier_query_contract_closure.md)
   - world-space 3D를 canonical volumetric query로 유지하고 renderer median-event provenance를 source-view exact identity로 보존하는 계약을 검증했다. 43,817,760 source events의 historical 18.62% contradiction은 provenance에서 0이 되었고, generic arm은 P1을 제외한 1,590,240 relevant pair에서 1,118 reference disagreement으로 귀속했다. 최종 verdict는 A이며, Candidate B·topology·tolerance는 변경하지 않았다.
+
+- [Worklog 124: Canonical Architecture Reduction Audit](124_canonical_architecture_reduction_audit.md)
+  - Worklog 96–123 evidence와 실제 current import/call graph를 분리했다. smallest defensible canonical core는 world-space x + optional exact renderer-event provenance + stored median frontier + frozen aggregation이다. visible topology/NURBS는 provisional, occluded-side/uncertain materialization은 premature/open으로 남겼고 production code와 public exports는 변경하지 않았다.

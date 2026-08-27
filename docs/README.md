@@ -378,3 +378,8 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 
 - [Worklog 123: Volumetric Frontier Query Contract Closure](worklogs/123_volumetric_frontier_query_contract_closure.md)
   - world-space 3D를 canonical volumetric query로 유지하고 renderer median-event provenance를 source-view exact identity로 보존하는 계약을 닫았다. exhaustive source identity 0/43,817,760 contradiction, cross-view historical global contradiction 19/19 rescue, generic P1-excluded stability 1,118/1,590,240 diagnostic disagreement을 확인했으며 최종 verdict는 A다. Candidate B·topology·epsilon/tolerance는 변경하지 않았다.
+
+## 2026-08-27 Canonical architecture reduction audit
+
+- [Worklog 124: Canonical Architecture Reduction Audit](worklogs/124_canonical_architecture_reduction_audit.md)
+  - Worklog 96–123 evidence와 실제 current call graph를 분리했다. smallest defensible canonical core는 world-space x + optional exact renderer-event provenance + stored median frontier + frozen aggregation이다. visible topology/NURBS는 provisional, occluded-side/uncertain materialization은 premature/open으로 남겼고 코드와 exports는 변경하지 않았다.
