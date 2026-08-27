@@ -266,3 +266,6 @@
 
 - [Worklog 125: Fixed Gaussian Visualization Contract](125_fixed_gaussian_visualization_contract.md)
   - 모든 Gaussian visualization에 Original Scene과 Observed/Occluded를 고정 포함하고, 동일 Gaussian의 색상만 상태별로 바꾸며 광원·추가 marker Gaussian·임의 overlay를 금지하는 계약을 확정했다.
+
+- [Worklog 126: WL123 Fixed Observed/Occluded Gaussian Visualization](126_wl123_fixed_observed_occluded_gaussian_visualization.md)
+  - WL125 계약을 실제 WL123 checkpoint에 적용했다. Gaussian 중심 1,190,469개를 provenance 없는 arbitrary world-space query로 161 view 전수 분류하여, 동일 Gaussian row의 `ORIGINAL_SCENE`과 `OBSERVED_OCCLUDED`를 생성했다(798,304 observed / 391,457 occluded / 708 unresolved, marker·조명·overlay 0).
