@@ -1,7 +1,7 @@
 # Worklog 124: Canonical Architecture Reduction Audit
 
-상태: **완료**  
-범위: Worklog 96–123의 증거와 현재 저장소의 실제 import/call graph를 분리한 bounded architecture audit  
+상태: **완료**
+범위: Worklog 96–123의 증거와 현재 저장소의 실제 import/call graph를 분리한 bounded architecture audit
 코드 변경: 없음 (문서와 색인만 추가)
 
 ## Agent Interpretation of Intent
@@ -307,7 +307,7 @@ OSN-GS는 canonical renderer에서 얻은 `RendererObservation`을 이용해 vis
 
 - branch: `arch/2dgs-coverage-first-surface`
 - base before this batch: `273bd50 Record Worklog 123 commit reference`
-- Worklog 124 documentation commit: `TO-BE-RECORDED`
+- Worklog 124 documentation commit: `99f46ea`
 - 다른 agent의 기존 변경: `M docs/agent_memory/MEMORY.md`, `?? docs/agent_memory/feedback_view_readme_required.md` — 보존했고 staging하지 않았다.
 
 ### Commands and outputs
@@ -332,5 +332,4 @@ surface_import=PASS exports=54 unique=54
 26 passed, 1 warning in 8.18s
 ```
 
-문서 링크 추가와 commit 후에는 `git diff --check`, `git status --short --branch`, `git log -2 --oneline`을 다시 실행한다. 이 Worklog의 commit placeholder는 첫 문서 commit SHA로 갱신한다. 최종 commit SHA는 다음 단계의 commit-reference update에서 확인한다.
-
+문서 링크 추가 후 `git diff --check`, `git status --short --branch`, `git log -2 --oneline` 검증을 완료했다. 첫 문서 commit은 `99f46ea`이며, 이 후속 commit은 그 SHA를 Worklog에 기록한다.
