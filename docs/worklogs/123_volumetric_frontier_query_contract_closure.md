@@ -246,7 +246,7 @@ arch/2dgs-coverage-first-surface
 
 ### Commit
 
-Worklog 123 implementation commit: to be recorded after this report and docs index are committed.
+Worklog 123 implementation commit: 0122d42 (Close volumetric frontier query contract).
 
 ### Commands
 
