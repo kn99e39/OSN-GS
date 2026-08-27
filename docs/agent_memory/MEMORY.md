@@ -30,6 +30,7 @@
 - [Region-coherent surfel partition](project_region_coherent_surfel_partition.md) — WL97: region-coherence merge fixes WL96 chaining; largest subset 74.70%→21.20%
 - [PNG preview in output folder](feedback_png_preview_in_output.md) — convert render.ppm to PNG, ALL views combined into one shared output/0NN_.../preview_png/<VIEW>.png folder (not per-view subfolders)
 - [Output folder conventions doc pointer](reference_output_folder_conventions.md) — docs/output_folder_conventions.md is the tracked record of output/'s (gitignored) layout; read before touching any export folder
+- [View README required](feedback_view_readme_required.md) — every export view folder needs its own Korean README.md; write it in the devtools script, not as a manual post-step
 - [output/confirmed convention](project_output_confirmed_convention.md) — user moves reviewed exports into output/confirmed/; means checked, NOT architecture approval
 - [Discontinuity-first surfel partition](project_discontinuity_first_surfel_partition.md) — WL98: shape-operator union rule; NEGATIVE real-scene (94.51% giant subset)
 - [Interface-coherent region merge](project_interface_coherent_region_merge.md) — WL99: MIXED (largest 53.86%); attribution unresolved
@@ -59,3 +60,5 @@
 - [Worklog 121 value-diagnostic layout](project_worklog121_value_diagnostic_layout.md) — value layer over frozen candidates, baseline replay gate, qdepth additive fields + stale-ext.o build gotcha
 - [Median surface frontier validation](project_median_surface_frontier_validation.md) — WL122: B numerically coherent, semantic validity INCONCLUSIVE; arbitrary-3D boundary policy unapproved
 - [Worklog 122 frontier code layout](project_worklog122_frontier_code_layout.md) — frontier_validation/synthetic contracts, qdepth 10 post-median categories, stale-ext.o + hardcoded-width traps
+- [Evidence-bounded projective TSDF](project_evidence_bounded_projective_tsdf.md) — WL127: renderer median depth fused directly into a TSDF, NO topology/KNN/region/boundary/chart used to construct; evidence coverage 89.84% vs historical 58.47%, ray-hit 99.88%; verdict **B** (premise viable, fixed TSDF insufficient); NURBS handoff PROMISING
+- [Worklog 127 TSDF code layout](project_worklog127_tsdf_code_layout.md) — isolated construction modules + AST isolation test, skimage mask is single-corner, frontier-only closure, --cache gotchas
