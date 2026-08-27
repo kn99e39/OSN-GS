@@ -133,3 +133,15 @@ Do not spend time retrying those commands inside the restricted sandbox. Treat t
 
 
 
+## Gaussian Visualization Contract
+
+This is a mandatory review/output rule for every Gaussian visualization batch.
+
+- Always produce both `Original Scene` and `Observed/Occluded` with the same checkpoint, iteration, camera, resolution, background, renderer, and Gaussian row count.
+- `Original Scene` uses only the Gaussians already present in that environment, with their original learned color/SH, position, scale/covariance, rotation, and opacity. Do not add light, shading, emissive effects, recolor, marker Gaussians, or geometry changes.
+- `Observed/Occluded` uses the exact same Gaussian rows and geometry as `Original Scene`; change only each Gaussian's display color according to its Observed Space/Occluded Space state.
+- Fixed colors: `OBSERVED=(0.10, 0.85, 0.35)` green, `OCCLUDED=(0.92, 0.18, 0.18)` red, and `UNRESOLVED=(0.60, 0.60, 0.62)` gray. Never silently assign an unresolved Gaussian to either state.
+- Never create marker Gaussians to make Occluded Space look present. If a validated occluded volumetric representation exists, it may be emitted as an additional `OCCLUDED_VOLUMETRIC` result; it does not replace the mandatory pair.
+- Additional frontier/topology/identity/residual views are allowed only after the mandatory pair and must include their own legend and state definition. Do not vary the required item set or palette per worklog.
+
+Historical outputs that used synthetic marker Gaussians, including WL123 `EVENT_IDENTITY_EFFECT`, remain historical diagnostics and are not canonical Gaussian visualizations.
