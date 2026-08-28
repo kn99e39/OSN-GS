@@ -62,3 +62,4 @@
 - [Worklog 122 frontier code layout](project_worklog122_frontier_code_layout.md) — frontier_validation/synthetic contracts, qdepth 10 post-median categories, stale-ext.o + hardcoded-width traps
 - [Evidence-bounded projective TSDF](project_evidence_bounded_projective_tsdf.md) — WL127: renderer median depth fused directly into a TSDF, NO topology/KNN/region/boundary/chart used to construct; evidence coverage 89.84% vs historical 58.47%, ray-hit 99.88%; verdict **B** (premise viable, fixed TSDF insufficient); NURBS handoff PROMISING
 - [Worklog 127 TSDF code layout](project_worklog127_tsdf_code_layout.md) — isolated construction modules + AST isolation test, skimage mask is single-corner, frontier-only closure, --cache gotchas
+- [View README analysis required](feedback_view_readme_analysis_required.md) — every view README needs a 분석 및 평가 section grounded in that batch's report numbers, from WL127 onward

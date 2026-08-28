@@ -979,6 +979,9 @@ ORIGINAL_2DGS_README = """# ORIGINAL_2DGS
 
 ## 이 이미지가 보여주는 것
 이 배치의 모든 진단 view가 공유하는 **기준 장면**이다. 다른 모든 view와 **같은 카메라·같은 iteration·같은 해상도·같은 background**에서 렌더링했으므로, 재구성된 표면이 장면의 어느 구조에 대응하는지 대조하는 기준이 된다. 6개 대표 학습 시점을 `preview_png/`에 함께 담았다.
+
+## 분석 및 평가
+{region_summary}
 """
 
 RENDERER_MEDIAN_README = """# RENDERER_MEDIAN_SURFACE_POINTS
@@ -989,6 +992,9 @@ RENDERER_MEDIAN_README = """# RENDERER_MEDIAN_SURFACE_POINTS
 
 ## 이 이미지가 보여주는 것
 이번 후보가 **소비하는 유일한 증거**다. TSDF는 이 점들 외에 topology·KNN·region·boundary·chart를 전혀 쓰지 않는다. 이것은 경쟁 아키텍처가 아니라 **증거 기준선(evidence reference)**이므로 A/B의 한 축으로 해석하지 않는다. 결정론적 stride로 {points} 개를 뽑았다.
+
+## 분석 및 평가
+여기 찍힌 점들이 밀집한 영역일수록 field가 조밀한 authority를 받아 표면 재구성이 안정적이다. 전수 {total_events} 개 median event 중 **{within_h:.2%}가 추출 표면으로부터 h({h:.6f}) 이내**, {within_2h:.2%}가 2h 이내였고 3h 안에 표면이 전혀 없는 경우는 {no_surface:.2%}뿐이었다(`renderer_evidence_reproduction.all_events`). 이 점들이 성긴 부분은 `TSDF_SUPPORT_COUNT`에서 낮은 support로, `TSDF_FIELD_SLICES`에서 얇은 authority 띠로 이어져 나타난다.
 """
 
 TSDF_SURFACE_README = """# NEW_TSDF_VISIBLE_SURFACE
@@ -1001,6 +1007,9 @@ TSDF_SURFACE_README = """# NEW_TSDF_VISIBLE_SURFACE
 이번 배치의 **후보 Visible Surface 그 자체**다. cell 8개 corner가 모두 field authority를 가질 때만 삼각형을 만들었고, UNKNOWN voxel은 채우지 않았으며 hole filling·smoothing·watertight 강제는 하지 않았다. 따라서 열려 있고 끊겨 있는 것이 정상이다.
 
 메시 전체는 `mesh/tsdf_visible_surface.ply` (정점 {vertices}, 삼각형 {faces})에 있고, 이 그림의 marker는 결정론적 stride로 {markers} 개만 뽑은 것이다.
+
+## 분석 및 평가
+연결 성분 {components:,}개, 총 표면적 {area:.1f}. renderer median event 전수의 {within_h:.2%}가 표면 h 이내(`renderer_evidence_reproduction`), 자기 카메라로 되쏜 raycast의 {ray_hit:.2%}가 표면에 맞았다(`raycast_self_consistency`). 연결 성분이 많은 것은 hole filling·smoothing·watertight 강제를 하지 않겠다는 계약의 직접적 결과이며 "더 매끄럽다"가 성공 기준이 아니다. `HISTORICAL_VISIBLE_NURBS_BASELINE`과 나란히 비교해서 봐야 한다.
 """
 
 BASELINE_README = """# HISTORICAL_VISIBLE_NURBS_BASELINE
@@ -1011,6 +1020,9 @@ BASELINE_README = """# HISTORICAL_VISIBLE_NURBS_BASELINE
 
 ## 이 이미지가 보여주는 것
 A/B의 **A arm**이다. fitter 용량(8x4, degree 2/2, correction round 2)과 chart 구성은 WL119 리포트에 기록된 값 그대로이며 이 배치에서 바꾸지 않았다. 비교를 유리하게 만들기 위한 수정은 없다.
+
+## 분석 및 평가
+재생 충실성: visible component {components:,} / singleton {singletons:,} / largest {largest:.5f}, fitted chart {charts:,}(`baseline_ab.arm_A_replay`). 공유 질의 집합에서 표면적 {area:.1f}, coverage(≤h) {coverage:.2%}, depth 오차 중앙값 {depth_err:.2f}h — arm B와 함께 봐야 이 값들이 좋은지 나쁜지 판단할 수 있다.
 """
 
 RAYCAST_README = """# TSDF_RAYCAST_DEPTH
@@ -1021,6 +1033,9 @@ RAYCAST_README = """# TSDF_RAYCAST_DEPTH
 
 ## 이 이미지가 보여주는 것
 재구성된 Visible Surface가 자기가 만들어진 그 카메라들에서 실제로 어떻게 보이는지다. 광선은 candidate B가 쓰는 것과 **동일한 pixel-centre ray**이므로 다음 view의 depth 오차와 직접 비교 가능하다.
+
+## 분석 및 평가
+161개 카메라 전수에서 canonical median depth를 가진 {total_pixels} 픽셀 중 **{ray_hit:.2%}가 mesh hit**을 가졌다(`raycast_self_consistency`). hit이 있다고 depth가 정확하다는 뜻은 아니므로 실제 깊이 오차는 `MEDIAN_VS_TSDF_DEPTH_ERROR`와 항상 같이 봐야 한다.
 """
 
 ERROR_README = """# MEDIAN_VS_TSDF_DEPTH_ERROR
@@ -1033,6 +1048,9 @@ ERROR_README = """# MEDIAN_VS_TSDF_DEPTH_ERROR
 
 ## 이 이미지가 보여주는 것
 이 배치의 **1차 실측 지표** 중 하나다. 후보 표면이 renderer가 정의한 visible-surface frontier를 어디에서 얼마나 재현하고 어디에서 어긋나는지 픽셀 단위로 보여준다.
+
+## 분석 및 평가
+전체 픽셀의 |오차|/h median은 **{median_err:.4f}**, p95는 {p95_err:.2f}다(`raycast_self_consistency.all_pixels`). 큰 오차 픽셀의 다수가 mesh-in-front(파랑) 쪽이라면 재구성 실패가 아니라 다른 뷰의 표면이 이 뷰의 시선을 가로막는 것일 가능성이 높다 — `B_VS_TSDF_OCCLUSION_DISAGREEMENT`와 함께 봐야 한다. 영역별 수치는 `raycast_self_consistency.by_region`에 있다.
 """
 
 SUPPORT_README = """# TSDF_SUPPORT_COUNT
@@ -1043,6 +1061,9 @@ SUPPORT_README = """# TSDF_SUPPORT_COUNT
 
 ## 이 이미지가 보여주는 것
 support_count는 **진단 전용**이다. fusion 가중치는 모든 관측이 정확히 1이고 최소 뷰 수 규칙도 없으므로, support_count가 1이어도 표면은 정상적으로 만들어진다. 이 그림은 그 표면이 얼마나 얇은 증거 위에 서 있는지를 보여줄 뿐 삭제 기준이 아니다.
+
+## 분석 및 평가
+authoritative voxel의 **{frac_1:.2%}가 support_count = 1**이다(`field.fraction_support_count_1`). 평균 support는 {mean_support:.2f}로 대다수 표면은 여러 뷰가 겹쳐 지지하지만, 빨강 영역이 전체 표면의 상당 부분을 차지한다는 뜻이다. 이 빨강 영역이 실제로 얇은 구조인지 근거 부족 영역인지는 `TSDF_LOW_SUPPORT_SURFACE`와 depth 오차 view를 같이 봐야 한다.
 """
 
 LOW_SUPPORT_README = """# TSDF_LOW_SUPPORT_SURFACE
@@ -1053,6 +1074,9 @@ LOW_SUPPORT_README = """# TSDF_LOW_SUPPORT_SURFACE
 
 ## 이 이미지가 보여주는 것
 **hallucination 후보 검토용**이다. directive에 따라 이 영역은 **삭제하지 않고 그대로 내보낸다**. 자홍이 실제 얇은 구조(잎, 다리)인지 아니면 근거 없는 다리(bridge)인지는 사람이 판단해야 하며, 정량 근거는 리포트의 `hallucination_audit`에 있다.
+
+## 분석 및 평가
+support≤{low} 표면이 삼각형 수로는 {tri_frac:.2%}, 면적으로는 {area_frac:.2%}를 차지한다(`hallucination_audit`). 계약 수준에서는 정상이다(삼각형 100%가 8-corner authoritative cell 출신). "실제 장면에서 미지지 조작이 material하지 않다"는 것은 이 배치가 적극 입증하지 않았으므로, 이 자홍 영역은 검토 우선순위로 남는다.
 """
 
 DISAGREEMENT_README = """# B_VS_TSDF_OCCLUSION_DISAGREEMENT
@@ -1066,6 +1090,9 @@ DISAGREEMENT_README = """# B_VS_TSDF_OCCLUSION_DISAGREEMENT
 
 ## 이 이미지가 보여주는 것
 WL120 4,712 질의를 재사용해, **재구성된 메시를 실제 차폐 geometry로 썼을 때** Observed/Occluded 분할이 frozen Candidate B와 어디에서 갈라지는지 보여준다. 이 비교는 **진단**이며 Candidate B를 대체하지 않는다. depth epsilon은 어디에도 없다.
+
+## 분석 및 평가
+{confusion_summary}
 """
 
 FRAGMENTATION_README = """# WL121_FRAGMENTATION_CONTEXT_OVERLAY
@@ -1077,6 +1104,9 @@ FRAGMENTATION_README = """# WL121_FRAGMENTATION_CONTEXT_OVERLAY
 
 ## 이 이미지가 보여주는 것
 역사적 topology가 **끊어 놓은** 자리에서 새 TSDF 표면이 어떻게 행동하는지를 보기 위한 overlay다. 같은 메시 component에 있다고 해서 물리적 연속성이 옳다는 뜻이 **아니고**, midpoint에 표면이 있다고 해서 역사적 분할이 틀렸다는 뜻도 **아니다**. 정량치는 리포트의 `historical_topology_attribution`에 있다.
+
+## 분석 및 평가
+{fragmentation_summary}
 """
 
 SLICE_README = """# TSDF_FIELD_SLICES
@@ -1089,6 +1119,9 @@ SLICE_README = """# TSDF_FIELD_SLICES
 
 ## 이 이미지가 보여주는 것
 sparse authority contract를 눈으로 확인하는 그림이다. UNKNOWN이 파랑/주황과 **시각적으로 명확히 구분**되며 자유 공간처럼 그려지지 않는다는 점이 핵심이다. 3개 slice는 table 구조 / patio / hedge(배경)를 각각 지난다.
+
+## 분석 및 평가
+값 있는 영역(파랑/주황/흰색)이 표면을 감싼 얇은 띠뿐이고 화면 대부분이 UNKNOWN이라는 점이 field 정의의 핵심 성질을 보여준다 — μ=3h({mu:.6f})의 truncation band 밖은 field가 값을 갖지 않는다. 세 slice의 띠 두께 차이는 그 영역의 support 밀도·표면 곡률 차이를 반영하며, 정량 근거는 `field.support_count_distribution`과 `renderer_evidence_reproduction.by_region`에 있다.
 """
 
 
@@ -1167,7 +1200,21 @@ def _exports(
         stages.write_png(preview_root / f"A_ORIGINAL_2DGS__{camera.image_name}.png",
                          package["render"].permute(1, 2, 0).detach().cpu().numpy())
         del package
-    write_view_readme(folder, ORIGINAL_2DGS_README, total_model_count)
+    newline = "\n"
+    region_lines = newline.join(
+        f"- **{label}**: coverage<=h {v['fraction_within_h']*100:.2f}%, raycast |error|/h median {rc:.3f}"
+        for label, v, rc in zip(
+            REGION_LABELS,
+            report.get("renderer_evidence_reproduction", {}).get("by_region", {}).values(),
+            [
+                r.get("absolute_depth_error_over_h", {}).get("median", float("nan"))
+                for r in report.get("raycast_self_consistency", {}).get("by_region", {}).values()
+            ] or [float("nan")] * len(REGION_LABELS),
+        )
+    ) or "영역별 수치는 아직 계산되지 않았다."
+    write_view_readme(
+        folder, ORIGINAL_2DGS_README.format(region_summary=region_lines), total_model_count
+    )
 
     # B ------------------------------------- RENDERER_MEDIAN_SURFACE_POINTS
     event_points = []
@@ -1179,7 +1226,14 @@ def _exports(
     paths["B_RENDERER_MEDIAN_SURFACE_POINTS"] = render_marker_view(
         "RENDERER_MEDIAN_SURFACE_POINTS", event_points_t,
         torch.tensor([[0.20, 0.85, 0.80]], device=device).expand(event_points_t.shape[0], 3).contiguous(),
-        RENDERER_MEDIAN_README.format(points=f"{int(event_points_t.shape[0]):,}"),
+        RENDERER_MEDIAN_README.format(
+            points=f"{int(event_points_t.shape[0]):,}",
+            total_events=f"{report['renderer_evidence_reproduction']['all_events']['events']:,}",
+            within_h=report["renderer_evidence_reproduction"]["all_events"]["fraction_within_h"],
+            within_2h=report["renderer_evidence_reproduction"]["all_events"]["fraction_within_2h"],
+            no_surface=report["renderer_evidence_reproduction"]["all_events"]["fraction_no_local_extracted_surface_beyond_3h"],
+            h=h,
+        ),
     )
     del event_points, event_points_t
 
@@ -1216,6 +1270,10 @@ def _exports(
         TSDF_SURFACE_README.format(
             vertices=f"{int(surface.vertices.shape[0]):,}", faces=f"{int(surface.faces.shape[0]):,}",
             markers=f"{int(marker_vertices.shape[0]):,}",
+            components=report["reconstruction"]["connected_components"],
+            area=report["reconstruction"]["total_surface_area"],
+            within_h=report["renderer_evidence_reproduction"]["all_events"]["fraction_within_h"],
+            ray_hit=report["raycast_self_consistency"]["ray_hit_coverage"],
         ),
     )
     paths["mesh_ply"] = {
@@ -1231,7 +1289,15 @@ def _exports(
         paths["D_HISTORICAL_VISIBLE_NURBS_BASELINE"] = render_marker_view(
             "HISTORICAL_VISIBLE_NURBS_BASELINE", points,
             torch.tensor([[0.95, 0.60, 0.15]], device=device).expand(points.shape[0], 3).contiguous(),
-            BASELINE_README,
+            BASELINE_README.format(
+                components=baseline.get("arm_A_replay", {}).get("topology", {}).get("visible_component_count", 0),
+                singletons=baseline.get("arm_A_replay", {}).get("topology", {}).get("singleton_surfel_count", 0),
+                largest=baseline.get("arm_A_replay", {}).get("topology", {}).get("largest_component_surfel_fraction", float("nan")),
+                charts=baseline.get("arm_A_replay", {}).get("fitted_chart_count", 0),
+                area=baseline.get("arm_A_metrics", {}).get("surface_area", float("nan")),
+                coverage=baseline.get("arm_A_metrics", {}).get("renderer_evidence_coverage_within_h", float("nan")),
+                depth_err=baseline.get("arm_A_metrics", {}).get("absolute_depth_error_over_h", {}).get("median", float("nan")),
+            ),
         )
         mesh_ops.write_mesh_ply(
             mesh_dir / "historical_visible_nurbs_baseline.ply", baseline_vertices, baseline["_faces"]
@@ -1261,8 +1327,23 @@ def _exports(
         image = stages.signed_error_to_rgb(error, valid, 2.0 * h)
         stages.write_png(error_dir / f"{camera.image_name}.png", image)
         stages.write_png(preview_root / f"F_MEDIAN_VS_TSDF_DEPTH_ERROR__{camera.image_name}.png", image)
-    write_view_readme(raycast_dir, RAYCAST_README, total_model_count)
-    write_view_readme(error_dir, ERROR_README.format(h=h), total_model_count)
+    write_view_readme(
+        raycast_dir,
+        RAYCAST_README.format(
+            total_pixels=f"{report['raycast_self_consistency']['pixels_with_canonical_median_depth']:,}",
+            ray_hit=report["raycast_self_consistency"]["ray_hit_coverage"],
+        ),
+        total_model_count,
+    )
+    write_view_readme(
+        error_dir,
+        ERROR_README.format(
+            h=h,
+            median_err=report["raycast_self_consistency"]["all_pixels"]["absolute_depth_error_over_h"]["median"],
+            p95_err=report["raycast_self_consistency"]["all_pixels"]["absolute_depth_error_over_h"]["p95"],
+        ),
+        total_model_count,
+    )
     paths["E_TSDF_RAYCAST_DEPTH"] = {"views": [cameras[i].image_name for i in preview_indices]}
     paths["F_MEDIAN_VS_TSDF_DEPTH_ERROR"] = {"views": [cameras[i].image_name for i in preview_indices]}
 
@@ -1272,7 +1353,11 @@ def _exports(
     paths["G_TSDF_SUPPORT_COUNT"] = render_marker_view(
         "TSDF_SUPPORT_COUNT", support_markers,
         torch.tensor(stages.support_to_rgb(support_values, support_cap), dtype=torch.float32, device=device),
-        SUPPORT_README.format(cap=f"{support_cap:.0f}"),
+        SUPPORT_README.format(
+            cap=f"{support_cap:.0f}",
+            frac_1=report["field"]["fraction_support_count_1"],
+            mean_support=report["field"]["support_count_distribution"]["mean"],
+        ),
     )
     low_points = surface.vertices[low]
     low_stride = max(1, int(low_points.shape[0]) // 400_000)
@@ -1280,7 +1365,14 @@ def _exports(
     paths["H_TSDF_LOW_SUPPORT_SURFACE"] = render_marker_view(
         "TSDF_LOW_SUPPORT_SURFACE", low_markers,
         torch.tensor([[0.95, 0.25, 0.75]], device=device).expand(low_markers.shape[0], 3).contiguous(),
-        LOW_SUPPORT_README.format(low=LOW_SUPPORT_COUNT),
+        LOW_SUPPORT_README.format(
+            low=LOW_SUPPORT_COUNT,
+            tri_frac=report["hallucination_audit"].get("fraction_low_support", float("nan")),
+            area_frac=(
+                report["hallucination_audit"].get("low_support_sampled_points", 0)
+                / max(report["hallucination_audit"].get("sampled_mesh_points", 1), 1)
+            ),
+        ),
     )
     del support_markers, low_markers, marker_vertices
 
@@ -1290,8 +1382,16 @@ def _exports(
     if disagreement is not None and "_positions" in occlusion:
         positions = occlusion["_positions"]
         colours = occlusion["_colours"]
+        wl120_confusion = occlusion.get("worklog_120_original_4712", {}).get("global_confusion", {})
+        confusion_lines = (
+            f"B가 OCCLUDED로 판정한 {wl120_confusion.get('B_OCCLUDED_and_mesh_OCCLUDED', 0) + wl120_confusion.get('B_OCCLUDED_and_mesh_unobstructed', 0)}건 중 "
+            f"{wl120_confusion.get('B_OCCLUDED_and_mesh_OCCLUDED', 0)}건({wl120_confusion.get('B_OCCLUDED_and_mesh_OCCLUDED', 0) / max(wl120_confusion.get('B_OCCLUDED_and_mesh_OCCLUDED', 0) + wl120_confusion.get('B_OCCLUDED_and_mesh_unobstructed', 0), 1) * 100:.2f}%)를 메시도 독립적으로 OCCLUDED로 본다. "
+            f"반대 방향(B=OBSERVED인데 mesh=OCCLUDED)은 {wl120_confusion.get('B_OBSERVED_and_mesh_OCCLUDED', 0)}건이며, "
+            "그 대부분은 `sdf_induced_occlusion_audit.worklog_120_disagreement_attribution`에서 3h 이내 실재 표면으로 설명된다."
+        )
         paths["I_B_VS_TSDF_OCCLUSION_DISAGREEMENT"] = render_marker_view(
-            "B_VS_TSDF_OCCLUSION_DISAGREEMENT", positions, colours, DISAGREEMENT_README
+            "B_VS_TSDF_OCCLUSION_DISAGREEMENT", positions, colours,
+            DISAGREEMENT_README.format(confusion_summary=confusion_lines),
         )
     else:
         paths["I_B_VS_TSDF_OCCLUSION_DISAGREEMENT"] = {"status": "worklog 120 bank unavailable"}
@@ -1299,8 +1399,16 @@ def _exports(
     # J --------------------- WL121_FRAGMENTATION_CONTEXT_OVERLAY
     if "_fragmentation_points" in report:
         points, colours = report.pop("_fragmentation_points")
+        frag = report.get("historical_topology_attribution", {})
+        frag_summary = (
+            f"{frag.get('contexts', 0)}개 context 중 {frag.get('endpoints_on_the_same_extracted_mesh_component', 0)}쌍의 "
+            f"두 endpoint가 같은 mesh component 위에 놓이고, {frag.get('midpoint_has_no_surface_within_3h', 0)}쌍은 "
+            "midpoint 3h 이내에 표면이 없다(`historical_topology_attribution`). "
+            "같은 component가 곧 물리적으로 옳다는 뜻은 아니다."
+        )
         paths["J_WL121_FRAGMENTATION_CONTEXT_OVERLAY"] = render_marker_view(
-            "WL121_FRAGMENTATION_CONTEXT_OVERLAY", points, colours, FRAGMENTATION_README
+            "WL121_FRAGMENTATION_CONTEXT_OVERLAY", points, colours,
+            FRAGMENTATION_README.format(fragmentation_summary=frag_summary),
         )
     else:
         paths["J_WL121_FRAGMENTATION_CONTEXT_OVERLAY"] = {"status": "worklog 121 bank unavailable"}
@@ -1328,7 +1436,7 @@ def _exports(
         stats["world_centre"] = [float(v) for v in centre.tolist()]
         stats["region"] = REGION_LABELS[region_id]
         slice_stats[label] = stats
-    write_view_readme(slice_dir, SLICE_README, total_model_count)
+    write_view_readme(slice_dir, SLICE_README.format(mu=mu), total_model_count)
     paths["TSDF_FIELD_SLICES"] = slice_stats
 
     (preview_root / "README.md").write_text(
