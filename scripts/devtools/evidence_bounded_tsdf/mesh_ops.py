@@ -321,3 +321,127 @@ def rasterize_mesh_depth(
             depth_buffer = depth_buffer.scatter_reduce(0, pixel, value, reduce="amin")
         stats["triangles_beyond_largest_tier"] += int(remaining.sum().item())
     return depth_buffer.reshape(height, width), stats
+
+
+def rasterize_mesh_shaded(
+    camera: Any, vertices: torch.Tensor, faces: torch.Tensor, vertex_colors: torch.Tensor, *,
+    background: tuple[float, float, float] = (0.07, 0.08, 0.10),
+    light_direction: tuple[float, float, float] = (0.35, 0.55, -0.77),
+    ambient: float = 0.35, diffuse: float = 0.65, shaded: bool = True,
+    tiers: tuple[int, ...] = (2, 4, 16, 64), face_chunk: int = 2_000_000,
+) -> torch.Tensor:
+    """Z-buffered triangle rasterization -- an actual mesh render, not a
+    marker point cloud.
+
+    Uses the SAME pixel-centre ray/triangle test as `rasterize_mesh_depth`
+    (identical camera convention), so the silhouette matches. When
+    `shaded=True`, per-face brightness is plain Lambertian off the face's own
+    geometric normal (`light_direction` is a fixed world-space direction, not
+    learned data) times the barycentric interpolation of `vertex_colors` -- no
+    Gaussian covariance normal, no invented lighting model, geometry-only.
+    Set `shaded=False` when `vertex_colors` itself ENCODES data (a support-count
+    ramp, a state colour) so lighting brightness cannot be confused with the
+    encoded value; the mesh is then flat-colour-interpolated with no shading.
+    Background pixels (no triangle hit) keep `background` untouched.
+    """
+
+    width, height = int(camera.image_width), int(camera.image_height)
+    device = vertices.device
+    depth_buffer = torch.full((height * width,), float("inf"), dtype=torch.float32, device=device)
+    color_buffer = torch.tensor(background, dtype=torch.float32, device=device).reshape(1, 3).expand(
+        height * width, 3
+    ).contiguous()
+
+    ones = torch.ones((vertices.shape[0], 1), dtype=torch.float32, device=device)
+    homogeneous = torch.cat([vertices.to(torch.float32), ones], dim=1)
+    vertex_depth = (homogeneous @ camera.world_view_transform)[:, 2].contiguous()
+    clip = homogeneous @ camera.full_proj_transform
+    w = clip[:, 3]
+    safe_w = torch.where(w.abs() > 0, w, torch.ones_like(w))
+    px = ((clip[:, 0] / safe_w + 1.0) * width - 1.0) * 0.5
+    py = ((clip[:, 1] / safe_w + 1.0) * height - 1.0) * 0.5
+    vertex_ok = (w > 0) & (vertex_depth >= CANONICAL_NEAR_N)
+    del clip, homogeneous
+
+    light = torch.tensor(light_direction, dtype=torch.float32, device=device)
+    light = light / light.norm().clamp_min(1e-12)
+
+    for start in range(0, int(faces.shape[0]), face_chunk):
+        block = faces[start : start + face_chunk]
+        ok = vertex_ok[block].all(dim=1)
+        block = block[ok]
+        if block.numel() == 0:
+            continue
+        x, y, z = px[block], py[block], vertex_depth[block]
+        inv_z = 1.0 / z
+        if shaded:
+            corners = vertices[block]
+            normals = torch.linalg.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0])
+            normals = normals / normals.norm(dim=1, keepdim=True).clamp_min(1e-12)
+            shade = (ambient + diffuse * (normals @ light).abs()).clamp(0.0, 1.0)
+        else:
+            shade = torch.ones((block.shape[0],), dtype=torch.float32, device=device)
+        colors = vertex_colors[block]
+
+        lo_c = torch.ceil(x.min(dim=1).values).to(torch.int64).clamp(min=0)
+        hi_c = torch.floor(x.max(dim=1).values).to(torch.int64).clamp(max=width - 1)
+        lo_r = torch.ceil(y.min(dim=1).values).to(torch.int64).clamp(min=0)
+        hi_r = torch.floor(y.max(dim=1).values).to(torch.int64).clamp(max=height - 1)
+        extent = torch.maximum(hi_c - lo_c + 1, hi_r - lo_r + 1)
+        alive = (hi_c >= lo_c) & (hi_r >= lo_r)
+        remaining = alive.clone()
+        for tier in tiers:
+            selected = remaining & (extent <= tier)
+            remaining &= ~selected
+            count = int(selected.sum().item())
+            if count == 0:
+                continue
+            grid = torch.arange(tier, device=device)
+            dc, dr = torch.meshgrid(grid, grid, indexing="ij")
+            dc, dr = dc.reshape(1, -1), dr.reshape(1, -1)
+            cols = lo_c[selected].unsqueeze(1) + dc
+            rows = lo_r[selected].unsqueeze(1) + dr
+            valid = (cols <= hi_c[selected].unsqueeze(1)) & (rows <= hi_r[selected].unsqueeze(1))
+            xs, ys = x[selected], y[selected]
+            fc, fr = cols.to(torch.float32), rows.to(torch.float32)
+            x0, x1, x2 = xs[:, 0:1], xs[:, 1:2], xs[:, 2:3]
+            y0, y1, y2 = ys[:, 0:1], ys[:, 1:2], ys[:, 2:3]
+            area = (x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0)
+            w0 = (x1 - fc) * (y2 - fr) - (x2 - fc) * (y1 - fr)
+            w1 = (x2 - fc) * (y0 - fr) - (x0 - fc) * (y2 - fr)
+            w2 = (x0 - fc) * (y1 - fr) - (x1 - fc) * (y0 - fr)
+            positive = (w0 >= 0) & (w1 >= 0) & (w2 >= 0)
+            negative = (w0 <= 0) & (w1 <= 0) & (w2 <= 0)
+            inside = valid & (positive | negative) & (area.abs() > 1e-20)
+            if not bool(inside.any()):
+                continue
+            safe_area = torch.where(area.abs() > 1e-20, area, torch.ones_like(area))
+            b0, b1, b2 = w0 / safe_area, w1 / safe_area, w2 / safe_area
+            iz = inv_z[selected]
+            inv_depth = b0 * iz[:, 0:1] + b1 * iz[:, 1:2] + b2 * iz[:, 2:3]
+            hit = inside & (inv_depth > 0)
+            if not bool(hit.any()):
+                continue
+            pixel = (rows * width + cols)[hit]
+            depth_here = (1.0 / inv_depth)[hit]
+
+            # per-pixel triangle index (row within `selected`) for gathering color
+            triangle_row = torch.arange(int(count), device=device).unsqueeze(1).expand_as(hit)[hit]
+            face_color = colors[selected][triangle_row]
+            b0h, b1h, b2h = b0[hit], b1[hit], b2[hit]
+            interpolated = (
+                b0h.unsqueeze(1) * face_color[:, 0] + b1h.unsqueeze(1) * face_color[:, 1]
+                + b2h.unsqueeze(1) * face_color[:, 2]
+            )
+            final_color = interpolated * shade[selected][triangle_row].unsqueeze(1)
+
+            # z-test against the running depth buffer: a fragment survives only
+            # if it beats what is already there for its pixel AND is the
+            # nearest fragment among this tier's own batch for that pixel
+            # (scatter_reduce gives the true per-pixel minimum in one pass, no
+            # chunk-order dependence).
+            depth_buffer = depth_buffer.scatter_reduce(0, pixel, depth_here, reduce="amin")
+            winner = depth_here <= depth_buffer[pixel] + 1e-9
+            if bool(winner.any()):
+                color_buffer[pixel[winner]] = final_color[winner]
+    return color_buffer.reshape(height, width, 3)

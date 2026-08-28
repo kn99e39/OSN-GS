@@ -444,6 +444,86 @@ class TestMeshOps:
         finite = torch.isfinite(depth)
         assert torch.allclose(depth[finite], torch.full_like(depth[finite], 3.0), atol=1e-4)
 
+    def test_shaded_rasterizer_z_tests_correctly_and_shows_background(self):
+        camera = _flat_camera(width=64, height=64, distance=6.0)
+        # nearer quad (world z=-2, depth 4) is red; farther quad (world z=0, depth 6) is blue;
+        # both smaller than the frame so background must remain visible around them.
+        near = torch.tensor([[-1.0, -1.0, -2.0], [1.0, -1.0, -2.0], [1.0, 1.0, -2.0], [-1.0, 1.0, -2.0]])
+        far = torch.tensor([[-1.0, -1.0, 0.0], [1.0, -1.0, 0.0], [1.0, 1.0, 0.0], [-1.0, 1.0, 0.0]])
+        vertices = torch.cat([near, far], dim=0)
+        faces = torch.tensor([[0, 1, 2], [0, 2, 3], [4, 5, 6], [4, 6, 7]], dtype=torch.int64)
+        colors = torch.tensor([[1.0, 0.0, 0.0]] * 4 + [[0.0, 0.0, 1.0]] * 4)
+        image = mesh_ops.rasterize_mesh_shaded(camera, vertices, faces, colors, background=(0.0, 0.0, 0.0))
+        centre = image[32, 32]
+        corner = image[1, 1]
+        assert centre[0] > centre[2], "the nearer (red) quad must win the z-test at the centre"
+        assert torch.allclose(corner, torch.zeros(3), atol=1e-4), "background must stay untouched off-mesh"
+
+    def test_shaded_rasterizer_matches_depth_rasterizer_silhouette(self):
+        """The shaded rasterizer's hit mask must equal the depth rasterizer's,
+        since both use the same pixel-centre ray/triangle test."""
+
+        camera = _flat_camera(width=32, height=32, distance=4.0)
+        vertices = torch.tensor([[-2.0, -2.0, 0.0], [2.0, -2.0, 0.0], [2.0, 2.0, 0.0], [-2.0, 2.0, 0.0]])
+        faces = torch.tensor([[0, 1, 2], [0, 2, 3]], dtype=torch.int64)
+        colors = torch.tensor([[0.5, 0.5, 0.5]] * 4)
+        depth, _stats = mesh_ops.rasterize_mesh_depth(camera, vertices, faces)
+        image = mesh_ops.rasterize_mesh_shaded(camera, vertices, faces, colors, background=(0.0, 0.0, 0.0))
+        depth_hit = torch.isfinite(depth)
+        shaded_hit = (image.abs().sum(dim=-1) > 0)
+        assert torch.equal(depth_hit, shaded_hit)
+
+    def test_unshaded_rasterizer_preserves_exact_vertex_colour(self):
+        """shaded=False must be a pure colour interpolation with NO lighting
+        term, so a data-encoding colour ramp (support-count, state colour) is
+        never confused with brightness. A face whose vertices are all the same
+        colour must render at EXACTLY that colour, regardless of orientation."""
+
+        camera = _flat_camera(width=16, height=16, distance=4.0)
+        # a triangle tilted steeply relative to the fixed light direction, so a
+        # shaded render would visibly dim it
+        vertices = torch.tensor([[-1.0, -1.0, 0.5], [1.0, -1.0, -0.5], [0.0, 1.0, 0.0]])
+        faces = torch.tensor([[0, 1, 2]], dtype=torch.int64)
+        flat_color = torch.tensor([[0.4, 0.6, 0.8]] * 3)
+        unshaded = mesh_ops.rasterize_mesh_shaded(
+            camera, vertices, faces, flat_color, background=(0.0, 0.0, 0.0), shaded=False
+        )
+        shaded = mesh_ops.rasterize_mesh_shaded(
+            camera, vertices, faces, flat_color, background=(0.0, 0.0, 0.0), shaded=True
+        )
+        hit = unshaded.abs().sum(dim=-1) > 0
+        assert bool(hit.any())
+        assert torch.allclose(unshaded[hit], torch.tensor([0.4, 0.6, 0.8]).expand(int(hit.sum()), 3), atol=1e-5)
+        # the shaded render of the SAME geometry must differ (lighting applied)
+        assert not torch.allclose(shaded[hit], unshaded[hit])
+
+    def test_shaded_param_is_not_reassigned_by_the_loop(self):
+        """Regression: `shaded` (the bool parameter) must NOT be shadowed by a
+        same-named local inside the per-tier body -- if it were, `if shaded:`
+        would read a colour TENSOR (left over from a previous tier iteration)
+        instead of the original bool on the tier after the first, and torch
+        raises exactly on that ambiguous truthiness test. Forcing >= 2
+        NON-EMPTY tier iterations inside ONE call (a tiny triangle for tier 2,
+        a large one for tier 64, with an explicit narrow `tiers` tuple so both
+        land in different, both-populated buckets) reproduces the exact
+        failure mode without needing a second call."""
+
+        camera = _flat_camera(width=64, height=64, distance=4.0)
+        tiny = torch.tensor([[-0.05, -0.05, 0.0], [0.05, -0.05, 0.0], [0.0, 0.05, 0.0]])
+        # sized so its screen-space extent falls inside the (2, 64) tier set's
+        # SECOND bucket, not beyond it (an oversized triangle would be dropped
+        # by `triangles_beyond_largest_tier` and never run tier 64 at all)
+        medium = torch.tensor([[-1.0, -1.0, 1.0], [1.0, -1.0, 1.0], [0.0, 1.0, 1.0]])
+        vertices = torch.cat([tiny, medium], dim=0)
+        faces = torch.tensor([[0, 1, 2], [3, 4, 5]], dtype=torch.int64)
+        colors = torch.rand(vertices.shape[0], 3)
+
+        # must not raise "Boolean value of Tensor with more than one value is
+        # ambiguous" on the second tier's `if shaded:` check
+        result = mesh_ops.rasterize_mesh_shaded(camera, vertices, faces, colors, tiers=(2, 64))
+        assert result.shape == (64, 64, 3)
+        assert result.abs().sum() > 0, "both triangles must actually have rasterized something"
+
 
 class TestDeterminism:
     def test_reconstruction_planning_is_deterministic(self):

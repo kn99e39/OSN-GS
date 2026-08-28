@@ -1000,13 +1000,13 @@ RENDERER_MEDIAN_README = """# RENDERER_MEDIAN_SURFACE_POINTS
 TSDF_SURFACE_README = """# NEW_TSDF_VISIBLE_SURFACE
 
 ## 색상 의미
-- **초록** (`0.20, 0.85, 0.40`): evidence-bounded projective TSDF의 zero level-set에서 추출된 삼각형 메시의 정점
-- **거의 검은 남색**: 학습된 2DGS 장면 전체(문맥용)
+- **초록** (`0.20, 0.85, 0.40`) 음영: evidence-bounded projective TSDF의 zero level-set에서 추출된 삼각형 메시 자체를 z-buffer로 렌더링한 것(정점 산포가 아니다). 음영은 각 삼각형의 기하 법선에 대한 단순 Lambertian 명암일 뿐 학습된 SH 색상이나 Gaussian covariance normal이 아니다
+- **어두운 남색 배경**: 메시가 없는 픽셀(배경)
 
 ## 이 이미지가 보여주는 것
 이번 배치의 **후보 Visible Surface 그 자체**다. cell 8개 corner가 모두 field authority를 가질 때만 삼각형을 만들었고, UNKNOWN voxel은 채우지 않았으며 hole filling·smoothing·watertight 강제는 하지 않았다. 따라서 열려 있고 끊겨 있는 것이 정상이다.
 
-메시 전체는 `mesh/tsdf_visible_surface.ply` (정점 {vertices}, 삼각형 {faces})에 있고, 이 그림의 marker는 결정론적 stride로 {markers} 개만 뽑은 것이다.
+메시 전체는 `mesh/tsdf_visible_surface.ply` (정점 {vertices}, 삼각형 {faces})에 있고, 이 폴더의 `render.png`/`preview_png/`는 그 메시 **전체**를 `ORIGINAL_2DGS`와 같은 6개 대표 시점에서 실제 삼각형으로 렌더링한 것이다(점 산포가 아니다). 원본 2DGS 장면과 겹쳐 볼 마커 점군이 필요하면 `mesh/tsdf_visible_surface.ply`를 결정론적 stride로 subsample({markers} 개 기준)해서 쓸 수 있다.
 
 ## 분석 및 평가
 연결 성분 {components:,}개, 총 표면적 {area:.1f}. renderer median event 전수의 {within_h:.2%}가 표면 h 이내(`renderer_evidence_reproduction`), 자기 카메라로 되쏜 raycast의 {ray_hit:.2%}가 표면에 맞았다(`raycast_self_consistency`). 연결 성분이 많은 것은 hole filling·smoothing·watertight 강제를 하지 않겠다는 계약의 직접적 결과이며 "더 매끄럽다"가 성공 기준이 아니다. `HISTORICAL_VISIBLE_NURBS_BASELINE`과 나란히 비교해서 봐야 한다.
@@ -1015,11 +1015,11 @@ TSDF_SURFACE_README = """# NEW_TSDF_VISIBLE_SURFACE
 BASELINE_README = """# HISTORICAL_VISIBLE_NURBS_BASELINE
 
 ## 색상 의미
-- **주황** (`0.95, 0.60, 0.15`): 역사적 topology/boundary-first 경로(WL107/109 topology → camera-observed chart → 기존 NURBS fitter)로 적합된 patch를 균일 UV 격자에서 샘플링한 점
-- **거의 검은 남색**: 학습된 2DGS 장면 전체(문맥용)
+- **주황** (`0.95, 0.60, 0.15`) 음영: 역사적 topology/boundary-first 경로(WL107/109 topology → camera-observed chart → 기존 NURBS fitter)로 적합된 patch를 균일 UV 격자로 샘플링해 만든 삼각형 메시를 z-buffer로 렌더링한 것(점 산포가 아니다). 음영은 삼각형 기하 법선의 단순 Lambertian 명암
+- **어두운 남색 배경**: 메시가 없는 픽셀(배경)
 
 ## 이 이미지가 보여주는 것
-A/B의 **A arm**이다. fitter 용량(8x4, degree 2/2, correction round 2)과 chart 구성은 WL119 리포트에 기록된 값 그대로이며 이 배치에서 바꾸지 않았다. 비교를 유리하게 만들기 위한 수정은 없다.
+A/B의 **A arm**이다. fitter 용량(8x4, degree 2/2, correction round 2)과 chart 구성은 WL119 리포트에 기록된 값 그대로이며 이 배치에서 바꾸지 않았다. 비교를 유리하게 만들기 위한 수정은 없다. 메시 전체는 `mesh/historical_visible_nurbs_baseline.ply`에 있다.
 
 ## 분석 및 평가
 재생 충실성: visible component {components:,} / singleton {singletons:,} / largest {largest:.5f}, fitted chart {charts:,}(`baseline_ab.arm_A_replay`). 공유 질의 집합에서 표면적 {area:.1f}, coverage(≤h) {coverage:.2%}, depth 오차 중앙값 {depth_err:.2f}h — arm B와 함께 봐야 이 값들이 좋은지 나쁜지 판단할 수 있다.
@@ -1056,8 +1056,8 @@ ERROR_README = """# MEDIAN_VS_TSDF_DEPTH_ERROR
 SUPPORT_README = """# TSDF_SUPPORT_COUNT
 
 ## 색상 의미
-- **빨강 → 청록** 램프: 메시 정점 위치의 voxel이 **몇 개 뷰의 truncation band 안에 있었는지**(support_count). 빨강 = 1개 뷰, 청록 = {cap}개 이상
-- **거의 검은 남색**: 학습된 2DGS 장면 전체(문맥용)
+- **빨강 → 청록** 램프(메시 전체를 z-buffer로 렌더링, 점 산포가 아니다): 각 정점 위치의 voxel이 **몇 개 뷰의 truncation band 안에 있었는지**(support_count). 빨강 = 1개 뷰, 청록 = {cap}개 이상. 램프 색만 표시하며 별도 음영은 넣지 않았다
+- **어두운 남색 배경**: 메시가 없는 픽셀(배경)
 
 ## 이 이미지가 보여주는 것
 support_count는 **진단 전용**이다. fusion 가중치는 모든 관측이 정확히 1이고 최소 뷰 수 규칙도 없으므로, support_count가 1이어도 표면은 정상적으로 만들어진다. 이 그림은 그 표면이 얼마나 얇은 증거 위에 서 있는지를 보여줄 뿐 삭제 기준이 아니다.
@@ -1069,8 +1069,8 @@ authoritative voxel의 **{frac_1:.2%}가 support_count = 1**이다(`field.fracti
 LOW_SUPPORT_README = """# TSDF_LOW_SUPPORT_SURFACE
 
 ## 색상 의미
-- **자홍** (`0.95, 0.25, 0.75`): support_count <= {low}인 메시 정점 — 단 하나의 뷰만이 그 voxel에 field authority를 준 곳
-- **거의 검은 남색**: 학습된 2DGS 장면 전체(문맥용)
+- **자홍** (`0.95, 0.25, 0.75`): support_count <= {low}인 삼각형 — 단 하나의 뷰만이 그 voxel에 field authority를 준 곳
+- **어두운 회색** (`0.18, 0.19, 0.22`): 같은 메시의 나머지(support 충분) 부분. 자홍 영역이 전체 형태에서 어디에 붙어 있는지(고립된 다리 vs 이어진 얇은 구조) 보기 위한 문맥이며 별도 장면이 아니다
 
 ## 이 이미지가 보여주는 것
 **hallucination 후보 검토용**이다. directive에 따라 이 영역은 **삭제하지 않고 그대로 내보낸다**. 자홍이 실제 얇은 구조(잎, 다리)인지 아니면 근거 없는 다리(bridge)인지는 사람이 판단해야 하며, 정량 근거는 리포트의 `hallucination_audit`에 있다.
@@ -1182,6 +1182,33 @@ def _exports(
         torch.cuda.empty_cache()
         return {"point_cloud_ply": str(ply_path), "gaussian_count": written, "marker_points": count}
 
+    def render_mesh_view(
+        name: str, mesh_vertices: torch.Tensor, mesh_faces: torch.Tensor, vertex_colours: torch.Tensor, body: str,
+        *, shaded: bool = True,
+    ) -> dict[str, Any]:
+        """Actual triangle-mesh rendering (z-buffered), for views whose subject
+        IS a surface -- a scatter of marker points at surface vertices does not
+        read as a shape, especially where the surface is thin or the marker
+        stride is coarse. Uses `mesh_ops.rasterize_mesh_shaded`, which reuses
+        the SAME pixel-centre ray/triangle test as the raycast self-consistency
+        stage, so the silhouette is directly comparable.
+
+        `shaded=False` (used for support-count and low-support colour-coded
+        views) disables the Lambertian brightness term so the data-encoding
+        colour ramp is never confused with lighting."""
+
+        folder = output_root / name
+        for camera in preview_cameras:
+            image = mesh_ops.rasterize_mesh_shaded(
+                camera, mesh_vertices, mesh_faces, vertex_colours, shaded=shaded
+            )
+            array = image.detach().cpu().numpy()
+            if camera is preview_cameras[0]:
+                stages.write_png(folder / "render.png", array)
+            stages.write_png(preview_root / f"{name}__{camera.image_name}.png", array)
+        write_view_readme(folder, body, total_model_count)
+        return {"mesh_vertices": int(mesh_vertices.shape[0]), "mesh_faces": int(mesh_faces.shape[0])}
+
     # A -------------------------------------------------------- ORIGINAL_2DGS
     folder = output_root / "ORIGINAL_2DGS"
     ply_path = folder / _ITERATION_DIR / "point_cloud.ply"
@@ -1264,9 +1291,11 @@ def _exports(
     )
     stride = max(1, int(surface.vertices.shape[0]) // 400_000)
     marker_vertices = torch.tensor(surface.vertices[::stride], dtype=torch.float32, device=device)
-    paths["C_NEW_TSDF_VISIBLE_SURFACE"] = render_marker_view(
-        "NEW_TSDF_VISIBLE_SURFACE", marker_vertices,
-        torch.tensor([[0.20, 0.85, 0.40]], device=device).expand(marker_vertices.shape[0], 3).contiguous(),
+    tsdf_vertex_colours = torch.tensor([0.20, 0.85, 0.40], device=device).reshape(1, 3).expand(
+        vertices_gpu.shape[0], 3
+    ).contiguous()
+    paths["C_NEW_TSDF_VISIBLE_SURFACE"] = render_mesh_view(
+        "NEW_TSDF_VISIBLE_SURFACE", vertices_gpu, faces_gpu, tsdf_vertex_colours,
         TSDF_SURFACE_README.format(
             vertices=f"{int(surface.vertices.shape[0]):,}", faces=f"{int(surface.faces.shape[0]):,}",
             markers=f"{int(marker_vertices.shape[0]):,}",
@@ -1284,11 +1313,13 @@ def _exports(
     # D -------------------------------- HISTORICAL_VISIBLE_NURBS_BASELINE
     baseline_vertices = baseline.get("_vertices")
     if baseline_vertices is not None and baseline_vertices.shape[0]:
-        baseline_stride = max(1, int(baseline_vertices.shape[0]) // 400_000)
-        points = torch.tensor(baseline_vertices[::baseline_stride], dtype=torch.float32, device=device)
-        paths["D_HISTORICAL_VISIBLE_NURBS_BASELINE"] = render_marker_view(
-            "HISTORICAL_VISIBLE_NURBS_BASELINE", points,
-            torch.tensor([[0.95, 0.60, 0.15]], device=device).expand(points.shape[0], 3).contiguous(),
+        baseline_v_gpu = torch.tensor(baseline_vertices, dtype=torch.float32, device=device)
+        baseline_f_gpu = torch.tensor(baseline["_faces"], dtype=torch.int64, device=device)
+        baseline_colours = torch.tensor([0.95, 0.60, 0.15], device=device).reshape(1, 3).expand(
+            baseline_v_gpu.shape[0], 3
+        ).contiguous()
+        paths["D_HISTORICAL_VISIBLE_NURBS_BASELINE"] = render_mesh_view(
+            "HISTORICAL_VISIBLE_NURBS_BASELINE", baseline_v_gpu, baseline_f_gpu, baseline_colours,
             BASELINE_README.format(
                 components=baseline.get("arm_A_replay", {}).get("topology", {}).get("visible_component_count", 0),
                 singletons=baseline.get("arm_A_replay", {}).get("topology", {}).get("singleton_surfel_count", 0),
@@ -1302,7 +1333,8 @@ def _exports(
         mesh_ops.write_mesh_ply(
             mesh_dir / "historical_visible_nurbs_baseline.ply", baseline_vertices, baseline["_faces"]
         )
-        del points
+        del baseline_v_gpu, baseline_f_gpu, baseline_colours
+        torch.cuda.empty_cache()
     else:
         paths["D_HISTORICAL_VISIBLE_NURBS_BASELINE"] = {"status": "baseline arm not replayed in this run"}
 
@@ -1348,23 +1380,34 @@ def _exports(
     paths["F_MEDIAN_VS_TSDF_DEPTH_ERROR"] = {"views": [cameras[i].image_name for i in preview_indices]}
 
     # G / H ------------------------------ support count, low-support surface
-    support_markers = torch.tensor(surface.vertices[::stride], dtype=torch.float32, device=device)
-    support_values = surface.vertex_support_count[::stride]
-    paths["G_TSDF_SUPPORT_COUNT"] = render_marker_view(
-        "TSDF_SUPPORT_COUNT", support_markers,
-        torch.tensor(stages.support_to_rgb(support_values, support_cap), dtype=torch.float32, device=device),
+    # Full-mesh per-vertex colour (not the marker stride subsample) so the
+    # actual surface shape is legible, not just a scatter of sample points.
+    support_colours_full = torch.tensor(
+        stages.support_to_rgb(surface.vertex_support_count, support_cap), dtype=torch.float32, device=device
+    )
+    paths["G_TSDF_SUPPORT_COUNT"] = render_mesh_view(
+        "TSDF_SUPPORT_COUNT", vertices_gpu, faces_gpu, support_colours_full,
         SUPPORT_README.format(
             cap=f"{support_cap:.0f}",
             frac_1=report["field"]["fraction_support_count_1"],
             mean_support=report["field"]["support_count_distribution"]["mean"],
         ),
+        shaded=False,
     )
-    low_points = surface.vertices[low]
-    low_stride = max(1, int(low_points.shape[0]) // 400_000)
-    low_markers = torch.tensor(low_points[::low_stride], dtype=torch.float32, device=device)
-    paths["H_TSDF_LOW_SUPPORT_SURFACE"] = render_marker_view(
-        "TSDF_LOW_SUPPORT_SURFACE", low_markers,
-        torch.tensor([[0.95, 0.25, 0.75]], device=device).expand(low_markers.shape[0], 3).contiguous(),
+    del support_colours_full
+
+    # Low-support view: colour the WHOLE mesh, but only the low-support
+    # triangles get the flagged colour -- the rest is dimmed context so the
+    # flagged region's shape (thin structure vs. isolated bridge) is visible
+    # rather than a disconnected point scatter.
+    low_vertex_mask = torch.tensor(low, device=device)
+    low_colours = torch.where(
+        low_vertex_mask.unsqueeze(1),
+        torch.tensor([0.95, 0.25, 0.75], device=device).reshape(1, 3),
+        torch.tensor([0.18, 0.19, 0.22], device=device).reshape(1, 3),
+    )
+    paths["H_TSDF_LOW_SUPPORT_SURFACE"] = render_mesh_view(
+        "TSDF_LOW_SUPPORT_SURFACE", vertices_gpu, faces_gpu, low_colours,
         LOW_SUPPORT_README.format(
             low=LOW_SUPPORT_COUNT,
             tri_frac=report["hallucination_audit"].get("fraction_low_support", float("nan")),
@@ -1373,8 +1416,9 @@ def _exports(
                 / max(report["hallucination_audit"].get("sampled_mesh_points", 1), 1)
             ),
         ),
+        shaded=False,
     )
-    del support_markers, low_markers, marker_vertices
+    del low_vertex_mask, low_colours, marker_vertices
 
     # I ------------------------------ B_VS_TSDF_OCCLUSION_DISAGREEMENT
     wl120 = occlusion.get("worklog_120_original_4712", {})
