@@ -667,7 +667,12 @@ def main() -> None:
         distance_a = mesh_ops.nearest_surface_distance(world_a, triangle_index, max_radius=3)
         distance_b = mesh_ops.nearest_surface_distance(world_b, triangle_index, max_radius=3)
         distance_mid = mesh_ops.nearest_surface_distance(midpoint, triangle_index, max_radius=3)
-        component_lookup = _nearest_mesh_component(world_a, world_b, vertices_gpu, labels, device)
+        # This is peak GPU occupancy (field, mesh, triangle_index, mesh_depth_maps
+        # and depth_maps are all still resident); free transient allocations and
+        # use a smaller streaming chunk purely as a memory safety margin -- the
+        # nearest-vertex RESULT is identical regardless of chunk size.
+        torch.cuda.empty_cache()
+        component_lookup = _nearest_mesh_component(world_a, world_b, vertices_gpu, labels, device, chunk=1_000_000)
         source_view = bundle["context_view_index"]
         depth_behaviour = []
         for row in range(world_a.shape[0]):
@@ -731,6 +736,10 @@ def main() -> None:
     mesh_depth_maps = []
     del vertices_gpu, faces_gpu
     torch.cuda.empty_cache()
+    _progress(
+        f"  GPU before baseline replay: allocated {torch.cuda.memory_allocated()/2**30:.2f} GiB, "
+        f"reserved {torch.cuda.memory_reserved()/2**30:.2f} GiB"
+    )
     baseline = _baseline_arm(
         arguments, report, model, cameras, views, depth_maps, representative_maps,
         region_of_pixel, h, device, triangle_index, evidence_distance, evidence_region, counted,
@@ -1649,6 +1658,7 @@ def _nearest_vertex(points: torch.Tensor, vertices: torch.Tensor, *, chunk: int 
 
 def _nearest_mesh_component(
     world_a: torch.Tensor, world_b: torch.Tensor, vertices: torch.Tensor, labels: np.ndarray, device: str,
+    *, chunk: int = 4_000_000,
 ) -> tuple[np.ndarray, np.ndarray]:
     if vertices.shape[0] == 0:
         empty = np.full((world_a.shape[0],), -1, dtype=np.int64)
@@ -1656,7 +1666,7 @@ def _nearest_mesh_component(
     label_tensor = torch.tensor(labels, dtype=torch.int64, device=device)
     out = []
     for points in (world_a, world_b):
-        out.append(label_tensor[_nearest_vertex(points, vertices)].detach().cpu().numpy())
+        out.append(label_tensor[_nearest_vertex(points, vertices, chunk=chunk)].detach().cpu().numpy())
     return out[0], out[1]
 
 
