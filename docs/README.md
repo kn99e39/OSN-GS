@@ -394,3 +394,10 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 모든 Gaussian visualization은 고정적으로 Original Scene과 Observed/Occluded를 함께 포함한다. Original Scene은 해당 환경의 Gaussian만 원래 색상으로 렌더링하고, Observed/Occluded는 **동일한 Gaussian들의 색상만** Observed Space/Occluded Space 상태에 따라 바꾼다. 조명·shading·emissive 효과·추가 marker Gaussian·geometry 변경은 금지한다.
 
 고정 색상은 OBSERVED=(0.10,0.85,0.35) green, OCCLUDED=(0.92,0.18,0.18) red, UNRESOLVED=(0.60,0.60,0.62) gray다. Occluded Gaussian/volumetric representation이 실제로 없으면 marker를 발명해 표시하지 않으며, validated Occluded volumetric render가 승인된 경우에만 고정 두 결과와 함께 추가한다. 이전 WL123 EVENT_IDENTITY_EFFECT 출력은 이 contract 이전의 historical diagnostic output으로 보존하지만 canonical 비교 결과로 사용하지 않는다. 상세 계약은 [Worklog 125](worklogs/125_fixed_gaussian_visualization_contract.md)와 [AGENTS.md](../AGENTS.md) 문서에 기록했다.
+
+## 2026-08-31 Worklog 130 Parameterization / Termination / Target-Coherence Attribution
+
+- [Worklog 130](worklogs/130_parametric_continuation_attribution_before_occluded_surface.md)은 Worklog 128/129의 frozen fit과 prediction을 바꾸지 않고, final footpoint UV·실제 mesh-face interface·withheld face connectivity를 별도 분석했다.
+- 두 ROI의 frozen control grid replay는 tolerance 안에서 재현됐지만, terminal final-u support가 curved rim 51.6%, thin structure 58.2%이고 thin structure inversion fraction은 11.412%였다. fitted `u=1`의 실제 interface agreement도 thin structure에서 coverage `<=2h` 1.6%로 무너졌다.
+- primary withheld target의 interface-connected 비율은 vertices 76.64%, faces 85.68%로 단일-sheet gate를 통과하지 못했고 competing sheets가 공존했다. 원래 Worklog 129 metric은 frozen population과 재계산 결과가 일치했다.
+- 최종 판정은 **A. PARAMETERIZATION CONTRACT FAILED**다. second-order continuation, true-occluded prototype, canonical production 변경은 수행하지 않았다. 분석 모듈/출력은 `devtools/demo/parametric_continuation_attribution.py` 및 `output/demo_parametric_continuation_attribution/`에 격리했다.
