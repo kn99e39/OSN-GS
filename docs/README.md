@@ -423,3 +423,9 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - physical correspondence의 supported target은 median `3.717h`, p95 `10.866h`, coverage `<=h 6.69% / <=2h 21.75%`, normal median/p95 `24.39°/80.04°`였다. frozen face-interface에서 정의한 B 바닥은 median `0.660h`, p95 `30.298h`이고, bias-corrected residual의 overall curvature cosine은 `-0.674`, positive fraction `22.23%`였다.
 - fixed `0–2h, 2–4h, 4–8h, 8–16h, >16h` bins와 raw/bias-corrected residual을 기록했다. thin leg/brace는 32/32 fixed v row가 `definitely_no_intersection`이며 Gamma가 없다.
 - **최종 판정: B. PARTIAL FEASIBILITY DEMO — physical-v correspondence confounds the WL132 attribution.** second-order/third-order/q fitting, true-occluded prototype, canonical production 변경은 수행하지 않았다. 산출물은 `output/confirmed/demo_physical_correspondence_curvature_identifiability/`에 격리했다.
+
+## 2026-08-31 Worklog 134 Meeting Feasibility Demo
+
+- [Worklog 134](worklogs/134_meeting_occluded_surface_feasibility_demo.md)는 frozen Worklog 127 Visible Surface에서 curved table side/rim boundary holdout을 만들고, retained frontier 기반 first-order continuation과 observed top-side junction transfer를 별도로 검증한 비정규 meeting demo다.
+- H1은 median `6.988h`, p95 `13.488h`, coverage `<=h 1.57% / <=2h 8.81%`, H2는 `AMBIGUOUS` branch로 단일 prediction을 만들지 못했다. H1의 pseudo-volume 위반도 있어 controlled gate는 **C. CONTROLLED HOLDOUT FAILS**로 닫혔다.
+- 요청된 visualization-scope에 따라 raw fixed-view PNG overlay와 NPZ/PLY geometry를 `output/meeting_occluded_surface_feasibility/`에 출력했다. true-occluded prototype은 gate 실패로 실행하지 않았고 canonical research code는 변경하지 않았다.
