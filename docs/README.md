@@ -415,3 +415,11 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - curved rim은 supported Gamma `23/32`이고 target은 `11,640 supported / 360 unsupported`로 분리됐다. 지원 target의 correspondence-restricted Arm B는 median `4.012h`, coverage `<=h 5.52%`, distance-bin median `2.208h→4.895h`로 여전히 명확히 실패했다.
 - residual curvature 진단은 `median cosine(R,A)=-0.617`, `R·A>0=18.23%`라 candidate gate가 통과하지 못했다. second-order candidate, true-occluded prototype, canonical production 변경은 수행하지 않았다.
 - thin leg/brace는 32개 fixed v row 모두 `definitely_no_intersection`으로 분류됐고 새 Gamma는 만들지 않았다. 출력은 `output/demo_supported_termination_attribution/`에 격리했으며 최종 판정은 **C. FIRST-ORDER STILL FAILS ON CORRECTLY ISOLATED SUPPORTED TERMINATION; VISIBLE CURVATURE DOES NOT EXPLAIN IT**다.
+
+## 2026-08-31 Worklog 133 Physical Correspondence / Curvature Identifiability Closure
+
+- [Worklog 133](worklogs/133_physical_correspondence_curvature_identifiability_closure.md)는 WL132의 Gamma UV/XYZ, physical direction, ROI, holdout, first-order prediction, support mask를 재생하고 identity를 `PASS`로 확인한 뒤, fitted parametric-v와 Gamma XYZ에서 계산한 physical-v의 대응을 분리 비교했다.
+- curved rim에서 Gamma-v의 Pearson/Spearman은 `0.9983/1.0000`이지만 target assignment `3,919/12,000 (32.66%)`가 바뀌었고 supported target은 `11,640→11,920`으로 변했다. 따라서 WL132의 curvature attribution은 correspondence-confounded로 닫혔다.
+- physical correspondence의 supported target은 median `3.717h`, p95 `10.866h`, coverage `<=h 6.69% / <=2h 21.75%`, normal median/p95 `24.39°/80.04°`였다. frozen face-interface에서 정의한 B 바닥은 median `0.660h`, p95 `30.298h`이고, bias-corrected residual의 overall curvature cosine은 `-0.674`, positive fraction `22.23%`였다.
+- fixed `0–2h, 2–4h, 4–8h, 8–16h, >16h` bins와 raw/bias-corrected residual을 기록했다. thin leg/brace는 32/32 fixed v row가 `definitely_no_intersection`이며 Gamma가 없다.
+- **최종 판정: B. PARTIAL FEASIBILITY DEMO — physical-v correspondence confounds the WL132 attribution.** second-order/third-order/q fitting, true-occluded prototype, canonical production 변경은 수행하지 않았다. 산출물은 `output/confirmed/demo_physical_correspondence_curvature_identifiability/`에 격리했다.
