@@ -11,6 +11,7 @@
 - [Worklog 126: WL123 Fixed Observed/Occluded Gaussian Visualization](worklogs/126_wl123_fixed_observed_occluded_gaussian_visualization.md): WL125의 고정 Gaussian visualization 계약으로 생성한 실제 Original Scene / Observed/Occluded 결과
 - [Worklog 127: Novel-View Observed/Occluded Inspection Correction](worklogs/127_novel_view_observed_occluded_inspection_correction.md): query camera set 밖 novel inspection pose에서 다시 만든 현재 Observed/Occluded 결과
 - [Worklog 128: Real-scene Parametric Surface Continuation Feasibility Demo](worklogs/128_real_scene_parametric_surface_continuation_feasibility_demo.md): canonical 경로와 분리된 WL127 Visible Surface holdout/continuation meeting demo 및 negative verdict ([output](../output/demo_parametric_surface_continuation/README.md))
+- [Worklog 129: Corrected First-order Parametric Continuation Revalidation](worklogs/129_corrected_first_order_parametric_continuation_revalidation.md): WL128의 underscaled continuation defect를 historical baseline으로 보존한 corrected analytic Taylor Arm B 재검증 및 negative verdict ([output](../output/demo_corrected_first_order_parametric_continuation/README.md))
 
 ## 현재 상태
 
