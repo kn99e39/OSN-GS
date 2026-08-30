@@ -891,6 +891,251 @@ def _configure_axis(axis: Any, limits_points: np.ndarray) -> None:
     axis.set_title("")
 
 
+def _local_coordinates(points: np.ndarray, holdout: Holdout) -> np.ndarray:
+    """Express points in the holdout's readable local continuation frame."""
+
+    points = np.asarray(points, dtype=np.float64).reshape(-1, 3)
+    coordinates = np.column_stack([
+        points @ holdout.u_axis - holdout.u_cut,
+        points @ holdout.v_axis - 0.5 * (holdout.v_bounds[0] + holdout.v_bounds[1]),
+        points @ holdout.n_axis - float(np.median(holdout.retained_points @ holdout.n_axis)),
+    ])
+    return coordinates
+
+
+def _configure_local_axis(axis: Any, all_points: np.ndarray, holdout: Holdout, *, azim: float = -58.0, elev: float = 32.0) -> None:
+    local = _local_coordinates(all_points, holdout)
+    minimum = local.min(axis=0)
+    maximum = local.max(axis=0)
+    span = np.maximum(maximum - minimum, 1e-6)
+    padding = 0.06 * span
+    axis.set_xlim(float(minimum[0] - padding[0]), float(maximum[0] + padding[0]))
+    axis.set_ylim(float(minimum[1] - padding[1]), float(maximum[1] + padding[1]))
+    axis.set_zlim(float(minimum[2] - padding[2]), float(maximum[2] + padding[2]))
+    axis.set_box_aspect(tuple(np.maximum(span, 1e-6)))
+    axis.view_init(elev=elev, azim=azim)
+    axis.set_xlabel("u: continuation direction")
+    axis.set_ylabel("v: along patch")
+    axis.set_zlabel("n: surface height")
+
+
+def _plot_local_cloud_surface(axis: Any, points: np.ndarray, holdout: Holdout, color: Any, *, alpha: float = 0.55, max_points: int = 1400) -> None:
+    """Draw a readable low-density surface skin over a point cloud."""
+
+    points = np.asarray(points, dtype=np.float64).reshape(-1, 3)
+    if len(points) == 0:
+        return
+    local = _local_coordinates(deterministic_subsample(points, max_points), holdout)
+    axis.scatter(local[:, 0], local[:, 1], local[:, 2], s=2.0, color=color, alpha=min(0.95, alpha + 0.15), depthshade=False)
+    if len(local) < 8:
+        return
+    try:
+        import matplotlib.tri as mtri
+
+        triangulation = mtri.Triangulation(local[:, 0], local[:, 1])
+        axis.plot_trisurf(
+            local[:, 0],
+            local[:, 1],
+            local[:, 2],
+            triangles=triangulation.triangles,
+            color=color,
+            alpha=alpha,
+            linewidth=0.0,
+            antialiased=True,
+            shade=True,
+        )
+    except (ValueError, RuntimeError):
+        # The point cloud remains useful even when a degenerate local
+        # triangulation cannot be formed.
+        return
+
+
+def _plot_local_grid_surface(axis: Any, grid: np.ndarray, holdout: Holdout, color: Any, *, alpha: float = 0.80) -> None:
+    if grid is None or np.asarray(grid).ndim != 3 or np.asarray(grid).shape[0] < 2 or np.asarray(grid).shape[1] < 2:
+        return
+    local = _local_coordinates(np.asarray(grid).reshape(-1, 3), holdout).reshape(np.asarray(grid).shape)
+    axis.plot_surface(
+        local[:, :, 0],
+        local[:, :, 1],
+        local[:, :, 2],
+        color=color,
+        alpha=alpha,
+        linewidth=0.15,
+        edgecolor=(0.10, 0.35, 0.40, 0.30),
+        antialiased=True,
+        shade=True,
+    )
+
+
+def _plot_local_frontier(axis: Any, frontier: np.ndarray, holdout: Holdout) -> None:
+    if len(frontier) == 0:
+        return
+    local = _local_coordinates(frontier, holdout)
+    order = np.argsort(local[:, 1], kind="mergesort")
+    local = local[order]
+    axis.plot(local[:, 0], local[:, 1], local[:, 2], color=FRONTIER_YELLOW, linewidth=2.4, marker="o", markersize=2.5)
+
+
+def _plot_local_boundary(axis: Any, holdout: Holdout) -> None:
+    n_center = float(np.median(holdout.retained_points @ holdout.n_axis))
+    corners = np.asarray([
+        [holdout.u_cut, holdout.v_bounds[0], holdout.n_bounds[0]],
+        [holdout.u_cut, holdout.v_bounds[1], holdout.n_bounds[0]],
+        [holdout.u_cut, holdout.v_bounds[1], holdout.n_bounds[1]],
+        [holdout.u_cut, holdout.v_bounds[0], holdout.n_bounds[1]],
+    ])
+    world = corners[:, 0, None] * holdout.u_axis[None, :] + corners[:, 1, None] * holdout.v_axis[None, :] + corners[:, 2, None] * holdout.n_axis[None, :]
+    local = _local_coordinates(world, holdout)
+    for first, second in ((0, 1), (1, 2), (2, 3), (3, 0)):
+        axis.plot(local[[first, second], 0], local[[first, second], 1], local[[first, second], 2], color=FRONTIER_YELLOW, linewidth=1.2, alpha=0.55)
+    axis.plot([0.0, 0.0], [holdout.v_bounds[0] - 0.5 * sum(holdout.v_bounds), holdout.v_bounds[1] - 0.5 * sum(holdout.v_bounds)], [n_center - float(np.median(holdout.retained_points @ holdout.n_axis)), n_center - float(np.median(holdout.retained_points @ holdout.n_axis))], color=FRONTIER_YELLOW, linewidth=1.5)
+
+
+def _plot_local_footprint(axis: Any, holdout: Holdout, prediction: Prediction | None, branches: dict[str, Prediction]) -> None:
+    retained = _local_coordinates(holdout.retained_points, holdout)
+    target = _local_coordinates(holdout.withheld_points, holdout)
+    axis.scatter(retained[:, 0], retained[:, 1], s=1.5, color=OBSERVED_GREY, alpha=0.36, label="retained")
+    axis.scatter(target[:, 0], target[:, 1], s=1.5, color=HELDOUT_GREEN, alpha=0.48, label="withheld reference")
+    if prediction is not None and prediction.status == "VALID":
+        local = _local_coordinates(prediction.points, holdout)
+        axis.scatter(local[:, 0], local[:, 1], s=2.0, color=PREDICTED_CYAN, alpha=0.72, label="prediction")
+    for branch in branches.values():
+        local = _local_coordinates(branch.points, holdout)
+        axis.scatter(local[:, 0], local[:, 1], s=1.6, color=JUNCTION_MAGENTA, alpha=0.48)
+    axis.axvline(0.0, color=FRONTIER_YELLOW, linewidth=1.5)
+    axis.set_xlabel("u from visible termination")
+    axis.set_ylabel("v along patch")
+    axis.set_title("Footprint: retained / withheld / predicted")
+    axis.grid(alpha=0.22)
+
+
+def _plot_local_profile(axis: Any, holdout: Holdout, prediction: Prediction | None, branches: dict[str, Prediction]) -> None:
+    retained = _local_coordinates(holdout.retained_points, holdout)
+    target = _local_coordinates(holdout.withheld_points, holdout)
+    axis.scatter(retained[:, 0], retained[:, 2], s=1.5, color=OBSERVED_GREY, alpha=0.36)
+    axis.scatter(target[:, 0], target[:, 2], s=1.5, color=HELDOUT_GREEN, alpha=0.48)
+    if prediction is not None and prediction.status == "VALID":
+        local = _local_coordinates(prediction.points, holdout)
+        axis.scatter(local[:, 0], local[:, 2], s=2.0, color=PREDICTED_CYAN, alpha=0.72)
+    for branch in branches.values():
+        local = _local_coordinates(branch.points, holdout)
+        axis.scatter(local[:, 0], local[:, 2], s=1.6, color=JUNCTION_MAGENTA, alpha=0.48)
+    axis.axvline(0.0, color=FRONTIER_YELLOW, linewidth=1.5)
+    axis.set_xlabel("u from visible termination")
+    axis.set_ylabel("n: surface height")
+    axis.set_title("Side profile: continuation shape")
+    axis.grid(alpha=0.22)
+
+
+def write_intuitive_controlled_figure(
+    holdout: Holdout,
+    prediction: Prediction | None,
+    *,
+    output_path: Path,
+    title: str,
+    selected_branches: dict[str, Prediction] | None = None,
+) -> None:
+    """Export a local surface view that is readable as geometry, not a line cloud."""
+
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    branches = selected_branches or {}
+    target = holdout.withheld_points
+    generated = [branch.points for branch in branches.values()]
+    all_points = np.concatenate([
+        holdout.full_points,
+        target,
+        prediction.points if prediction is not None else np.empty((0, 3)),
+        *generated,
+    ], axis=0)
+    figure = plt.figure(figsize=(22, 9), facecolor="white")
+    axes = [figure.add_subplot(1, 4, index + 1, projection="3d") for index in range(4)]
+    for axis in axes:
+        _configure_local_axis(axis, all_points, holdout)
+
+    _plot_local_cloud_surface(axes[0], holdout.retained_points, holdout, OBSERVED_GREY, alpha=0.32)
+    _plot_local_cloud_surface(axes[0], target, holdout, HELDOUT_GREEN, alpha=0.58)
+    _plot_local_frontier(axes[0], prediction.frontier_points if prediction is not None else np.empty((0, 3)), holdout)
+    axes[0].set_title("A  Full reference\ngreen = withheld reference")
+
+    _plot_local_cloud_surface(axes[1], holdout.retained_points, holdout, OBSERVED_GREY, alpha=0.42)
+    _plot_local_frontier(axes[1], prediction.frontier_points if prediction is not None else np.empty((0, 3)), holdout)
+    _plot_local_boundary(axes[1], holdout)
+    axes[1].set_title("B  Visible-only input\nyellow = boundary / frontier")
+
+    _plot_local_cloud_surface(axes[2], holdout.retained_points, holdout, OBSERVED_GREY, alpha=0.20)
+    if prediction is not None and prediction.status == "VALID":
+        _plot_local_grid_surface(axes[2], prediction.points_grid, holdout, PREDICTED_CYAN)
+    for branch in branches.values():
+        _plot_local_grid_surface(axes[2], branch.points_grid, holdout, JUNCTION_MAGENTA, alpha=0.54)
+    axes[2].set_title("C  Continuation surface\ncyan = prediction, magenta = H2 branches")
+
+    _plot_local_cloud_surface(axes[3], holdout.retained_points, holdout, OBSERVED_GREY, alpha=0.22)
+    _plot_local_cloud_surface(axes[3], target, holdout, HELDOUT_GREEN, alpha=0.48)
+    if prediction is not None and prediction.status == "VALID":
+        _plot_local_grid_surface(axes[3], prediction.points_grid, holdout, PREDICTED_CYAN)
+    for branch in branches.values():
+        _plot_local_grid_surface(axes[3], branch.points_grid, holdout, JUNCTION_MAGENTA, alpha=0.46)
+    _plot_local_frontier(axes[3], prediction.frontier_points if prediction is not None else np.empty((0, 3)), holdout)
+    axes[3].set_title("D  Overlay\ngreen = withheld, cyan = generated")
+
+    figure.suptitle(title + " — local geometry view", fontsize=16, y=0.98)
+    figure.text(0.5, 0.01, "Local coordinates are a display transform; withheld reference is evaluation/overlay only.", ha="center", fontsize=10)
+    figure.tight_layout(rect=(0.0, 0.04, 1.0, 0.94))
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(output_path, dpi=180, bbox_inches="tight")
+    plt.close(figure)
+
+
+def write_intuitive_raw_overlay(
+    holdout: Holdout,
+    prediction: Prediction | None,
+    output_path: Path,
+    *,
+    title: str,
+    branch_predictions: dict[str, Prediction] | None = None,
+) -> None:
+    """Export compact raw 3D + footprint/profile inspection views."""
+
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    branches = branch_predictions or {}
+    target = holdout.withheld_points
+    generated = [branch.points for branch in branches.values()]
+    all_points = np.concatenate([
+        holdout.full_points,
+        target,
+        prediction.points if prediction is not None else np.empty((0, 3)),
+        *generated,
+    ], axis=0)
+    figure = plt.figure(figsize=(16, 7), facecolor="white")
+    axis = figure.add_subplot(1, 2, 1, projection="3d")
+    _configure_local_axis(axis, all_points, holdout, azim=-58.0, elev=32.0)
+    _plot_local_cloud_surface(axis, holdout.retained_points, holdout, OBSERVED_GREY, alpha=0.28)
+    _plot_local_cloud_surface(axis, target, holdout, HELDOUT_GREEN, alpha=0.52)
+    if prediction is not None and prediction.status == "VALID":
+        _plot_local_grid_surface(axis, prediction.points_grid, holdout, PREDICTED_CYAN)
+    for branch in branches.values():
+        _plot_local_grid_surface(axis, branch.points_grid, holdout, JUNCTION_MAGENTA, alpha=0.48)
+    _plot_local_frontier(axis, prediction.frontier_points if prediction is not None else np.empty((0, 3)), holdout)
+    axis.set_title("3D local surface")
+    profile_axis = figure.add_subplot(2, 2, 2)
+    _plot_local_footprint(profile_axis, holdout, prediction, branches)
+    side_axis = figure.add_subplot(2, 2, 4)
+    _plot_local_profile(side_axis, holdout, prediction, branches)
+    figure.suptitle(title + " — raw inspectable geometry", fontsize=15, y=0.98)
+    figure.tight_layout(rect=(0.0, 0.0, 1.0, 0.94))
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(output_path, dpi=180, bbox_inches="tight")
+    plt.close(figure)
+
+
 def write_controlled_figure(
     holdout: Holdout,
     prediction: Prediction | None,
@@ -1139,9 +1384,9 @@ def run_demo(arguments: argparse.Namespace) -> dict[str, Any]:
     h1_prediction = build_self_continuation(side_holdout, frontier_band_fraction=config.h1_frontier_band_fraction, frontier_bins=config.frontier_bins, continuation_samples=config.continuation_samples)
     h1_evaluation = evaluate_controlled_case(side_holdout, h1_prediction, h=h)
     h1_raw_overlay = output_root / "H1_self_continuation" / "raw_fixed_view_overlay.png"
-    write_raw_controlled_overlay(side_holdout, h1_prediction, h1_raw_overlay, title="H1 fixed-view holdout overlay")
+    write_intuitive_raw_overlay(side_holdout, h1_prediction, h1_raw_overlay, title="H1 fixed-view holdout overlay")
     h1_geometry = write_controlled_geometry(side_holdout, h1_prediction, output_root / "H1_self_continuation")
-    write_controlled_figure(side_holdout, h1_prediction, output_path=output_root / "H1_self_continuation" / "controlled_pseudo_occlusion.png", title="Controlled pseudo-occlusion — H1 self-continuation")
+    write_intuitive_controlled_figure(side_holdout, h1_prediction, output_path=output_root / "H1_self_continuation" / "controlled_pseudo_occlusion.png", title="Controlled pseudo-occlusion — H1 self-continuation")
 
     h2_prediction, h2_selection = build_junction_transfer(
         side_holdout,
@@ -1160,9 +1405,9 @@ def run_demo(arguments: argparse.Namespace) -> dict[str, Any]:
         for name, item in h2_selection["selection"]["branches"].items():
             h2_branches[name] = item[0]
     h2_raw_overlay = output_root / "H2_junction_transfer" / "raw_fixed_view_overlay.png"
-    write_raw_controlled_overlay(side_holdout, h2_prediction, h2_raw_overlay, title="H2 fixed-view holdout overlay", branch_predictions=h2_branches)
+    write_intuitive_raw_overlay(side_holdout, h2_prediction, h2_raw_overlay, title="H2 fixed-view holdout overlay", branch_predictions=h2_branches)
     h2_geometry = write_controlled_geometry(side_holdout, h2_prediction, output_root / "H2_junction_transfer", branch_predictions=h2_branches)
-    write_controlled_figure(side_holdout, h2_prediction, output_path=output_root / "H2_junction_transfer" / "controlled_pseudo_occlusion.png", title="Controlled pseudo-occlusion — H2 observed junction-pattern transfer", template=junction, selected_branches=h2_branches)
+    write_intuitive_controlled_figure(side_holdout, h2_prediction, output_path=output_root / "H2_junction_transfer" / "controlled_pseudo_occlusion.png", title="Controlled pseudo-occlusion — H2 observed junction-pattern transfer", selected_branches=h2_branches)
 
     # This is a qualitative gate for the human meeting review.  It records
     # fixed h-scaled diagnostics and never changes a construction parameter.
@@ -1347,7 +1592,9 @@ def run_demo(arguments: argparse.Namespace) -> dict[str, Any]:
         "# Worklog 134 — meeting occluded-surface feasibility demo\n\n"
         f"Meeting verdict: `{report['meeting_verdict']}`\n\n"
         "The controlled H1/H2 results are separate from canonical OSN-GS.\n"
-        "Held-out reconstructed visible-surface reference is evaluation-only.\n",
+        "Held-out reconstructed visible-surface reference is evaluation-only.\n"
+        "controlled_pseudo_occlusion.png is a local u/v/n surface view; raw_fixed_view_overlay.png includes 3D, footprint, and side-profile views.\n"
+        "NPZ/PLY geometry files are emitted beside each case for direct inspection.\n",
         encoding="utf-8",
     )
     return report

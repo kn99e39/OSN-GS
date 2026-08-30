@@ -13,6 +13,7 @@ from devtools.demo.meeting_occluded_surface_feasibility import (
     build_fixed_holdout,
     build_self_continuation,
     evaluate_controlled_case,
+    _local_coordinates,
     validate_branch,
 )
 
@@ -123,3 +124,13 @@ def test_construction_source_is_reference_free_and_h2_selection_contract_is_expl
     assert "withheld_points" not in validator
     assert "second_order" in source
     assert "free_space" in validator
+
+
+def test_local_display_frame_makes_boundary_and_continuation_readable_without_changing_geometry() -> None:
+    holdout = _holdout(_plane_points())
+    local_retained = _local_coordinates(holdout.retained_points, holdout)
+    local_withheld = _local_coordinates(holdout.withheld_points, holdout)
+    assert float(np.max(local_retained[:, 0])) <= 0.0
+    assert float(np.min(local_withheld[:, 0])) > 0.0
+    assert np.allclose(local_retained[:, 1], holdout.retained_points[:, 1] - 0.5)
+    assert np.allclose(local_retained[:, 2], holdout.retained_points[:, 2])
