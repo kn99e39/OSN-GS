@@ -401,3 +401,10 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - 두 ROI의 frozen control grid replay는 tolerance 안에서 재현됐지만, terminal final-u support가 curved rim 51.6%, thin structure 58.2%이고 thin structure inversion fraction은 11.412%였다. fitted `u=1`의 실제 interface agreement도 thin structure에서 coverage `<=2h` 1.6%로 무너졌다.
 - primary withheld target의 interface-connected 비율은 vertices 76.64%, faces 85.68%로 단일-sheet gate를 통과하지 못했고 competing sheets가 공존했다. 원래 Worklog 129 metric은 frozen population과 재계산 결과가 일치했다.
 - 최종 판정은 **A. PARAMETERIZATION CONTRACT FAILED**다. second-order continuation, true-occluded prototype, canonical production 변경은 수행하지 않았다. 분석 모듈/출력은 `devtools/demo/parametric_continuation_attribution.py` 및 `output/demo_parametric_continuation_attribution/`에 격리했다.
+
+## 2026-08-31 Worklog 131 Explicit Geometric Termination Mapping
+
+- [Worklog 131](worklogs/131_explicit_geometric_termination_mapping.md)은 `u=1` rectangular NURBS edge를 termination으로 부르지 않고, fixed physical holdout plane과 frozen observed-side NURBS의 교차곡선 `GEOMETRIC_TERMINATION_CURVE`를 사용해 같은 first-order continuation을 재검증했다.
+- curved rim은 32/32 plane roots, `u_gamma=0.9910–0.9976`, `d local_u/dl=1.0`을 얻었지만 full population median `3.179h→3.275h`, coverage `9.23%→8.83%`로 materially 개선되지 않았다. supported termination attribution도 median `3.308h`, coverage `8.83%`였다.
+- thin leg/brace는 fixed plane root가 0/32라 explicit termination을 구성하지 못했다. mesh fragmentation은 physical sheet 의미로 해석하지 않았다.
+- 최종 판정은 **C. EXPLICIT TERMINATION DOES NOT MATERIALLY HELP**다. second-order, true-occluded, canonical production 변경은 수행하지 않았고 결과는 `output/demo_explicit_geometric_termination_continuation/`에 격리했다.
