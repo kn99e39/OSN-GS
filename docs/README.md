@@ -408,3 +408,10 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - curved rim은 32/32 plane roots, `u_gamma=0.9910–0.9976`, `d local_u/dl=1.0`을 얻었지만 full population median `3.179h→3.275h`, coverage `9.23%→8.83%`로 materially 개선되지 않았다. supported termination attribution도 median `3.308h`, coverage `8.83%`였다.
 - thin leg/brace는 fixed plane root가 0/32라 explicit termination을 구성하지 못했다. mesh fragmentation은 physical sheet 의미로 해석하지 않았다.
 - 최종 판정은 **C. EXPLICIT TERMINATION DOES NOT MATERIALLY HELP**다. second-order, true-occluded, canonical production 변경은 수행하지 않았고 결과는 `output/demo_explicit_geometric_termination_continuation/`에 격리했다.
+
+## 2026-08-31 Worklog 132 Supported-Termination Attribution Contract Closure
+
+- [Worklog 132](worklogs/132_supported_termination_attribution_contract_closure.md)는 Worklog 131의 `Gamma`/ROI/plane/physical direction/first-order prediction을 동결한 채, 모든 withheld row를 정확히 하나의 nearest-v Gamma column에 배정하는 별도 attribution을 수행했다.
+- curved rim은 supported Gamma `23/32`이고 target은 `11,640 supported / 360 unsupported`로 분리됐다. 지원 target의 correspondence-restricted Arm B는 median `4.012h`, coverage `<=h 5.52%`, distance-bin median `2.208h→4.895h`로 여전히 명확히 실패했다.
+- residual curvature 진단은 `median cosine(R,A)=-0.617`, `R·A>0=18.23%`라 candidate gate가 통과하지 못했다. second-order candidate, true-occluded prototype, canonical production 변경은 수행하지 않았다.
+- thin leg/brace는 32개 fixed v row 모두 `definitely_no_intersection`으로 분류됐고 새 Gamma는 만들지 않았다. 출력은 `output/demo_supported_termination_attribution/`에 격리했으며 최종 판정은 **C. FIRST-ORDER STILL FAILS ON CORRECTLY ISOLATED SUPPORTED TERMINATION; VISIBLE CURVATURE DOES NOT EXPLAIN IT**다.
