@@ -448,3 +448,11 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - tabletop 후보는 oracle support 후에도 graphness fail, curved rim과 ground는 graphness-PASS 대표면이 생성됐지만 unsupported chart domain과 정성 alignment가 남아 최종 Stage A는 **F. MIXED / INCONCLUSIVE**로 기록했다.
 - WL127 PLY에 renderer primitive/contributor provenance가 없어 `NO_VALID_PRIMITIVE_PROVENANCE`로 닫았고, nearest-Gaussian proxy나 SH appearance membership score는 계산하지 않았다. 자동 membership, region growing, continuation, Occluded Surface, canonical renderer 변경은 수행하지 않았다.
 - 산출물은 `output/oracle_single_surface_support_appearance_evidence/`에 격리했으며 focused tests 23개가 통과했다.
+
+## 2026-08-31 Worklog 142 Multi-view Support Lifting / Projection / Depth / Physical-Sheet Attribution
+
+- [Worklog 142](worklogs/142_multi_view_support_lifting_projection_depth_physical_sheet_attribution.md)는 WL141의 MASK_ONLY_BASELINE을 그대로 재생하고, projection/coordinate contract와 canonical renderer depth_median 기반 depth-layer contamination을 분리 진단했다.
+- checkpoint Gaussian center projection은 세 control camera에서 renderer alpha alignment 0.998481/0.998726/0.998684로 기계적 PASS였고, WL141 support는 세 ROI 모두 row-ID count/hash 기준 exact 재현됐다.
+- 고정 WL139 mu depth rule 적용 결과 tabletop 1,367→0, curved rim 17,842→0, paver ground 6,220→0으로 MASK_PLUS_DEPTH_SUPPORT가 남지 않았다. curved rim은 세 camera에서 consistent/behind/in-front depth relation이 혼합됐다.
+- 최종 attribution은 F. MIXED / INCONCLUSIVE다. depth consistency는 layer contamination evidence이지만 physical-sheet identity proof가 아니므로 automatic membership, representative replay, continuation, Occluded Surface는 실행하지 않았다.
+- canonical renderer/checkpoint/161 cameras/WL127/WL139/WL141/Candidate B는 변경하지 않았고, 결과는 output/multi_view_support_lifting_projection_depth_attribution/에 격리했다. focused tests 10개가 통과했다.
