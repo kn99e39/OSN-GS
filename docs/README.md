@@ -441,3 +441,10 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - 실제 `DSC08111.JPG` raw scene에서 수동 camera-aligned curved table-side/rim seed를 추가했고, 기존 WL139 curved-rim 좌표는 paver/ground로 투영되는 historical alignment control로 분리했다. graphness pass 자체를 semantic alignment나 성공으로 해석하지 않는다.
 - 7개 ROI 중 graphness pass는 camera-aligned rim, historical control, adjacent side, patio이며 tabletop/leg/hedge는 materially multivalued로 fail-closed했다. primary representative proximity는 진단용이고 qualitative macro-shape는 `USER REVIEW REQUIRED`다.
 - raw/representative PLY·NPZ와 same-camera A/B/C/D PNG, 3D raw/representative/overlay/normal/boundary 출력을 `output/real_gaussian_scene_surface_validation/`에 생성했다. 상세 결과·남은 정합성 위험은 worklog를 따른다.
+
+## 2026-08-31 Worklog 141 Oracle Single-Surface Support / Renderer-Native Appearance Evidence
+
+- [Worklog 141](worklogs/141_oracle_single_surface_support_renderer_native_appearance_evidence.md)은 자동 Surface Membership 없이, WL127 raw Visible Surface에 고정된 3-camera polygon oracle support를 만들고 baseline spatial population과 동일한 WL139 graphness/fitter를 비교했다.
+- tabletop 후보는 oracle support 후에도 graphness fail, curved rim과 ground는 graphness-PASS 대표면이 생성됐지만 unsupported chart domain과 정성 alignment가 남아 최종 Stage A는 **F. MIXED / INCONCLUSIVE**로 기록했다.
+- WL127 PLY에 renderer primitive/contributor provenance가 없어 `NO_VALID_PRIMITIVE_PROVENANCE`로 닫았고, nearest-Gaussian proxy나 SH appearance membership score는 계산하지 않았다. 자동 membership, region growing, continuation, Occluded Surface, canonical renderer 변경은 수행하지 않았다.
+- 산출물은 `output/oracle_single_surface_support_appearance_evidence/`에 격리했으며 focused tests 23개가 통과했다.
