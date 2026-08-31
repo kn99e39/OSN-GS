@@ -433,3 +433,11 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - 요청된 visualization-scope에 따라 raw fixed-view PNG overlay와 NPZ/PLY geometry를 `output/meeting_occluded_surface_feasibility/`에 출력했다. true-occluded prototype은 gate 실패로 실행하지 않았고 canonical research code는 변경하지 않았다.
 - [Worklog 135](worklogs/135_meeting_demo_visualization_scope_correction.md)는 Worklog 134의 실험·gate·metric을 유지한 채 local `u/v/n` surface skin, generated grid surface, `u-v` footprint, `u-n` profile을 추가해 raw geometry를 직접 읽을 수 있도록 시각화 범위만 보정했다.
 - [Worklog 136](worklogs/136_semantically_aligned_occluded_surface_feasibility_demo.md)는 실제 leg/brace와 실제 tabletop-side source/target pair를 사용한 semantic-alignment feasibility demo를 별도 `devtools/demo`·output 경로에 추가했다. H1은 withheld median `4.684h`, coverage `<=h 3.12%`, H2는 measured source angle `77.63°`의 두 branch 모두 geometry gate reject로 **C. NEGATIVE FEASIBILITY RESULT**를 기록했다.
+
+## 2026-08-31 Worklog 140 Real Gaussian Scene 정성적 Surface Construction 검증
+
+- [Worklog 140](worklogs/140_real_gaussian_scene_surface_construction_validation.md)은 frozen trained 2DGS checkpoint, canonical renderer, WL127 raw Visible Surface, WL139 graphness/physical-chart representative를 실제 Gaussian Scene에서 정성적으로 대조하는 격리 평가다.
+- WL139 모듈·canonical renderer·checkpoint·WL127 결과는 변경하지 않았다. continuation, pseudo-occlusion, Candidate B, true-occluded prototype은 실행하지 않았다.
+- 실제 `DSC08111.JPG` raw scene에서 수동 camera-aligned curved table-side/rim seed를 추가했고, 기존 WL139 curved-rim 좌표는 paver/ground로 투영되는 historical alignment control로 분리했다. graphness pass 자체를 semantic alignment나 성공으로 해석하지 않는다.
+- 7개 ROI 중 graphness pass는 camera-aligned rim, historical control, adjacent side, patio이며 tabletop/leg/hedge는 materially multivalued로 fail-closed했다. primary representative proximity는 진단용이고 qualitative macro-shape는 `USER REVIEW REQUIRED`다.
+- raw/representative PLY·NPZ와 same-camera A/B/C/D PNG, 3D raw/representative/overlay/normal/boundary 출력을 `output/real_gaussian_scene_surface_validation/`에 생성했다. 상세 결과·남은 정합성 위험은 worklog를 따른다.
