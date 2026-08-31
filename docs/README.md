@@ -8,6 +8,7 @@
 - [현재 구현 파이프라인](current_framework.md): 논문·연구 보조용으로 현재 동작하는 Gaussian–canonical visible-NURBS–ADC lifecycle과 구현 수식을 설명
 - [NURBS Construction](nurbs_construction.md): NURBS 중간 표현과 구현 계약
 - [Worklog 138: Scale-Separated Visible Surface Representative](worklogs/138_scale_separated_visible_surface_representative_closure.md): raw Visible Surface와 retained-only NURBS representative의 scale-separated continuation audit 및 부분 feasibility 판정 ([output](../output/scale_separated_visible_surface_representative/README.md))
+- [Worklog 139: Physical-Chart-Constrained Surface Representative](worklogs/139_physical_chart_surface_representative_closure.md): frozen physical chart를 보존하는 graph B-spline representative, controlled continuation A/B 및 architecture 판정 ([output](../output/physical_chart_surface_representative/README.md))
 - [output/ 폴더 관리 규약](output_folder_conventions.md): gitignore된 `output/`의 번호 매김·`confirmed/` 이동·preview_png 통합 규칙(참조용 유일 문서)
 - [Worklog 126: WL123 Fixed Observed/Occluded Gaussian Visualization](worklogs/126_wl123_fixed_observed_occluded_gaussian_visualization.md): WL125의 고정 Gaussian visualization 계약으로 생성한 실제 Original Scene / Observed/Occluded 결과
 - [Worklog 127: Novel-View Observed/Occluded Inspection Correction](worklogs/127_novel_view_observed_occluded_inspection_correction.md): query camera set 밖 novel inspection pose에서 다시 만든 현재 Observed/Occluded 결과
