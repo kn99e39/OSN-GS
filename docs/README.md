@@ -456,3 +456,12 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - 고정 WL139 mu depth rule 적용 결과 tabletop 1,367→0, curved rim 17,842→0, paver ground 6,220→0으로 MASK_PLUS_DEPTH_SUPPORT가 남지 않았다. curved rim은 세 camera에서 consistent/behind/in-front depth relation이 혼합됐다.
 - 최종 attribution은 F. MIXED / INCONCLUSIVE다. depth consistency는 layer contamination evidence이지만 physical-sheet identity proof가 아니므로 automatic membership, representative replay, continuation, Occluded Surface는 실행하지 않았다.
 - canonical renderer/checkpoint/161 cameras/WL127/WL139/WL141/Candidate B는 변경하지 않았고, 결과는 output/multi_view_support_lifting_projection_depth_attribution/에 격리했다. focused tests 10개가 통과했다.
+
+
+## 2026-09-01 Worklog 143 Renderer median-depth 의미론 및 multi-view evidence aggregation 감사
+
+- [Worklog 143](worklogs/143_renderer_median_depth_semantics_multi_view_evidence_aggregation.md)는 canonical renderer의 `depth_median`을 실제 CUDA event 정의까지 추적하고, pixel/depth renderer-native self-consistency를 검증한 격리 진단이다.
+- 6개 deterministic camera에서 각 6,000개 sample의 reprojection p95가 `1.14e-13` 이하, absolute renderer-z residual p95가 `1.78e-15` 이하로 identity gate를 통과했다. `depth_median`은 Gaussian center z나 Euclidean ray length가 아니라 renderer event의 camera/view-space z다.
+- WL141/WL142 `MASK_ONLY_BASELINE`은 세 ROI에서 row-ID count/hash 기준 exact replay됐다. `tabletop 1,367`, `curved rim 17,842`, `paver 6,220`의 `>=2 NEAR`가 모두 0이어서 hard veto가 all-zero 원인이 아니었다. curved rim은 D1 676개만 남고 D2/D3는 0이었다.
+- 최종 attribution은 **C. DEPTH REPRESENTATION AND AGGREGATION ARE VALID, BUT THE HISTORICAL MASK SUPPORT HAS LITTLE DIRECT DEPTH CONSISTENCY**다. Surface Membership, representative/SH, continuation, true-occluded prototype, canonical production은 실행하거나 변경하지 않았다.
+- 산출물은 `output/multi_view_support_lifting_depth_semantics_evidence_aggregation/`에 격리했고, focused tests `14 passed` 및 실제 CUDA `failures=[]`를 확인했다.
