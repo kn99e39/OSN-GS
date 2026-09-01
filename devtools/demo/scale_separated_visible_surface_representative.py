@@ -55,8 +55,8 @@ from osn_gs.surface.torch_nurbs import (  # noqa: E402
 )
 
 
-WORKLOG_127_MESH = REPO_ROOT / "output/127_osn_gs_evidence_bounded_projective_tsdf/_cache/mesh.npz"
-WORKLOG_127_FIELD = REPO_ROOT / "output/127_osn_gs_evidence_bounded_projective_tsdf/_cache/field.npz"
+WORKLOG_127_MESH = REPO_ROOT / "output/confirmed/127_osn_gs_evidence_bounded_projective_tsdf/_cache/mesh.npz"
+WORKLOG_127_FIELD = REPO_ROOT / "output/confirmed/127_osn_gs_evidence_bounded_projective_tsdf/_cache/field.npz"
 
 # Existing fitter configuration.  This is frozen before either case is run;
 # it is deliberately shared by full and retained fits and is not swept.
@@ -1029,7 +1029,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mesh-cache", type=Path, default=WORKLOG_127_MESH)
     parser.add_argument("--field-cache", type=Path, default=WORKLOG_127_FIELD)
-    parser.add_argument("--out", type=Path, default=REPO_ROOT / "output/scale_separated_visible_surface_representative")
+    parser.add_argument("--out", type=Path, default=REPO_ROOT / "output/138_scale_separated_visible_surface_representative")
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
     parser.add_argument("--max-fit-points", type=int, default=12000)
     parser.add_argument("--max-reference-points", type=int, default=12000)

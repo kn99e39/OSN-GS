@@ -20,7 +20,7 @@ whole-scene Occluded Surface, production fitter 변경, second-order continuatio
 ## 구현 충실도 (IMPLEMENTATION FIDELITY)
 
 - 신규 경로는 `devtools/demo/physical_chart_surface_representative.py`와
-  `output/physical_chart_surface_representative/`에만 격리했다.
+  `output/confirmed/139_physical_chart_surface_representative/`에만 격리했다.
 - canonical renderer, Candidate B, TSDF, `osn_gs/surface/torch_nurbs.py`, WL138
   module과 confirmed artifact를 수정하지 않았다. 실행 전후 confirmed WL138 file
   manifest SHA가 동일함을 report에서 확인했다.
@@ -216,7 +216,7 @@ controlled `0–16h` signal은 있지만 필수 read-only Candidate B archive
 
 ## 시각화 및 geometry
 
-output root는 `output/physical_chart_surface_representative/`이다. near-opaque
+output root는 `output/confirmed/139_physical_chart_surface_representative/`이다. near-opaque
 raw/reference points(`alpha=0.98/0.99`, marker size `3.4`)와 동일 local physical-chart
 view를 사용했다. display-only voxel thinning `0.02`는 fit/metric/PLY/NPZ에 영향을
 주지 않는다.

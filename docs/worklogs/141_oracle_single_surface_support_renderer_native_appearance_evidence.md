@@ -2,7 +2,7 @@
 
 ## 의도와 격리
 
-이번 배치는 자동 `Surface Membership`를 구현하지 않고, WL127 raw Visible Surface Evidence의 혼합 membership와 WL139 representative family 문제를 분리하는 oracle upper-bound 진단이다. 새 코드는 `devtools/demo/oracle_single_surface_support_appearance_evidence.py`, 테스트는 `tests/test_oracle_single_surface_support_appearance_evidence.py`, 산출물은 `output/oracle_single_surface_support_appearance_evidence/`에 격리했다. WL127 geometry, frozen checkpoint, canonical renderer, WL139 graphness/fitter는 수정하지 않았다.
+이번 배치는 자동 `Surface Membership`를 구현하지 않고, WL127 raw Visible Surface Evidence의 혼합 membership와 WL139 representative family 문제를 분리하는 oracle upper-bound 진단이다. 새 코드는 `devtools/demo/oracle_single_surface_support_appearance_evidence.py`, 테스트는 `tests/test_oracle_single_surface_support_appearance_evidence.py`, 산출물은 `output/141_oracle_single_surface_support_appearance_evidence/`에 격리했다. WL127 geometry, frozen checkpoint, canonical renderer, WL139 graphness/fitter는 수정하지 않았다.
 
 ## Phase 0 — WL140 정성 보정 기록
 

@@ -177,9 +177,9 @@ artificial fan/divergence가 해결됐다고 말할 수 없다.
 
 - 모듈: `devtools/demo/explicit_geometric_termination_continuation.py`
 - 테스트: `tests/test_explicit_geometric_termination_continuation.py`
-- report: `output/demo_explicit_geometric_termination_continuation/explicit_geometric_termination_report.json`
-- curved-rim figure: `output/demo_explicit_geometric_termination_continuation/curved_rim_explicit_termination_figure.png`
-- distance figure: `output/demo_explicit_geometric_termination_continuation/distance_to_termination_ab.png`
+- report: `output/131_demo_explicit_geometric_termination_continuation/explicit_geometric_termination_report.json`
+- curved-rim figure: `output/131_demo_explicit_geometric_termination_continuation/curved_rim_explicit_termination_figure.png`
+- distance figure: `output/131_demo_explicit_geometric_termination_continuation/distance_to_termination_ab.png`
 - focused test: `6 passed, 1 warning` (pytest cache permission warning)
 - actual run: `cases=2`, meeting figure 미생성, root-free secondary를 포함해 정상 종료
 

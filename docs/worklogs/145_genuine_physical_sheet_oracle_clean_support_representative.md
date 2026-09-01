@@ -57,7 +57,7 @@ curved rim을 `PARTIAL / MIXED`로 보정하는 해석만 이 보고서에 기�
 
 ## 산출물 및 판정
 
-주요 산출물은 [`output/genuine_physical_sheet_oracle_clean_support_representative_audit/`](../../output/genuine_physical_sheet_oracle_clean_support_representative_audit/)에 있다. 각 case에 per-view provenance NPZ/PLY, common-world PNG, cross-view reprojection PNG가 있고, clear case에는 raw-only, representative-only, raw+representative, normals, supported/unsupported domain PNG가 있다.
+주요 산출물은 [`output/145_genuine_physical_sheet_oracle_clean_support_representative_audit/`](../../output/145_genuine_physical_sheet_oracle_clean_support_representative_audit/)에 있다. 각 case에 per-view provenance NPZ/PLY, common-world PNG, cross-view reprojection PNG가 있고, clear case에는 raw-only, representative-only, raw+representative, normals, supported/unsupported domain PNG가 있다.
 
 `tests/test_genuine_physical_sheet_oracle_clean_support_representative_audit.py`의
 focused tests는 `4 passed`였다. 실제 frozen CUDA 실행도 완료했다.

@@ -54,8 +54,8 @@ from devtools.demo.parametric_surface_continuation import (  # noqa: E402
 )
 
 
-WORKLOG_127_MESH = REPO_ROOT / "output/127_osn_gs_evidence_bounded_projective_tsdf/_cache/mesh.npz"
-WORKLOG_127_FIELD = REPO_ROOT / "output/127_osn_gs_evidence_bounded_projective_tsdf/_cache/field.npz"
+WORKLOG_127_MESH = REPO_ROOT / "output/confirmed/127_osn_gs_evidence_bounded_projective_tsdf/_cache/mesh.npz"
+WORKLOG_127_FIELD = REPO_ROOT / "output/confirmed/127_osn_gs_evidence_bounded_projective_tsdf/_cache/field.npz"
 CANDIDATE_B_ARCHIVE = REPO_ROOT / "output/confirmed/120_osn_gs_observed_occluded_volumetric_audit/observed_occluded_per_view_states.npz"
 
 OBSERVED_GREY = (0.58, 0.60, 0.63)
@@ -1022,7 +1022,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--mesh-cache", type=Path, default=WORKLOG_127_MESH)
     parser.add_argument("--field-cache", type=Path, default=WORKLOG_127_FIELD)
     parser.add_argument("--candidate-b-archive", type=Path, default=CANDIDATE_B_ARCHIVE)
-    parser.add_argument("--out", type=Path, default=REPO_ROOT / "output/semantically_aligned_occluded_surface_demo")
+    parser.add_argument("--out", type=Path, default=REPO_ROOT / "output/136_semantically_aligned_occluded_surface_demo")
     parser.add_argument("--max-scene-points", type=int, default=18000)
     parser.add_argument("--max-patch-points", type=int, default=24000)
     parser.add_argument("--controlled-gate", choices=("review", "h1_useful", "h2_useful", "negative"), default="review")

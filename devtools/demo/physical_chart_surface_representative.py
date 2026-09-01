@@ -60,9 +60,9 @@ from osn_gs.surface.torch_nurbs import (  # noqa: E402
 )
 
 
-OUTPUT_ROOT = REPO_ROOT / "output/physical_chart_surface_representative"
+OUTPUT_ROOT = REPO_ROOT / "output/139_physical_chart_surface_representative"
 WL138_MODULE = REPO_ROOT / "devtools/demo/scale_separated_visible_surface_representative.py"
-WL138_CONFIRMED_ROOT = REPO_ROOT / "output/confirmed/scale_separated_visible_surface_representative"
+WL138_CONFIRMED_ROOT = REPO_ROOT / "output/confirmed/138_scale_separated_visible_surface_representative"
 CANDIDATE_B_ARCHIVE = REPO_ROOT / "output/confirmed/120_osn_gs_observed_occluded_volumetric_audit/observed_occluded_per_view_states.npz"
 
 # Frozen historical representation settings.  The scalar graph solve uses the

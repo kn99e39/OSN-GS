@@ -90,7 +90,7 @@ def test_h2_source_angle_does_not_depend_on_target_reference() -> None:
 def test_demo_path_isolated_and_display_thinning_does_not_change_geometry() -> None:
     import devtools.demo.semantically_aligned_occluded_surface_demo as demo
 
-    assert "output/semantically_aligned_occluded_surface_demo" in str(demo.build_arg_parser().parse_args([]).out).replace("\\", "/")
+    assert "output/136_semantically_aligned_occluded_surface_demo" in str(demo.build_arg_parser().parse_args([]).out).replace("\\", "/")
     points = _brace_like_points()
     displayed = demo._display_subsample(points, 10000)
     assert len(displayed) <= len(points)

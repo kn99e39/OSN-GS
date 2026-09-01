@@ -85,15 +85,15 @@ from devtools.demo.scale_separated_visible_surface_representative import (  # no
 )
 
 
-OUTPUT_ROOT = REPO_ROOT / "output" / "genuine_physical_sheet_oracle_clean_support_representative_audit"
+OUTPUT_ROOT = REPO_ROOT / "output" / "145_genuine_physical_sheet_oracle_clean_support_representative_audit"
 RAW_VISIBLE_SURFACE = (
     REPO_ROOT / "output" / "confirmed" / "127_osn_gs_evidence_bounded_projective_tsdf"
     / "RENDERER_MEDIAN_SURFACE_POINTS" / "iteration_0000001" / "point_cloud.ply"
 )
-WL139_REPORT = REPO_ROOT / "output" / "confirmed" / "physical_chart_surface_representative" / "physical_chart_surface_representative_report.json"
-WL144_REPORT = REPO_ROOT / "output" / "per_view_renderer_surface_correspondence_physical_sheet_oracle_audit" / "per_view_renderer_surface_correspondence_physical_sheet_oracle_audit_report.json"
-WL141_REPORT = REPO_ROOT / "output" / "oracle_single_surface_support_appearance_evidence" / "oracle_single_surface_support_appearance_evidence_report.json"
-WL143_REPORT = REPO_ROOT / "output" / "multi_view_support_lifting_depth_semantics_evidence_aggregation" / "multi_view_support_lifting_depth_semantics_evidence_aggregation_report.json"
+WL139_REPORT = REPO_ROOT / "output" / "confirmed" / "139_physical_chart_surface_representative" / "physical_chart_surface_representative_report.json"
+WL144_REPORT = REPO_ROOT / "output" / "144_per_view_renderer_surface_correspondence_physical_sheet_oracle_audit" / "per_view_renderer_surface_correspondence_physical_sheet_oracle_audit_report.json"
+WL141_REPORT = REPO_ROOT / "output" / "141_oracle_single_surface_support_appearance_evidence" / "oracle_single_surface_support_appearance_evidence_report.json"
+WL143_REPORT = REPO_ROOT / "output" / "143_multi_view_support_lifting_depth_semantics_evidence_aggregation" / "multi_view_support_lifting_depth_semantics_evidence_aggregation_report.json"
 
 CAMERAS = ("DSC08043.JPG", "DSC07960.JPG", "DSC08003.JPG")
 LOCAL_NORMAL_NEIGHBORS = 12

@@ -63,7 +63,7 @@ from devtools.demo.physical_chart_surface_representative import (  # noqa: E402
 from devtools.demo.scale_separated_visible_surface_representative import FIXED_FITTER_CONFIG  # noqa: E402
 
 
-OUTPUT_ROOT = REPO_ROOT / "output" / "real_gaussian_scene_surface_validation"
+OUTPUT_ROOT = REPO_ROOT / "output" / "140_real_gaussian_scene_surface_validation"
 WL127_RAW_VISIBLE_SURFACE = (
     REPO_ROOT
     / "output"
@@ -73,7 +73,7 @@ WL127_RAW_VISIBLE_SURFACE = (
     / "iteration_0000001"
     / "point_cloud.ply"
 )
-WL139_REPORT = REPO_ROOT / "output" / "confirmed" / "scale_separated_visible_surface_representative" / "scale_separated_visible_surface_representative_report.json"
+WL139_REPORT = REPO_ROOT / "output" / "confirmed" / "138_scale_separated_visible_surface_representative" / "scale_separated_visible_surface_representative_report.json"
 DEFAULT_CHECKPOINT = REPO_ROOT / "output" / "arch_2dgs_coverage_first_surface" / "2dgs_run1" / "30000" / "checkpoint.pt"
 DEFAULT_SOURCE_PATH = REPO_ROOT / "DATASET"
 

@@ -12,7 +12,7 @@ horizon, NURBS control grid, Arm A/Arm B geometry를 모두 read-only로 보존�
 ## IMPLEMENTATION FIDELITY / 구현 충실도
 
 - 신규 모듈은 `devtools/demo/supported_termination_attribution.py`이며,
-  출력은 `output/demo_supported_termination_attribution/`에 격리했다.
+  출력은 `output/132_demo_supported_termination_attribution/`에 격리했다.
 - Worklog 131 보고서와 WL128 frozen control grid를 replay했다. replay가
   일치하지 않으면 attribution 및 curvature 단계로 진행하지 않도록 했다.
 - 각 withheld reference row의 frozen manual-normalized `v`에 대해
@@ -188,7 +188,7 @@ occluded prototype 및 canonical Occluded Surface도 실행하지 않았다.
 - warning은 `.pytest_cache` 생성 권한 경고이며 test failure가 아니다.
 - syntax check: new module/test `py_compile` 통과
 - actual run: `cases=2`, primary/secondary frozen replay `PASS`
-- report: `output/demo_supported_termination_attribution/supported_termination_attribution_report.json`
+- report: `output/132_demo_supported_termination_attribution/supported_termination_attribution_report.json`
 
 ## FINAL REPORT / 최종 판정
 

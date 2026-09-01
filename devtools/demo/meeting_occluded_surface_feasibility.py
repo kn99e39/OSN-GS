@@ -54,8 +54,8 @@ JUNCTION_MAGENTA = (0.85, 0.05, 0.70)
 PREDICTED_CYAN = (0.00, 0.72, 0.82)
 HELDOUT_GREEN = (0.10, 0.75, 0.32)
 
-WORKLOG_127_MESH = REPO_ROOT / "output/127_osn_gs_evidence_bounded_projective_tsdf/_cache/mesh.npz"
-WORKLOG_127_FIELD = REPO_ROOT / "output/127_osn_gs_evidence_bounded_projective_tsdf/_cache/field.npz"
+WORKLOG_127_MESH = REPO_ROOT / "output/confirmed/127_osn_gs_evidence_bounded_projective_tsdf/_cache/mesh.npz"
+WORKLOG_127_FIELD = REPO_ROOT / "output/confirmed/127_osn_gs_evidence_bounded_projective_tsdf/_cache/field.npz"
 CANDIDATE_B_ARCHIVE = REPO_ROOT / "output/confirmed/120_osn_gs_observed_occluded_volumetric_audit/observed_occluded_per_view_states.npz"
 
 
@@ -1605,7 +1605,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--mesh-cache", type=Path, default=WORKLOG_127_MESH)
     parser.add_argument("--field-cache", type=Path, default=WORKLOG_127_FIELD)
     parser.add_argument("--candidate-b-archive", type=Path, default=CANDIDATE_B_ARCHIVE)
-    parser.add_argument("--out", type=Path, default=REPO_ROOT / "output/meeting_occluded_surface_feasibility")
+    parser.add_argument("--out", type=Path, default=REPO_ROOT / "output/134_meeting_occluded_surface_feasibility")
     parser.add_argument("--max-scene-points", type=int, default=18000)
     parser.add_argument("--max-patch-points", type=int, default=24000)
     parser.add_argument("--controlled-gate", choices=("review", "positive", "negative"), default="review")

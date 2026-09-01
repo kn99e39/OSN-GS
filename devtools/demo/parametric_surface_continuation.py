@@ -1099,17 +1099,17 @@ XYZ는 evaluation/visualization/error에만 사용한다.
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    default_mesh = REPO_ROOT / "output/127_osn_gs_evidence_bounded_projective_tsdf/_cache/mesh.npz"
-    default_field = REPO_ROOT / "output/127_osn_gs_evidence_bounded_projective_tsdf/_cache/field.npz"
-    default_evidence = REPO_ROOT / "output/127_osn_gs_evidence_bounded_projective_tsdf/_cache/evidence.npz"
-    default_raycast = REPO_ROOT / "output/127_osn_gs_evidence_bounded_projective_tsdf/_cache/raycast.npz"
+    default_mesh = REPO_ROOT / "output/confirmed/127_osn_gs_evidence_bounded_projective_tsdf/_cache/mesh.npz"
+    default_field = REPO_ROOT / "output/confirmed/127_osn_gs_evidence_bounded_projective_tsdf/_cache/field.npz"
+    default_evidence = REPO_ROOT / "output/confirmed/127_osn_gs_evidence_bounded_projective_tsdf/_cache/evidence.npz"
+    default_raycast = REPO_ROOT / "output/confirmed/127_osn_gs_evidence_bounded_projective_tsdf/_cache/raycast.npz"
     default_original = REPO_ROOT / "output/arch_2dgs_coverage_first_surface/2dgs_run1/30000/render.ppm"
     parser.add_argument("--mesh-cache", type=Path, default=default_mesh)
     parser.add_argument("--field-cache", type=Path, default=default_field)
     parser.add_argument("--evidence-cache", type=Path, default=default_evidence)
     parser.add_argument("--raycast-cache", type=Path, default=default_raycast)
     parser.add_argument("--original-render", type=Path, default=default_original)
-    parser.add_argument("--out", type=Path, default=REPO_ROOT / "output/demo_parametric_surface_continuation")
+    parser.add_argument("--out", type=Path, default=REPO_ROOT / "output/128_demo_parametric_surface_continuation")
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
     parser.add_argument("--max-fit-points", type=int, default=12000)
     parser.add_argument("--max-reference-points", type=int, default=12000)

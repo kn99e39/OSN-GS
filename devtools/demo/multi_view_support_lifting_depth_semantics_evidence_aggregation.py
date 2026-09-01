@@ -59,7 +59,7 @@ from devtools.demo.real_gaussian_scene_surface_validation import (  # noqa: E402
 OUTPUT_ROOT = (
     REPO_ROOT
     / "output"
-    / "multi_view_support_lifting_depth_semantics_evidence_aggregation"
+    / "143_multi_view_support_lifting_depth_semantics_evidence_aggregation"
 )
 WL127_RAW_VISIBLE_SURFACE = (
     REPO_ROOT
@@ -74,19 +74,19 @@ WL139_REPORT = (
     REPO_ROOT
     / "output"
     / "confirmed"
-    / "scale_separated_visible_surface_representative"
+    / "138_scale_separated_visible_surface_representative"
     / "scale_separated_visible_surface_representative_report.json"
 )
 WL141_REPORT = (
     REPO_ROOT
     / "output"
-    / "oracle_single_surface_support_appearance_evidence"
+    / "141_oracle_single_surface_support_appearance_evidence"
     / "oracle_single_surface_support_appearance_evidence_report.json"
 )
 WL142_REPORT = (
     REPO_ROOT
     / "output"
-    / "multi_view_support_lifting_projection_depth_attribution"
+    / "142_multi_view_support_lifting_projection_depth_attribution"
     / "multi_view_support_lifting_projection_depth_attribution_report.json"
 )
 

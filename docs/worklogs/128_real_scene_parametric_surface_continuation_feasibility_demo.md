@@ -3,14 +3,14 @@
 ## 작업
 
 - canonical OSN-GS 경로를 변경하지 않고 `devtools/demo/`에 격리된 meeting-demo 모듈을 추가했다.
-- Worklog 127의 `output/127_osn_gs_evidence_bounded_projective_tsdf/_cache/mesh.npz`를 읽기 전용 reference geometry로 사용했다.
+- Worklog 127의 `output/confirmed/127_osn_gs_evidence_bounded_projective_tsdf/_cache/mesh.npz`를 읽기 전용 reference geometry로 사용했다.
 - 고정 수동 ROI 두 개를 만들었다.
   - `curved_table_rim`: curved table side/rim
   - `thin_table_leg_brace`: thin table leg/brace
 - 각 ROI에서 `u <= u_cut`만 fitting input으로 보존하고 `u > u_cut`은 boundary-attached withheld reference로 분리했다. 중앙 interior hole은 만들지 않았다.
 - 기존 `osn_gs.surface.torch_nurbs.fit_torch_visible_surface_lsq`를 그대로 호출하고, 마지막 control-column과 직전 column의 finite difference를 고정 continuation rule로 사용했다.
 - withheld geometry는 evaluation target, final visualization, quantitative error 계산에만 사용했다.
-- four-panel PNG, no-completion sanity baseline, error/normal backup map, WL127 TSDF context backup, JSON report를 `output/demo_parametric_surface_continuation/`에 생성했다.
+- four-panel PNG, no-completion sanity baseline, error/normal backup map, WL127 TSDF context backup, JSON report를 `output/128_demo_parametric_surface_continuation/`에 생성했다.
 
 ## 결과
 

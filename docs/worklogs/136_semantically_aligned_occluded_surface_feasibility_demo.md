@@ -19,7 +19,7 @@ meeting demo이다.
 ## IMPLEMENTATION FIDELITY
 
 새 구현은 [semantically_aligned_occluded_surface_demo.py](../../devtools/demo/semantically_aligned_occluded_surface_demo.py)와
-전용 출력 `output/semantically_aligned_occluded_surface_demo/`에만 있다.
+전용 출력 `output/136_semantically_aligned_occluded_surface_demo/`에만 있다.
 기존 WL134 구현과 output은 재실행·수정하지 않았다.
 
 수동 선택은 leg/brace ROI, source/target tabletop-side box, world

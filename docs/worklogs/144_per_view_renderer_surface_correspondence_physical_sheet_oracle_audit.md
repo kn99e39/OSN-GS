@@ -113,7 +113,7 @@
 - focused tests: `19 passed in 1.82s`
 - module `py_compile`: 통과
 - 실제 고정 CUDA audit: `COMPLETED_DIAGNOSTIC_AUDIT`, `COMPLETED_CASE_REVIEW`, `failures=[]`
-- 산출물: `output/per_view_renderer_surface_correspondence_physical_sheet_oracle_audit/`
+- 산출물: `output/144_per_view_renderer_surface_correspondence_physical_sheet_oracle_audit/`
 - 주요 파일: root report, 각 case `case_report.json`, `per_view_event_clouds/`, `3d_review/`, `cross_view_reprojection_overlays/`, pairwise/attribution/overlap NPZ
 
 canonical renderer/checkpoint, 161 camera calibration, WL127–143 historical artifact, Candidate B는 변경하지 않았다.

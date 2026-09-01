@@ -7,13 +7,14 @@
 - [Architecture](architecture.md): 프레임워크 수준의 설계 결정
 - [현재 구현 파이프라인](current_framework.md): 논문·연구 보조용으로 현재 동작하는 Gaussian–canonical visible-NURBS–ADC lifecycle과 구현 수식을 설명
 - [NURBS Construction](nurbs_construction.md): NURBS 중간 표현과 구현 계약
-- [Worklog 138: Scale-Separated Visible Surface Representative](worklogs/138_scale_separated_visible_surface_representative_closure.md): raw Visible Surface와 retained-only NURBS representative의 scale-separated continuation audit 및 부분 feasibility 판정 ([output](../output/scale_separated_visible_surface_representative/README.md))
-- [Worklog 139: Physical-Chart-Constrained Surface Representative](worklogs/139_physical_chart_surface_representative_closure.md): frozen physical chart를 보존하는 graph B-spline representative, controlled continuation A/B 및 architecture 판정 ([output](../output/physical_chart_surface_representative/README.md))
+- [Worklog 138: Scale-Separated Visible Surface Representative](worklogs/138_scale_separated_visible_surface_representative_closure.md): raw Visible Surface와 retained-only NURBS representative의 scale-separated continuation audit 및 부분 feasibility 판정 ([output](../output/confirmed/138_scale_separated_visible_surface_representative/README.md))
+- [Worklog 139: Physical-Chart-Constrained Surface Representative](worklogs/139_physical_chart_surface_representative_closure.md): frozen physical chart를 보존하는 graph B-spline representative, controlled continuation A/B 및 architecture 판정 ([output](../output/confirmed/139_physical_chart_surface_representative/README.md))
+- [Worklog 146: 산출물 폴더 Worklog 번호 정규화](worklogs/146_output_worklog_prefix_normalization.md): `output/` 및 `output/confirmed/`의 Worklog 산출물 루트에 대응 번호 prefix를 적용하고 demo/문서 참조를 동기화
 - [output/ 폴더 관리 규약](output_folder_conventions.md): gitignore된 `output/`의 번호 매김·`confirmed/` 이동·preview_png 통합 규칙(참조용 유일 문서)
 - [Worklog 126: WL123 Fixed Observed/Occluded Gaussian Visualization](worklogs/126_wl123_fixed_observed_occluded_gaussian_visualization.md): WL125의 고정 Gaussian visualization 계약으로 생성한 실제 Original Scene / Observed/Occluded 결과
 - [Worklog 127: Novel-View Observed/Occluded Inspection Correction](worklogs/127_novel_view_observed_occluded_inspection_correction.md): query camera set 밖 novel inspection pose에서 다시 만든 현재 Observed/Occluded 결과
-- [Worklog 128: Real-scene Parametric Surface Continuation Feasibility Demo](worklogs/128_real_scene_parametric_surface_continuation_feasibility_demo.md): canonical 경로와 분리된 WL127 Visible Surface holdout/continuation meeting demo 및 negative verdict ([output](../output/demo_parametric_surface_continuation/README.md))
-- [Worklog 129: Corrected First-order Parametric Continuation Revalidation](worklogs/129_corrected_first_order_parametric_continuation_revalidation.md): WL128의 underscaled continuation defect를 historical baseline으로 보존한 corrected analytic Taylor Arm B 재검증 및 negative verdict ([output](../output/demo_corrected_first_order_parametric_continuation/README.md))
+- [Worklog 128: Real-scene Parametric Surface Continuation Feasibility Demo](worklogs/128_real_scene_parametric_surface_continuation_feasibility_demo.md): canonical 경로와 분리된 WL127 Visible Surface holdout/continuation meeting demo 및 negative verdict ([output](../output/128_demo_parametric_surface_continuation/README.md))
+- [Worklog 129: Corrected First-order Parametric Continuation Revalidation](worklogs/129_corrected_first_order_parametric_continuation_revalidation.md): WL128의 underscaled continuation defect를 historical baseline으로 보존한 corrected analytic Taylor Arm B 재검증 및 negative verdict ([output](../output/129_demo_corrected_first_order_parametric_continuation/README.md))
 
 ## 현재 상태
 
@@ -402,21 +403,21 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - [Worklog 130](worklogs/130_parametric_continuation_attribution_before_occluded_surface.md)은 Worklog 128/129의 frozen fit과 prediction을 바꾸지 않고, final footpoint UV·실제 mesh-face interface·withheld face connectivity를 별도 분석했다.
 - 두 ROI의 frozen control grid replay는 tolerance 안에서 재현됐지만, terminal final-u support가 curved rim 51.6%, thin structure 58.2%이고 thin structure inversion fraction은 11.412%였다. fitted `u=1`의 실제 interface agreement도 thin structure에서 coverage `<=2h` 1.6%로 무너졌다.
 - primary withheld target의 interface-connected 비율은 vertices 76.64%, faces 85.68%로 단일-sheet gate를 통과하지 못했고 competing sheets가 공존했다. 원래 Worklog 129 metric은 frozen population과 재계산 결과가 일치했다.
-- 최종 판정은 **A. PARAMETERIZATION CONTRACT FAILED**다. second-order continuation, true-occluded prototype, canonical production 변경은 수행하지 않았다. 분석 모듈/출력은 `devtools/demo/parametric_continuation_attribution.py` 및 `output/demo_parametric_continuation_attribution/`에 격리했다.
+- 최종 판정은 **A. PARAMETERIZATION CONTRACT FAILED**다. second-order continuation, true-occluded prototype, canonical production 변경은 수행하지 않았다. 분석 모듈/출력은 `devtools/demo/parametric_continuation_attribution.py` 및 `output/130_demo_parametric_continuation_attribution/`에 격리했다.
 
 ## 2026-08-31 Worklog 131 Explicit Geometric Termination Mapping
 
 - [Worklog 131](worklogs/131_explicit_geometric_termination_mapping.md)은 `u=1` rectangular NURBS edge를 termination으로 부르지 않고, fixed physical holdout plane과 frozen observed-side NURBS의 교차곡선 `GEOMETRIC_TERMINATION_CURVE`를 사용해 같은 first-order continuation을 재검증했다.
 - curved rim은 32/32 plane roots, `u_gamma=0.9910–0.9976`, `d local_u/dl=1.0`을 얻었지만 full population median `3.179h→3.275h`, coverage `9.23%→8.83%`로 materially 개선되지 않았다. supported termination attribution도 median `3.308h`, coverage `8.83%`였다.
 - thin leg/brace는 fixed plane root가 0/32라 explicit termination을 구성하지 못했다. mesh fragmentation은 physical sheet 의미로 해석하지 않았다.
-- 최종 판정은 **C. EXPLICIT TERMINATION DOES NOT MATERIALLY HELP**다. second-order, true-occluded, canonical production 변경은 수행하지 않았고 결과는 `output/demo_explicit_geometric_termination_continuation/`에 격리했다.
+- 최종 판정은 **C. EXPLICIT TERMINATION DOES NOT MATERIALLY HELP**다. second-order, true-occluded, canonical production 변경은 수행하지 않았고 결과는 `output/131_demo_explicit_geometric_termination_continuation/`에 격리했다.
 
 ## 2026-08-31 Worklog 132 Supported-Termination Attribution Contract Closure
 
 - [Worklog 132](worklogs/132_supported_termination_attribution_contract_closure.md)는 Worklog 131의 `Gamma`/ROI/plane/physical direction/first-order prediction을 동결한 채, 모든 withheld row를 정확히 하나의 nearest-v Gamma column에 배정하는 별도 attribution을 수행했다.
 - curved rim은 supported Gamma `23/32`이고 target은 `11,640 supported / 360 unsupported`로 분리됐다. 지원 target의 correspondence-restricted Arm B는 median `4.012h`, coverage `<=h 5.52%`, distance-bin median `2.208h→4.895h`로 여전히 명확히 실패했다.
 - residual curvature 진단은 `median cosine(R,A)=-0.617`, `R·A>0=18.23%`라 candidate gate가 통과하지 못했다. second-order candidate, true-occluded prototype, canonical production 변경은 수행하지 않았다.
-- thin leg/brace는 32개 fixed v row 모두 `definitely_no_intersection`으로 분류됐고 새 Gamma는 만들지 않았다. 출력은 `output/demo_supported_termination_attribution/`에 격리했으며 최종 판정은 **C. FIRST-ORDER STILL FAILS ON CORRECTLY ISOLATED SUPPORTED TERMINATION; VISIBLE CURVATURE DOES NOT EXPLAIN IT**다.
+- thin leg/brace는 32개 fixed v row 모두 `definitely_no_intersection`으로 분류됐고 새 Gamma는 만들지 않았다. 출력은 `output/132_demo_supported_termination_attribution/`에 격리했으며 최종 판정은 **C. FIRST-ORDER STILL FAILS ON CORRECTLY ISOLATED SUPPORTED TERMINATION; VISIBLE CURVATURE DOES NOT EXPLAIN IT**다.
 
 ## 2026-08-31 Worklog 133 Physical Correspondence / Curvature Identifiability Closure
 
@@ -430,7 +431,7 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 
 - [Worklog 134](worklogs/134_meeting_occluded_surface_feasibility_demo.md)는 frozen Worklog 127 Visible Surface에서 curved table side/rim boundary holdout을 만들고, retained frontier 기반 first-order continuation과 observed top-side junction transfer를 별도로 검증한 비정규 meeting demo다.
 - H1은 median `6.988h`, p95 `13.488h`, coverage `<=h 1.57% / <=2h 8.81%`, H2는 `AMBIGUOUS` branch로 단일 prediction을 만들지 못했다. H1의 pseudo-volume 위반도 있어 controlled gate는 **C. CONTROLLED HOLDOUT FAILS**로 닫혔다.
-- 요청된 visualization-scope에 따라 raw fixed-view PNG overlay와 NPZ/PLY geometry를 `output/meeting_occluded_surface_feasibility/`에 출력했다. true-occluded prototype은 gate 실패로 실행하지 않았고 canonical research code는 변경하지 않았다.
+- 요청된 visualization-scope에 따라 raw fixed-view PNG overlay와 NPZ/PLY geometry를 `output/134_meeting_occluded_surface_feasibility/`에 출력했다. true-occluded prototype은 gate 실패로 실행하지 않았고 canonical research code는 변경하지 않았다.
 - [Worklog 135](worklogs/135_meeting_demo_visualization_scope_correction.md)는 Worklog 134의 실험·gate·metric을 유지한 채 local `u/v/n` surface skin, generated grid surface, `u-v` footprint, `u-n` profile을 추가해 raw geometry를 직접 읽을 수 있도록 시각화 범위만 보정했다.
 - [Worklog 136](worklogs/136_semantically_aligned_occluded_surface_feasibility_demo.md)는 실제 leg/brace와 실제 tabletop-side source/target pair를 사용한 semantic-alignment feasibility demo를 별도 `devtools/demo`·output 경로에 추가했다. H1은 withheld median `4.684h`, coverage `<=h 3.12%`, H2는 measured source angle `77.63°`의 두 branch 모두 geometry gate reject로 **C. NEGATIVE FEASIBILITY RESULT**를 기록했다.
 
@@ -440,14 +441,14 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - WL139 모듈·canonical renderer·checkpoint·WL127 결과는 변경하지 않았다. continuation, pseudo-occlusion, Candidate B, true-occluded prototype은 실행하지 않았다.
 - 실제 `DSC08111.JPG` raw scene에서 수동 camera-aligned curved table-side/rim seed를 추가했고, 기존 WL139 curved-rim 좌표는 paver/ground로 투영되는 historical alignment control로 분리했다. graphness pass 자체를 semantic alignment나 성공으로 해석하지 않는다.
 - 7개 ROI 중 graphness pass는 camera-aligned rim, historical control, adjacent side, patio이며 tabletop/leg/hedge는 materially multivalued로 fail-closed했다. primary representative proximity는 진단용이고 qualitative macro-shape는 `USER REVIEW REQUIRED`다.
-- raw/representative PLY·NPZ와 same-camera A/B/C/D PNG, 3D raw/representative/overlay/normal/boundary 출력을 `output/real_gaussian_scene_surface_validation/`에 생성했다. 상세 결과·남은 정합성 위험은 worklog를 따른다.
+- raw/representative PLY·NPZ와 same-camera A/B/C/D PNG, 3D raw/representative/overlay/normal/boundary 출력을 `output/confirmed/140_real_gaussian_scene_surface_validation/`에 생성했다. 상세 결과·남은 정합성 위험은 worklog를 따른다.
 
 ## 2026-08-31 Worklog 141 Oracle Single-Surface Support / Renderer-Native Appearance Evidence
 
 - [Worklog 141](worklogs/141_oracle_single_surface_support_renderer_native_appearance_evidence.md)은 자동 Surface Membership 없이, WL127 raw Visible Surface에 고정된 3-camera polygon oracle support를 만들고 baseline spatial population과 동일한 WL139 graphness/fitter를 비교했다.
 - tabletop 후보는 oracle support 후에도 graphness fail, curved rim과 ground는 graphness-PASS 대표면이 생성됐지만 unsupported chart domain과 정성 alignment가 남아 최종 Stage A는 **F. MIXED / INCONCLUSIVE**로 기록했다.
 - WL127 PLY에 renderer primitive/contributor provenance가 없어 `NO_VALID_PRIMITIVE_PROVENANCE`로 닫았고, nearest-Gaussian proxy나 SH appearance membership score는 계산하지 않았다. 자동 membership, region growing, continuation, Occluded Surface, canonical renderer 변경은 수행하지 않았다.
-- 산출물은 `output/oracle_single_surface_support_appearance_evidence/`에 격리했으며 focused tests 23개가 통과했다.
+- 산출물은 `output/141_oracle_single_surface_support_appearance_evidence/`에 격리했으며 focused tests 23개가 통과했다.
 
 ## 2026-08-31 Worklog 142 Multi-view Support Lifting / Projection / Depth / Physical-Sheet Attribution
 
@@ -455,7 +456,7 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - checkpoint Gaussian center projection은 세 control camera에서 renderer alpha alignment 0.998481/0.998726/0.998684로 기계적 PASS였고, WL141 support는 세 ROI 모두 row-ID count/hash 기준 exact 재현됐다.
 - 고정 WL139 mu depth rule 적용 결과 tabletop 1,367→0, curved rim 17,842→0, paver ground 6,220→0으로 MASK_PLUS_DEPTH_SUPPORT가 남지 않았다. curved rim은 세 camera에서 consistent/behind/in-front depth relation이 혼합됐다.
 - 최종 attribution은 F. MIXED / INCONCLUSIVE다. depth consistency는 layer contamination evidence이지만 physical-sheet identity proof가 아니므로 automatic membership, representative replay, continuation, Occluded Surface는 실행하지 않았다.
-- canonical renderer/checkpoint/161 cameras/WL127/WL139/WL141/Candidate B는 변경하지 않았고, 결과는 output/multi_view_support_lifting_projection_depth_attribution/에 격리했다. focused tests 10개가 통과했다.
+- canonical renderer/checkpoint/161 cameras/WL127/WL139/WL141/Candidate B는 변경하지 않았고, 결과는 output/142_multi_view_support_lifting_projection_depth_attribution/에 격리했다. focused tests 10개가 통과했다.
 
 
 ## 2026-09-01 Worklog 143 Renderer median-depth 의미론 및 multi-view evidence aggregation 감사
@@ -464,7 +465,7 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - 6개 deterministic camera에서 각 6,000개 sample의 reprojection p95가 `1.14e-13` 이하, absolute renderer-z residual p95가 `1.78e-15` 이하로 identity gate를 통과했다. `depth_median`은 Gaussian center z나 Euclidean ray length가 아니라 renderer event의 camera/view-space z다.
 - WL141/WL142 `MASK_ONLY_BASELINE`은 세 ROI에서 row-ID count/hash 기준 exact replay됐다. `tabletop 1,367`, `curved rim 17,842`, `paver 6,220`의 `>=2 NEAR`가 모두 0이어서 hard veto가 all-zero 원인이 아니었다. curved rim은 D1 676개만 남고 D2/D3는 0이었다.
 - 최종 attribution은 **C. DEPTH REPRESENTATION AND AGGREGATION ARE VALID, BUT THE HISTORICAL MASK SUPPORT HAS LITTLE DIRECT DEPTH CONSISTENCY**다. Surface Membership, representative/SH, continuation, true-occluded prototype, canonical production은 실행하거나 변경하지 않았다.
-- 산출물은 `output/multi_view_support_lifting_depth_semantics_evidence_aggregation/`에 격리했고, focused tests `14 passed` 및 실제 CUDA `failures=[]`를 확인했다.
+- 산출물은 `output/143_multi_view_support_lifting_depth_semantics_evidence_aggregation/`에 격리했고, focused tests `14 passed` 및 실제 CUDA `failures=[]`를 확인했다.
 
 
 ## 2026-09-02 Worklog 144 Per-view renderer surface correspondence 및 physical-sheet oracle audit
@@ -473,7 +474,7 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - 세 ROI 모두 per-view cloud를 별도 저장하고 common-world 3D view, all-target raw reprojection, continuous pairwise distance, fixed-k local differential agreement를 생성했다. WL127 point identity를 multi-view에서 직접 요구하지 않는다.
 - tabletop pairwise reciprocal median은 `118.67h` 이상, paver는 `62.70h` 이상이며, curved rim도 한 pair만 median `1.84h`이고 나머지는 `33.07h/34.64h`였다. WL127 MASK_ONLY point에 대한 nearest/second/third cloud distance도 별도 diagnostic으로 기록했다.
 - 직접 3D/reprojection review와 정량 분포를 결합한 세 case classification은 모두 **C. SEMANTIC_MASK_MISASSOCIATION**이다. frozen masks가 한 physical sheet가 아니라 ground/tabletop/brace/front-side 구조를 함께 선택한다.
-- 자동 Surface Membership, 새 vote/threshold, KNN selection, NURBS/continuation/Occluded Surface, Candidate B 및 canonical code는 변경하지 않았다. 산출물은 `output/per_view_renderer_surface_correspondence_physical_sheet_oracle_audit/`에 격리했다.
+- 자동 Surface Membership, 새 vote/threshold, KNN selection, NURBS/continuation/Occluded Surface, Candidate B 및 canonical code는 변경하지 않았다. 산출물은 `output/144_per_view_renderer_surface_correspondence_physical_sheet_oracle_audit/`에 격리했다.
 
 
 ## 2026-09-02 Worklog 145 Genuine physical-sheet oracle 및 clean-support representative 검증
@@ -481,4 +482,4 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - [Worklog 145](worklogs/145_genuine_physical_sheet_oracle_clean_support_representative.md)는 WL141 historical mask를 고치지 않고, 새로 수동 동결한 image-space interior polygon에서 canonical renderer `depth_median` event를 per-view로 복원해 genuine physical-sheet oracle을 검토했다.
 - `tabletop_broad_planar_clean`은 세 독립 cloud의 pairwise reciprocal median `1.31h~1.83h`와 common-world/reprojection review를 바탕으로 `CLEAR_PHYSICAL_SHEET_ORACLE`로 승격되고, frozen WL139 graphness `PASS_GRAPH_LIKE` 뒤 unchanged representative를 한 번 실행했다. raw→representative median/p95는 `1.33h/2.17h`였다.
 - 다만 full representative rectangle의 supported vertex는 `248/3840 (6.46%)`뿐이고 representative→raw median/p95는 `32.40h/77.94h`였다. 결과는 clean observed patch에 대해서만 유효하고 unsupported domain은 검증되지 않은 **B. VALID ONLY ON SUPPORTED DOMAIN**으로 분류했다.
-- curved rim과 near-vase 후보는 각각 `PARTIAL / MIXED`로 비승격했다. automatic Surface Membership, WL141 mask repair, continuation, Occluded Surface, SH/appearance completion, canonical production 변경은 없었다. 산출물은 `output/genuine_physical_sheet_oracle_clean_support_representative_audit/`에 격리했다.
+- curved rim과 near-vase 후보는 각각 `PARTIAL / MIXED`로 비승격했다. automatic Surface Membership, WL141 mask repair, continuation, Occluded Surface, SH/appearance completion, canonical production 변경은 없었다. 산출물은 `output/145_genuine_physical_sheet_oracle_clean_support_representative_audit/`에 격리했다.

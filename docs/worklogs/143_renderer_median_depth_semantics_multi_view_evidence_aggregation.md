@@ -48,7 +48,7 @@ WL141/WL142 historical replay는 세 ROI 모두 row-ID count/hash 기준 exact r
 
 ## 산출물 및 검증
 
-산출물은 `output/multi_view_support_lifting_depth_semantics_evidence_aggregation/`에 격리했다.
+산출물은 `output/143_multi_view_support_lifting_depth_semantics_evidence_aggregation/`에 격리했다.
 
 - `depth_self_consistency/`: renderer median event sample PLY/NPZ 및 camera별 residual report
 - 각 ROI의 `camera_overlays/`: original scene, historical mask-only baseline, per-view state, D1/D2/D3 raw overlays

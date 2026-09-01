@@ -38,7 +38,7 @@ Worklog 127의 renderer-grounded Visible Surface와 frozen trained Gaussian Scen
 
 ## 출력과 시각화
 
-출력 root는 `output/real_gaussian_scene_surface_validation/`이다.
+출력 root는 `output/confirmed/140_real_gaussian_scene_surface_validation/`이다.
 
 - pass ROI마다 선택된 동일 camera에서 `A_gaussian_scene_only`, `B_gaussian_plus_raw_visible_surface`, `C_gaussian_plus_surface_representative`, `D_raw_evidence_plus_representative`를 생성했다.
 - `3d_review/`에 raw Visible Surface, representative shaded/wireframe, raw+representative, analytic normals, chart boundary PNG를 생성했다.

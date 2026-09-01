@@ -75,7 +75,7 @@ from devtools.demo.real_gaussian_scene_surface_validation import (  # noqa: E402
 )
 
 
-OUTPUT_ROOT = REPO_ROOT / "output" / "oracle_single_surface_support_appearance_evidence"
+OUTPUT_ROOT = REPO_ROOT / "output" / "141_oracle_single_surface_support_appearance_evidence"
 WL127_RAW_VISIBLE_SURFACE = (
     REPO_ROOT
     / "output"
@@ -89,7 +89,7 @@ WL139_REPORT = (
     REPO_ROOT
     / "output"
     / "confirmed"
-    / "scale_separated_visible_surface_representative"
+    / "138_scale_separated_visible_surface_representative"
     / "scale_separated_visible_surface_representative_report.json"
 )
 

@@ -44,7 +44,7 @@ def _small_curve(support_distances: np.ndarray | None = None) -> TerminationCurv
 
 
 def test_frozen_worklog131_arm_b_report_contract_is_available_and_strict():
-    report_path = Path("output/demo_explicit_geometric_termination_continuation/explicit_geometric_termination_report.json")
+    report_path = Path("output/131_demo_explicit_geometric_termination_continuation/explicit_geometric_termination_report.json")
     if not report_path.exists():
         pytest.skip("generated frozen Worklog 131 output is not present in this checkout")
     report = json.loads(report_path.read_text(encoding="utf-8"))

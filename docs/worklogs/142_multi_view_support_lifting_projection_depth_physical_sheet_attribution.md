@@ -14,7 +14,7 @@ WL141의 기존 camera, polygon, candidate crop, 2-of-3 mask rule은 MASK_ONLY_B
 
 - 코드: devtools/demo/multi_view_support_lifting_projection_depth_attribution.py
 - 테스트: tests/test_multi_view_support_lifting_projection_depth_attribution.py
-- 출력: output/multi_view_support_lifting_projection_depth_attribution/
+- 출력: output/142_multi_view_support_lifting_projection_depth_attribution/
 - renderer는 OSNSurfelRasterizer.render(...)[depth_median]를 read-only로 사용했다.
 - projection은 기존 WL140과 같은 homogeneous row-vector convention을 사용했다.
 - depth tolerance는 WL139의 frozen mu를 그대로 사용했으며 WL142 결과로 조정하지 않았다.

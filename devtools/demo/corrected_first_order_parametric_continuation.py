@@ -763,12 +763,12 @@ def _readme(report: dict[str, Any]) -> str:
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--worklog128-out", type=Path, default=REPO_ROOT / "output/demo_parametric_surface_continuation")
-    parser.add_argument("--mesh-cache", type=Path, default=REPO_ROOT / "output/127_osn_gs_evidence_bounded_projective_tsdf/_cache/mesh.npz")
-    parser.add_argument("--field-cache", type=Path, default=REPO_ROOT / "output/127_osn_gs_evidence_bounded_projective_tsdf/_cache/field.npz")
-    parser.add_argument("--evidence-cache", type=Path, default=REPO_ROOT / "output/127_osn_gs_evidence_bounded_projective_tsdf/_cache/evidence.npz")
-    parser.add_argument("--raycast-cache", type=Path, default=REPO_ROOT / "output/127_osn_gs_evidence_bounded_projective_tsdf/_cache/raycast.npz")
-    parser.add_argument("--out", type=Path, default=REPO_ROOT / "output/demo_corrected_first_order_parametric_continuation")
+    parser.add_argument("--worklog128-out", type=Path, default=REPO_ROOT / "output/128_demo_parametric_surface_continuation")
+    parser.add_argument("--mesh-cache", type=Path, default=REPO_ROOT / "output/confirmed/127_osn_gs_evidence_bounded_projective_tsdf/_cache/mesh.npz")
+    parser.add_argument("--field-cache", type=Path, default=REPO_ROOT / "output/confirmed/127_osn_gs_evidence_bounded_projective_tsdf/_cache/field.npz")
+    parser.add_argument("--evidence-cache", type=Path, default=REPO_ROOT / "output/confirmed/127_osn_gs_evidence_bounded_projective_tsdf/_cache/evidence.npz")
+    parser.add_argument("--raycast-cache", type=Path, default=REPO_ROOT / "output/confirmed/127_osn_gs_evidence_bounded_projective_tsdf/_cache/raycast.npz")
+    parser.add_argument("--out", type=Path, default=REPO_ROOT / "output/129_demo_corrected_first_order_parametric_continuation")
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
     return parser
 

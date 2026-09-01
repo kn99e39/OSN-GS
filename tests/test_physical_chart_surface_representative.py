@@ -34,7 +34,7 @@ def test_wl138_module_and_historical_output_path_remain_untouched() -> None:
     assert before == after
     source = inspect.getsource(demo.run_demo)
     assert "output/scale_separated_visible_surface_representative" not in source
-    assert demo.OUTPUT_ROOT.name == "physical_chart_surface_representative"
+    assert demo.OUTPUT_ROOT.name == "139_physical_chart_surface_representative"
 
 
 def test_graphness_uses_retained_points_and_detects_separated_modes() -> None:

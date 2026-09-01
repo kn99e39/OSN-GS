@@ -107,10 +107,10 @@ true-occluded prototype과 canonical Occluded Surface는 실행하지 않았다.
 
 - `devtools/demo/corrected_first_order_parametric_continuation.py`
 - `tests/test_corrected_first_order_parametric_continuation.py`
-- `output/demo_corrected_first_order_parametric_continuation/README.md`
-- `output/demo_corrected_first_order_parametric_continuation/figure_1_visible_surface_is_real_corrected_provenance.png`
-- `output/demo_corrected_first_order_parametric_continuation/figure_2_corrected_first_order_ab.png`
-- `output/demo_corrected_first_order_parametric_continuation/corrected_first_order_parametric_continuation_report.json`
+- `output/129_demo_corrected_first_order_parametric_continuation/README.md`
+- `output/129_demo_corrected_first_order_parametric_continuation/figure_1_visible_surface_is_real_corrected_provenance.png`
+- `output/129_demo_corrected_first_order_parametric_continuation/figure_2_corrected_first_order_ab.png`
+- `output/129_demo_corrected_first_order_parametric_continuation/corrected_first_order_parametric_continuation_report.json`
 
 ## 검증
 

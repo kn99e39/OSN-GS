@@ -106,9 +106,9 @@ fit하거나 parameter sweep하지 않았다. 두 controlled 결과가 gate를 �
 발표용 polish 대신 advisor가 바로 열어볼 수 있는 raw fixed-view PNG와 geometry를
 우선 출력했다.
 
-- `output/meeting_occluded_surface_feasibility/table_demo_scene_overview.png`
-- `output/meeting_occluded_surface_feasibility/H1_self_continuation/raw_fixed_view_overlay.png`
-- `output/meeting_occluded_surface_feasibility/H2_junction_transfer/raw_fixed_view_overlay.png`
+- `output/134_meeting_occluded_surface_feasibility/table_demo_scene_overview.png`
+- `output/134_meeting_occluded_surface_feasibility/H1_self_continuation/raw_fixed_view_overlay.png`
+- `output/134_meeting_occluded_surface_feasibility/H2_junction_transfer/raw_fixed_view_overlay.png`
 - 각 case의 `controlled_geometry.npz`, retained/withheld point PLY, generated/branch PLY
 - `table_demo_geometry.npz`와 top/side/leg/table point PLY
 - 전체 provenance/metrics: `meeting_occluded_surface_feasibility_report.json`

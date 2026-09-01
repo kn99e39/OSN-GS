@@ -167,9 +167,9 @@ Worklog 129의 실패를 curvature 부족으로 해석하거나 second-order com
 
 - 분석 모듈: `devtools/demo/parametric_continuation_attribution.py`
 - focused tests: `tests/test_parametric_continuation_attribution.py`
-- report: `output/demo_parametric_continuation_attribution/parametric_continuation_attribution_report.json`
-- attribution figure: `output/demo_parametric_continuation_attribution/curved_rim_attribution.png`
-- boundary support: `output/demo_parametric_continuation_attribution/curved_rim_boundary_support.png`
-- distance plot: `output/demo_parametric_continuation_attribution/distance_to_termination.png`
+- report: `output/130_demo_parametric_continuation_attribution/parametric_continuation_attribution_report.json`
+- attribution figure: `output/130_demo_parametric_continuation_attribution/curved_rim_attribution.png`
+- boundary support: `output/130_demo_parametric_continuation_attribution/curved_rim_boundary_support.png`
+- distance plot: `output/130_demo_parametric_continuation_attribution/distance_to_termination.png`
 - 검증: `11 passed, 1 warning` (pytest cache permission warning)
 - 실제 실행: `A_PARAMETERIZATION_CONTRACT_FAILED`, `cases=2`, gate 미통과

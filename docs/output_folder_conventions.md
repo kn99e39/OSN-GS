@@ -12,7 +12,7 @@ changes.
 output/
   osn_gs_scene/                        # EXCLUDED -- live 3DGS baseline checkpoint root, never renamed/moved
   arch_2dgs_coverage_first_surface/    # EXCLUDED -- live 2DGS training checkpoint root, never renamed/moved
-  1NN_osn_gs_<name>/                    # the CURRENT (latest) worklog's export -- stays directly under output/
+  0NN_osn_gs_<name>/                    # every worklog export -- current directly under output/ or older under confirmed/
   confirmed/
     0NN_osn_gs_<name>/                  # every OLDER worklog's export, moved here once superseded
     _run_logs/
@@ -24,10 +24,11 @@ output/
   zero-padded 3-digit worklog number, e.g. `113_osn_gs_chart_contract_diagnostic`.
   This makes chronological order visible in a plain directory listing without
   opening any report.
-- **Only the current worklog's folder lives directly under `output/`.** As
-  soon as a new worklog's batch starts, the previous worklog's folder (and
-  its paired `*_run.log`) is moved into `output/confirmed/0NN_...` — see
-  [feedback_output_folder_numbering](agent_memory/feedback_output_folder_numbering.md).
+- **Every worklog export folder starts with its three-digit Worklog number.**
+  The current export remains directly under `output/`; superseded exports
+  are moved into `output/confirmed/`. The `confirmed/` container itself is
+  not a worklog and is therefore not numbered. This applies to existing
+  exports as well as all future demo/diagnostic outputs.
 - **Excluded from numbering/moving**: `output/osn_gs_scene/` and
   `output/arch_2dgs_coverage_first_surface/` are training-checkpoint roots
   (`checkpoint.pt`, `point_cloud.ply`, `nurbs_surface.json` per saved

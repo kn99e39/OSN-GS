@@ -21,7 +21,7 @@ boundary-attached holdout이다. true-occluded prototype은 조건부 gate를 �
   추가했다. 기존 `osn_gs/surface/torch_nurbs.py`, canonical renderer,
   Candidate B, WL127/136/137 결과는 수정하지 않았다.
 - 입력 raw geometry는
-  `output/127_osn_gs_evidence_bounded_projective_tsdf/_cache/mesh.npz`의
+  `output/confirmed/127_osn_gs_evidence_bounded_projective_tsdf/_cache/mesh.npz`의
   Worklog 127 mesh이며, `field.npz`에서 `h`와 `mu`만 read-only로 읽었다.
 - 기존 NURBS fitter의 고정 설정을 full evaluation-only fit과 retained-only fit에
   동일하게 적용했다: `resolution_u=8`, `resolution_v=4`, `degree_u=2`,
@@ -164,7 +164,7 @@ curved rim에서 macro representative의 withheld-side position error가 특히
 
 ## Raw visualization paths
 
-출력 root는 `output/scale_separated_visible_surface_representative/`이다. 각 case에
+출력 root는 `output/confirmed/138_scale_separated_visible_surface_representative/`이다. 각 case에
 다음 raw fixed-view PNG가 생성된다.
 
 - `raw_visible_surface.png`
