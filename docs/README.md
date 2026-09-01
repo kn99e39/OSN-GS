@@ -474,3 +474,11 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - tabletop pairwise reciprocal median은 `118.67h` 이상, paver는 `62.70h` 이상이며, curved rim도 한 pair만 median `1.84h`이고 나머지는 `33.07h/34.64h`였다. WL127 MASK_ONLY point에 대한 nearest/second/third cloud distance도 별도 diagnostic으로 기록했다.
 - 직접 3D/reprojection review와 정량 분포를 결합한 세 case classification은 모두 **C. SEMANTIC_MASK_MISASSOCIATION**이다. frozen masks가 한 physical sheet가 아니라 ground/tabletop/brace/front-side 구조를 함께 선택한다.
 - 자동 Surface Membership, 새 vote/threshold, KNN selection, NURBS/continuation/Occluded Surface, Candidate B 및 canonical code는 변경하지 않았다. 산출물은 `output/per_view_renderer_surface_correspondence_physical_sheet_oracle_audit/`에 격리했다.
+
+
+## 2026-09-02 Worklog 145 Genuine physical-sheet oracle 및 clean-support representative 검증
+
+- [Worklog 145](worklogs/145_genuine_physical_sheet_oracle_clean_support_representative.md)는 WL141 historical mask를 고치지 않고, 새로 수동 동결한 image-space interior polygon에서 canonical renderer `depth_median` event를 per-view로 복원해 genuine physical-sheet oracle을 검토했다.
+- `tabletop_broad_planar_clean`은 세 독립 cloud의 pairwise reciprocal median `1.31h~1.83h`와 common-world/reprojection review를 바탕으로 `CLEAR_PHYSICAL_SHEET_ORACLE`로 승격되고, frozen WL139 graphness `PASS_GRAPH_LIKE` 뒤 unchanged representative를 한 번 실행했다. raw→representative median/p95는 `1.33h/2.17h`였다.
+- 다만 full representative rectangle의 supported vertex는 `248/3840 (6.46%)`뿐이고 representative→raw median/p95는 `32.40h/77.94h`였다. 결과는 clean observed patch에 대해서만 유효하고 unsupported domain은 검증되지 않은 **B. VALID ONLY ON SUPPORTED DOMAIN**으로 분류했다.
+- curved rim과 near-vase 후보는 각각 `PARTIAL / MIXED`로 비승격했다. automatic Surface Membership, WL141 mask repair, continuation, Occluded Surface, SH/appearance completion, canonical production 변경은 없었다. 산출물은 `output/genuine_physical_sheet_oracle_clean_support_representative_audit/`에 격리했다.
