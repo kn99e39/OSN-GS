@@ -465,3 +465,12 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - WL141/WL142 `MASK_ONLY_BASELINE`은 세 ROI에서 row-ID count/hash 기준 exact replay됐다. `tabletop 1,367`, `curved rim 17,842`, `paver 6,220`의 `>=2 NEAR`가 모두 0이어서 hard veto가 all-zero 원인이 아니었다. curved rim은 D1 676개만 남고 D2/D3는 0이었다.
 - 최종 attribution은 **C. DEPTH REPRESENTATION AND AGGREGATION ARE VALID, BUT THE HISTORICAL MASK SUPPORT HAS LITTLE DIRECT DEPTH CONSISTENCY**다. Surface Membership, representative/SH, continuation, true-occluded prototype, canonical production은 실행하거나 변경하지 않았다.
 - 산출물은 `output/multi_view_support_lifting_depth_semantics_evidence_aggregation/`에 격리했고, focused tests `14 passed` 및 실제 CUDA `failures=[]`를 확인했다.
+
+
+## 2026-09-02 Worklog 144 Per-view renderer surface correspondence 및 physical-sheet oracle audit
+
+- [Worklog 144](worklogs/144_per_view_renderer_surface_correspondence_physical_sheet_oracle_audit.md)는 WL141 frozen polygon/camera/ROI를 변경하지 않고, 각 camera의 독립 renderer `depth_median` event cloud를 복원해 surface correspondence를 감사했다.
+- 세 ROI 모두 per-view cloud를 별도 저장하고 common-world 3D view, all-target raw reprojection, continuous pairwise distance, fixed-k local differential agreement를 생성했다. WL127 point identity를 multi-view에서 직접 요구하지 않는다.
+- tabletop pairwise reciprocal median은 `118.67h` 이상, paver는 `62.70h` 이상이며, curved rim도 한 pair만 median `1.84h`이고 나머지는 `33.07h/34.64h`였다. WL127 MASK_ONLY point에 대한 nearest/second/third cloud distance도 별도 diagnostic으로 기록했다.
+- 직접 3D/reprojection review와 정량 분포를 결합한 세 case classification은 모두 **C. SEMANTIC_MASK_MISASSOCIATION**이다. frozen masks가 한 physical sheet가 아니라 ground/tabletop/brace/front-side 구조를 함께 선택한다.
+- 자동 Surface Membership, 새 vote/threshold, KNN selection, NURBS/continuation/Occluded Surface, Candidate B 및 canonical code는 변경하지 않았다. 산출물은 `output/per_view_renderer_surface_correspondence_physical_sheet_oracle_audit/`에 격리했다.
