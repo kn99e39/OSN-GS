@@ -1,0 +1,47 @@
+{
+  "artifact": "output/confirmed/127_osn_gs_evidence_bounded_projective_tsdf/RENDERER_MEDIAN_SURFACE_POINTS/iteration_0000001/point_cloud.ply",
+  "closed_boundary_count": "NOT_MEANINGFUL_WITHOUT_FACES",
+  "component_size_distribution": "NOT_DEFINED_WITHOUT_FACES",
+  "connected_components": "NOT_DEFINED_WITHOUT_FACES",
+  "edge_count": 0,
+  "face_count": 0,
+  "interpretation": "The available file cannot answer mesh connectivity questions; treating each point as a component would invent point adjacency and is not performed.",
+  "no_component_filtering": true,
+  "no_largest_component_selection": true,
+  "open_boundary_count": "NOT_MEANINGFUL_WITHOUT_FACES",
+  "source_operation": {
+    "calls": [
+      "arange",
+      "astype",
+      "concatenate",
+      "coo_matrix",
+      "int",
+      "ones",
+      "scipy_components",
+      "tocsr",
+      "zeros"
+    ],
+    "end_line": 53,
+    "function": "connected_components",
+    "line": 37,
+    "matched_source_lines": [
+      {
+        "line": 29,
+        "text": "if faces.shape[0] == 0:"
+      },
+      {
+        "line": 38,
+        "text": "\"\"\"Vertex-connectivity components of the extracted mesh. Reported, never"
+      },
+      {
+        "line": 46,
+        "text": "if faces.shape[0] == 0:"
+      }
+    ],
+    "path": "scripts/devtools/evidence_bounded_tsdf/mesh_ops.py",
+    "source_sha256": "638ac4d617957b90b1516485ba63f5bace861a70a22f729c3578cf7af4363b8a",
+    "status": "PRESENT"
+  },
+  "topological_boundary_component_count": "NOT_MEANINGFUL_WITHOUT_FACES",
+  "vertex_count": 1212365
+}

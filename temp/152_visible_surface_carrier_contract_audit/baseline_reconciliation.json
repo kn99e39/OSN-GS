@@ -1,0 +1,70 @@
+{
+  "all_four_supported_cells": 211,
+  "event_1527": {
+    "event_id": 1527,
+    "human_review": "CLEAR_NOT_ON_INTENDED_SURFACE",
+    "source_camera": "DSC08003.JPG",
+    "source_pixel": [
+      259,
+      169
+    ],
+    "v_min_owner": true,
+    "world_xyz": [
+      0.07806993070364089,
+      0.762390534692282,
+      1.5849404821876258
+    ]
+  },
+  "event_count": 1586,
+  "event_union_sha256": "79855ad840164a923f8c4bb1c6935ce22cff8030bfedebf7a0dc4cd141026c78",
+  "historical_extrema_owner_ids": [
+    795,
+    947,
+    1104,
+    1527
+  ],
+  "raw_visible_surface_artifact": {
+    "bytes": 63043320,
+    "elements": {
+      "vertex": 1212365
+    },
+    "format": "format binary_little_endian 1.0",
+    "has_faces": false,
+    "header": "ply\nformat binary_little_endian 1.0\nelement vertex 1212365\nproperty float x\nproperty float y\nproperty float z\nproperty float f_dc_0\nproperty float f_dc_1\nproperty float f_dc_2\nproperty float opacity\nproperty float scale_0\nproperty float scale_1\nproperty float rot_0\nproperty float rot_1\nproperty float rot_2\nproperty float rot_3\nend_header\n",
+    "path": "output/confirmed/127_osn_gs_evidence_bounded_projective_tsdf/RENDERER_MEDIAN_SURFACE_POINTS/iteration_0000001/point_cloud.ply",
+    "properties": {
+      "vertex": [
+        "x",
+        "y",
+        "z",
+        "f_dc_0",
+        "f_dc_1",
+        "f_dc_2",
+        "opacity",
+        "scale_0",
+        "scale_1",
+        "rot_0",
+        "rot_1",
+        "rot_2",
+        "rot_3"
+      ]
+    },
+    "sha256": "fcdd26129737b6610e86837e5138e084ed3cfb95a80d6db2692b9cf70427107a"
+  },
+  "raw_visible_surface_exact_replay": {
+    "available_artifact_is_the_extracted_tsdf_mesh": false,
+    "expected_source_commit": "943a764",
+    "field_cache_exists": false,
+    "field_cache_path": "output/confirmed/127_osn_gs_evidence_bounded_projective_tsdf/_cache/field.npz",
+    "mesh_cache_exists": false,
+    "mesh_cache_path": "output/confirmed/127_osn_gs_evidence_bounded_projective_tsdf/_cache/mesh.npz",
+    "status": "AVAILABLE_POINT_CLOUD_ONLY_TSDF_MESH_REPLAY_UNAVAILABLE"
+  },
+  "representative_shape": [
+    3840,
+    3
+  ],
+  "support_mask_sha256": "23d00a22ae5ffc307ac3d5772c63c271291f535d2d383c63d68139708a6401d9",
+  "support_vertices": 314,
+  "wl149_wl151_exact": true
+}

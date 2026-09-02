@@ -1,0 +1,19 @@
+{
+  "boundary_relation": "region-owned topology and boundary candidate/order/status, not renderer event membership",
+  "entity": "Gaussian construction node",
+  "not_available_on_renderer_events": true,
+  "outputs": [
+    "node_region_id",
+    "SurfaceRegionCandidate.region_id",
+    "member/core/attached/rejected IDs",
+    "region state/confidence"
+  ],
+  "properties": [
+    "position",
+    "covariance or log_scales+rotations",
+    "covariance frame",
+    "structural reliability",
+    "manifold affinity graph",
+    "stable source ID"
+  ]
+}

@@ -512,3 +512,10 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - renderer event에는 XYZ/depth/camera/pixel/normal/provenance는 있지만 covariance/reliability, manifold adjacency/topology, local region/member/core identity, boundary ownership/order, executable physical-sheet identity가 없다. manual polygon·normal·camera agreement를 이 의미로 바꾸려면 새 heuristic가 필요하다.
 - 따라서 Stop Condition A인 **A. CONTRACT_GAP**으로 종료했다. Candidate C, synthetic contract, real-scene replay, Candidate C visualization은 실행하지 않았고 event 1527 및 모든 historical 결과를 보존했다.
 - canonical code와 WL139–WL150 산출물은 변경하지 않았으며, compatibility matrix와 numbered output/temp audit를 추가했고 focused tests 4개가 통과했다.
+
+## 2026-09-02 Worklog 152 Visible Surface Carrier 계약 감사
+
+- [Worklog 152](worklogs/152_visible_surface_carrier_contract_audit.md)은 renderer evidence와 representative 사이에서 기존 Raw Visible Surface가 topology/boundary ownership carrier가 될 수 있는지 WL127 source와 available artifact로 감사했다.
+- 현재 확인 가능한 `RENDERER_MEDIAN_SURFACE_POINTS/point_cloud.ply`는 `1,212,365` vertex와 `0` face의 vertex-only artifact이며, matching TSDF `ExtractedSurface` replay cache가 없다. event/TSDF-cell→surface-element provenance와 physical-sheet ownership도 없다.
+- 따라서 carrier는 **INELIGIBLE_CARRIER**로 판정했고 secondary gap은 `RAW_SURFACE_PROVENANCE_GAP` 및 `PHYSICAL_SHEET_MEMBERSHIP_GAP`이다. event 1527은 삭제하지 않고 `CLEAR_NOT_ON_INTENDED_SURFACE`와 `NOT MAPPABLE UNDER EXISTING CONTRACT`로 보존했다.
+- Candidate D, synthetic contracts, Candidate D real-scene replay와 새 visualization은 실행하지 않았다. canonical 코드와 WL139–WL151 historical 결과는 변경하지 않았고 focused tests 4개가 통과했다.

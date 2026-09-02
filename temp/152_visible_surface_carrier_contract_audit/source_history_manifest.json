@@ -1,0 +1,570 @@
+{
+  "audit": "committed source/history inspection; no canonical source modification",
+  "historical_commits": [
+    {
+      "commit": "cef5ae6",
+      "subject": "Integrate boundary-first and Gaussian foundation work"
+    },
+    {
+      "commit": "8dac4a2",
+      "subject": "Add covariance-guided visible-surface construction thread (worklogs 111-123)"
+    },
+    {
+      "commit": "943a764",
+      "subject": "Worklog 127: evidence-bounded projective TSDF for direct Visible Surface construction"
+    },
+    {
+      "commit": "9482a34",
+      "subject": "worklog139-physical-chart-representative-closure"
+    },
+    {
+      "commit": "6f7482e",
+      "subject": "worklog145 validate genuine physical-sheet oracle"
+    },
+    {
+      "commit": "7c67275",
+      "subject": "worklog148 reconcile WL145 support materialization"
+    },
+    {
+      "commit": "9ce0705",
+      "subject": "worklog149 attribute physical-sheet chart extent failure"
+    }
+  ],
+  "no_canonical_modification": true,
+  "source_files": [
+    {
+      "bytes": 30112,
+      "path": "osn_gs/surface/torch_visible_surface_construction.py",
+      "sha256": "2a5284b9fd015c41cecd3f3d9ee6f01bef98909442bc7179317640ae27200971"
+    },
+    {
+      "bytes": 84640,
+      "path": "osn_gs/core/torch_pipeline.py",
+      "sha256": "a37794c23af8bcf240ea17adc5f97491a89d9003fc3caa59b1cb819ce079606e"
+    },
+    {
+      "bytes": 12152,
+      "path": "osn_gs/surface/torch_boundary_first_visible_builder.py",
+      "sha256": "b4c1e50f113b6b43e315bea78bedcc51ec5ecd10bec6c8c0fb53a363625d50b3"
+    },
+    {
+      "bytes": 5757,
+      "path": "osn_gs/surface/torch_visible_boundary_materialization_adapter.py",
+      "sha256": "da262572cd57457e3f035dba884482e059e14c0bb8e7b398ada8e6b3432cfc8f"
+    },
+    {
+      "bytes": 71093,
+      "path": "osn_gs/surface/torch_gaussian_surface_region_formation.py",
+      "sha256": "a3d8d7a8c4dc41d204032a2b136064c8dba2db0a0035aaaadad39d927c906b1b"
+    },
+    {
+      "bytes": 23632,
+      "path": "osn_gs/surface/torch_surface_decomposition.py",
+      "sha256": "5c1a41a5be11e51a20465f91c1488d777dd6ba739c043517eb2312cac6284551"
+    },
+    {
+      "bytes": 84521,
+      "path": "devtools/demo/physical_chart_surface_representative.py",
+      "sha256": "baa5d3fef223be02792aec0d21e1cdb4749cdda26c836e7c088d59c1951401bd"
+    },
+    {
+      "bytes": 45720,
+      "path": "devtools/demo/per_view_renderer_surface_correspondence_physical_sheet_oracle_audit.py",
+      "sha256": "cd2618c488563b788496f590783a9ae2f10ff2654793db21a58d6582f63a9f4f"
+    },
+    {
+      "bytes": 44530,
+      "path": "devtools/demo/genuine_physical_sheet_oracle_clean_support_representative_audit.py",
+      "sha256": "f81eae01e1f2a8c306e40926dc712788fac4a1e94cb847dfc10152ada6aedcd8"
+    },
+    {
+      "bytes": 55105,
+      "path": "devtools/demo/wl145_baseline_reconciliation_support_constrained_materialization.py",
+      "sha256": "4d10fb56ed2a46a58f2884af39976cc81c8b1bc13f3b6668cae714e447695ad1"
+    },
+    {
+      "bytes": 43875,
+      "path": "devtools/demo/physical_sheet_evidence_vs_chart_extent_failure_attribution.py",
+      "sha256": "cc0ba492544345f7902ddaea92b04fbdd7f31b6ff0152fc03b3e0b35a8d6c583"
+    }
+  ],
+  "wl127_commit": {
+    "commit": "943a764",
+    "subject": "Worklog 127: evidence-bounded projective TSDF for direct Visible Surface construction"
+  },
+  "wl127_sources": [
+    {
+      "exists": true,
+      "path": "scripts/devtools/evidence_bounded_tsdf/extraction.py",
+      "sha256": "60daff9823e6286df72362dea0e3da8e744913d47e972ae3c143b6649b982a48"
+    },
+    {
+      "exists": true,
+      "path": "scripts/devtools/evidence_bounded_tsdf/mesh_ops.py",
+      "sha256": "638ac4d617957b90b1516485ba63f5bace861a70a22f729c3578cf7af4363b8a"
+    },
+    {
+      "exists": true,
+      "path": "scripts/devtools/evidence_bounded_tsdf_stages.py",
+      "sha256": "f23b8718130e8dcf8a14fbc6df0dd34bb65a97cf9498d747be5948cee74a3b18"
+    },
+    {
+      "exists": true,
+      "path": "docs/worklogs/127_evidence_bounded_projective_tsdf.md",
+      "sha256": "00dfe1485afd8cfb8c1be41c7b5de62f2f5714a736be079e48f9fe2d96a13e66"
+    }
+  ],
+  "wl149_commit_baseline": "9ce0705",
+  "wl150_diagnostic_only": true,
+  "wl152_source_inventory": {
+    "wl127_extracted_surface_entity": {
+      "extract_function": {
+        "calls": [
+          "ExtractedSurface",
+          "_block_keys",
+          "_encode",
+          "all",
+          "any",
+          "append",
+          "astype",
+          "candidate_blocks",
+          "cell_corner_offsets",
+          "clip",
+          "concatenate",
+          "cpu",
+          "detach",
+          "float",
+          "floor",
+          "full",
+          "full_like",
+          "int",
+          "item",
+          "lookup",
+          "marching_cubes",
+          "maximum",
+          "mean",
+          "min",
+          "minimum",
+          "numpy",
+          "ones",
+          "progress",
+          "range",
+          "reshape",
+          "rint",
+          "slice",
+          "sum",
+          "unique",
+          "weld_block_seams",
+          "where",
+          "zeros"
+        ],
+        "end_line": 218,
+        "function": "extract_zero_level_set",
+        "line": 101,
+        "matched_source_lines": [
+          {
+            "line": 14,
+            "text": "HOW THE MASK IS ENFORCED. `skimage.measure.marching_cubes` accepts a `mask`,"
+          },
+          {
+            "line": 105,
+            "text": "from skimage.measure import marching_cubes"
+          },
+          {
+            "line": 135,
+            "text": "corner_ok = torch.ones((shape[0], block, block, block), dtype=torch.bool, device=device)"
+          },
+          {
+            "line": 141,
+            "text": "corner_ok &= found[sl]"
+          },
+          {
+            "line": 145,
+            "text": "eligible = corner_ok & crossing"
+          },
+          {
+            "line": 146,
+            "text": "authoritative_cells += int(corner_ok.sum().item())"
+          },
+          {
+            "line": 159,
+            "text": "verts, tris, _normals, _vals = marching_cubes("
+          },
+          {
+            "line": 200,
+            "text": "merged_vertices, merged_faces, merged_supports, merged_values = weld_block_seams("
+          },
+          {
+            "line": 204,
+            "text": "vertices=merged_vertices, faces=merged_faces,"
+          },
+          {
+            "line": 221,
+            "text": "def weld_block_seams("
+          }
+        ],
+        "path": "scripts/devtools/evidence_bounded_tsdf/extraction.py",
+        "source_sha256": "60daff9823e6286df72362dea0e3da8e744913d47e972ae3c143b6649b982a48",
+        "status": "PRESENT"
+      },
+      "matched_lines": [
+        {
+          "line": 48,
+          "text": "class ExtractedSurface:"
+        },
+        {
+          "line": 49,
+          "text": "vertices: np.ndarray            # (V, 3) float64 world space"
+        },
+        {
+          "line": 50,
+          "text": "faces: np.ndarray               # (F, 3) int64"
+        },
+        {
+          "line": 51,
+          "text": "vertex_support_count: np.ndarray  # (V,) int32 -- nearest-lattice-corner support"
+        },
+        {
+          "line": 52,
+          "text": "vertex_field_value: np.ndarray    # (V,) float32 -- nearest-lattice-corner phi"
+        },
+        {
+          "line": 205,
+          "text": "vertex_support_count=merged_supports.astype(np.int32),"
+        },
+        {
+          "line": 206,
+          "text": "vertex_field_value=merged_values.astype(np.float32), h=field.h,"
+        },
+        {
+          "line": 222,
+          "text": "vertices: np.ndarray, faces: np.ndarray, supports: np.ndarray, values: np.ndarray, h: float,"
+        }
+      ],
+      "path": "scripts/devtools/evidence_bounded_tsdf/extraction.py"
+    },
+    "wl127_mesh_connectivity": {
+      "calls": [
+        "arange",
+        "astype",
+        "concatenate",
+        "coo_matrix",
+        "int",
+        "ones",
+        "scipy_components",
+        "tocsr",
+        "zeros"
+      ],
+      "end_line": 53,
+      "function": "connected_components",
+      "line": 37,
+      "matched_source_lines": [
+        {
+          "line": 29,
+          "text": "if faces.shape[0] == 0:"
+        },
+        {
+          "line": 38,
+          "text": "\"\"\"Vertex-connectivity components of the extracted mesh. Reported, never"
+        },
+        {
+          "line": 46,
+          "text": "if faces.shape[0] == 0:"
+        }
+      ],
+      "path": "scripts/devtools/evidence_bounded_tsdf/mesh_ops.py",
+      "source_sha256": "638ac4d617957b90b1516485ba63f5bace861a70a22f729c3578cf7af4363b8a",
+      "status": "PRESENT"
+    },
+    "wl127_mesh_export": {
+      "calls": [
+        "ascontiguousarray",
+        "empty",
+        "encode",
+        "int",
+        "join",
+        "mkdir",
+        "open",
+        "tobytes",
+        "write"
+      ],
+      "end_line": 83,
+      "function": "write_mesh_ply",
+      "line": 57,
+      "matched_source_lines": [
+        {
+          "line": 67,
+          "text": "header += [f\"element face {face_count}\", \"property list uchar int vertex_indices\", \"end_header\", \"\"]"
+        },
+        {
+          "line": 342,
+          "text": "Set `shaded=False` when `vertex_colors` itself ENCODES data (a support-count"
+        }
+      ],
+      "path": "scripts/devtools/evidence_bounded_tsdf/mesh_ops.py",
+      "source_sha256": "638ac4d617957b90b1516485ba63f5bace861a70a22f729c3578cf7af4363b8a",
+      "status": "PRESENT"
+    },
+    "wl127_semantics": {
+      "matched_lines": [
+        {
+          "line": 32,
+          "text": "completion heuristic으로 SDF를 성공시키지 않는다. 가장 단순한 renderer-evidence 기반 implicit geometry가 이미 충분한지를 본다. 핵심 질문:"
+        },
+        {
+          "line": 316,
+          "text": "| renderer-evidence coverage ≤h | 58.472% | **89.842%** |"
+        },
+        {
+          "line": 317,
+          "text": "| renderer-evidence coverage ≤2h | 68.200% | **98.486%** |"
+        },
+        {
+          "line": 339,
+          "text": "**증거 기준선.** raw renderer median surface point cloud는 `RENDERER_MEDIAN_SURFACE_POINTS`로 함께 냈으며, **경쟁 아키텍처가 아니라 두 arm이 공유하는 증거**로만 쓰였다."
+        },
+        {
+          "line": 379,
+          "text": "| 두 endpoint가 **같은** 추출 mesh component | 173 / 300 |"
+        },
+        {
+          "line": 388,
+          "text": "게이트 충족(합성 미지지-gap 계약 통과 + 실제 메시의 renderer-evidence 89.8% / ray-hit 99.9%)으로 **실행**했다. 기존 NURBS fitter를 그대로 쓰고, 기존 `pca_parameterize_points`(역사적 boundary 아키텍처를 되살리지 않는 가장 단순한 기존 parameterization)만 사용했으며, crop은 **공간 ROI(anchor 주변 ±12h 상자)로만** 골랐다 — boundary/region/chart eligibility를 쓰지 않았다."
+        }
+      ],
+      "path": "docs/worklogs/127_evidence_bounded_projective_tsdf.md",
+      "sha256": "00dfe1485afd8cfb8c1be41c7b5de62f2f5714a736be079e48f9fe2d96a13e66"
+    },
+    "wl127_stage_replay": {
+      "calls": [
+        "CameraInducedAdjacencyConfig",
+        "CoverageFirstPartitionConfig",
+        "_connected_component_roots",
+        "_dc_replace",
+        "accumulate_image_space_pairs",
+        "append",
+        "apply_secondary_geometric_gate",
+        "arange",
+        "argsort",
+        "asarray",
+        "astype",
+        "build_candidate_graph",
+        "build_view_chart_pixel_samples",
+        "clamp",
+        "concatenate",
+        "cpu",
+        "derive_surface_orientation_from_surfel",
+        "detach",
+        "empty_like",
+        "enumerate",
+        "evaluate",
+        "filter_by_3d_locality",
+        "fit_torch_visible_surface_lsq",
+        "float",
+        "full",
+        "full_like",
+        "int",
+        "item",
+        "len",
+        "linspace",
+        "median",
+        "meshgrid",
+        "no_grad",
+        "nonzero",
+        "norm",
+        "numpy",
+        "progress",
+        "reshape",
+        "say",
+        "stack",
+        "sum",
+        "to",
+        "tolist",
+        "unique",
+        "unproject_pixels",
+        "valid_pixel_chart_mask",
+        "where",
+        "zeros",
+        "zip"
+      ],
+      "end_line": 200,
+      "function": "replay_historical_visible_nurbs",
+      "line": 37,
+      "matched_source_lines": [
+        {
+          "line": 1,
+          "text": "\"\"\"Worklog 127 -- driver stages that are ALLOWED to read historical machinery."
+        },
+        {
+          "line": 3,
+          "text": "`evidence_bounded_tsdf/` (scale / field / extraction / mesh_ops / synthetic) is"
+        },
+        {
+          "line": 4,
+          "text": "the control-experiment half and imports nothing historical. Everything in THIS"
+        },
+        {
+          "line": 5,
+          "text": "file runs after that mesh exists: the A/B baseline replay, the qualitative"
+        },
+        {
+          "line": 19,
+          "text": "from evidence_bounded_tsdf import field as tsdf_field, mesh_ops"
+        },
+        {
+          "line": 37,
+          "text": "def replay_historical_visible_nurbs("
+        },
+        {
+          "line": 41,
+          "text": "\"\"\"Replay the historical topology/boundary-first path WITHOUT modification:"
+        },
+        {
+          "line": 44,
+          "text": "historical capacity. Returns fitted-patch geometry so the SAME new metrics"
+        },
+        {
+          "line": 47,
+          "text": "from osn_gs.surface.torch_camera_induced_visible_adjacency import ("
+        },
+        {
+          "line": 51,
+          "text": "from osn_gs.surface.torch_camera_observed_chart_domains import ("
+        },
+        {
+          "line": 54,
+          "text": "from osn_gs.surface.torch_coverage_first_subset_partition import ("
+        },
+        {
+          "line": 57,
+          "text": "from osn_gs.surface.torch_nurbs import fit_torch_visible_surface_lsq"
+        },
+        {
+          "line": 58,
+          "text": "from osn_gs.surface.torch_surfel_surface_orientation import derive_surface_orientation_from_surfel"
+        },
+        {
+          "line": 66,
+          "text": "say(\"[historical replay, unchanged] surfel orientation + candidate graph\")"
+        },
+        {
+          "line": 76,
+          "text": "full_orientation = derive_surface_orientation_from_surfel(model)"
+        },
+        {
+          "line": 83,
+          "text": "surface_normal=full_orientation.surface_normal[visible_selector],"
+        },
+        {
+          "line": 100,
+          "text": "say(\"[historical replay, unchanged] camera-induced visible adjacency\")"
+        },
+        {
+          "line": 120,
+          "text": "say(\"[historical replay, unchanged] camera-observed chart blobs + NURBS fitting\")"
+        },
+        {
+          "line": 155,
+          "text": "surface, uv_footpoint = fit_torch_visible_surface_lsq("
+        },
+        {
+          "line": 161,
+          "text": "residual = (surface.evaluate(uv_footpoint) - points).norm(dim=-1)"
+        },
+        {
+          "line": 164,
+          "text": "uu, vv = torch.meshgrid(grid, grid, indexing=\"ij\")"
+        },
+        {
+          "line": 165,
+          "text": "patch = surface.evaluate(torch.stack([uu.reshape(-1), vv.reshape(-1)], dim=1))"
+        },
+        {
+          "line": 169,
+          "text": "a, b = np.meshgrid(rows, rows, indexing=\"ij\")"
+        },
+        {
+          "line": 183,
+          "text": "say(f\"  historical chart fitting: view {view_index}/{len(cameras)}, {chart_count:,} charts\")"
+        },
+        {
+          "line": 214,
+          "text": "first, second = torch.meshgrid(span, span, indexing=\"ij\")"
+        },
+        {
+          "line": 295,
+          "text": "\"\"\"Blue = mesh in front of the renderer frontier, red = behind, grey = no"
+        }
+      ],
+      "path": "scripts/devtools/evidence_bounded_tsdf_stages.py",
+      "source_sha256": "1e69ca6e2b8591c719023930efc6389cd31ba441c3ecb085eb19f65533216a94",
+      "status": "PRESENT"
+    },
+    "wl145_raw_surface_reference": {
+      "calls": [
+        "Path",
+        "_build_per_view_event_cloud",
+        "_camera_representative_outputs",
+        "_depth_map_from_package",
+        "_jsonable",
+        "_load_canonical_scene",
+        "_load_inputs",
+        "_manual_controls",
+        "_mask_camera_lookup",
+        "_output_readme",
+        "_pairwise_reports",
+        "_pca_chart_config",
+        "_render_to_pil",
+        "_save_candidate_outputs",
+        "_save_representative_outputs",
+        "_sha256_file",
+        "_sha256_rows",
+        "append",
+        "as_json",
+        "audit_raw_graphness",
+        "bool",
+        "concatenate",
+        "dumps",
+        "empty",
+        "get",
+        "graphness_report",
+        "int",
+        "items",
+        "len",
+        "list",
+        "mkdir",
+        "package_for",
+        "pop",
+        "render",
+        "resolve",
+        "startswith",
+        "str",
+        "write_text"
+      ],
+      "end_line": 696,
+      "function": "run_audit",
+      "line": 556,
+      "matched_source_lines": [
+        {
+          "line": 77,
+          "text": "_load_xyz_ply,"
+        },
+        {
+          "line": 89,
+          "text": "RAW_VISIBLE_SURFACE = ("
+        },
+        {
+          "line": 552,
+          "text": "raw_visible_surface = _load_xyz_ply(paths[\"raw_visible_surface\"])"
+        },
+        {
+          "line": 716,
+          "text": "parser.add_argument(\"--raw-visible-surface\", type=Path, default=RAW_VISIBLE_SURFACE)"
+        }
+      ],
+      "path": "devtools/demo/genuine_physical_sheet_oracle_clean_support_representative_audit.py",
+      "source_sha256": "f81eae01e1f2a8c306e40926dc712788fac4a1e94cb847dfc10152ada6aedcd8",
+      "status": "PRESENT"
+    }
+  }
+}

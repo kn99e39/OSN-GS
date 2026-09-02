@@ -1,0 +1,19 @@
+{
+  "direct_properties": [
+    "world XYZ",
+    "renderer median-event depth",
+    "source camera",
+    "source pixel",
+    "event normal",
+    "camera provenance"
+  ],
+  "does_not_prove": [
+    "physical-sheet identity",
+    "visible topology",
+    "local region ownership",
+    "boundary ownership"
+  ],
+  "event_1527": "HUMAN_REVIEW_PHYSICAL_SHEET_STATUS: CLEAR_NOT_ON_INTENDED_SURFACE",
+  "scientific_meaning": "renderer-grounded observation event from a camera pixel and renderer median-depth reconstruction",
+  "source": "WL145 per-view event_cloud_with_provenance.npz / WL144 renderer event helper"
+}

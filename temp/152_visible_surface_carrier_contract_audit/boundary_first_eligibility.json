@@ -1,0 +1,7 @@
+{
+  "candidate_d_eligible": false,
+  "candidate_d_implemented": false,
+  "candidate_d_tested": false,
+  "reason": "INELIGIBLE_CARRIER / provenance and physical-sheet ownership gaps",
+  "status": "STOPPED"
+}
