@@ -484,3 +484,10 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - `tabletop_broad_planar_clean`은 세 독립 cloud의 pairwise reciprocal median `1.31h~1.83h`와 common-world/reprojection review를 바탕으로 `CLEAR_PHYSICAL_SHEET_ORACLE`로 승격되고, frozen WL139 graphness `PASS_GRAPH_LIKE` 뒤 unchanged representative를 한 번 실행했다. raw→representative median/p95는 `1.33h/2.17h`였다.
 - 다만 full representative rectangle의 supported vertex는 `248/3840 (6.46%)`뿐이고 representative→raw median/p95는 `32.40h/77.94h`였다. 결과는 clean observed patch에 대해서만 유효하고 unsupported domain은 검증되지 않은 **B. VALID ONLY ON SUPPORTED DOMAIN**으로 분류했다.
 - curved rim과 near-vase 후보는 각각 `PARTIAL / MIXED`로 비승격했다. automatic Surface Membership, WL141 mask repair, continuation, Occluded Surface, SH/appearance completion, canonical production 변경은 없었다. 산출물은 `output/145_genuine_physical_sheet_oracle_clean_support_representative_audit/`에 격리했다.
+
+
+## 2026-09-02 Worklog 148 Committed WL145 baseline reconciliation
+
+- [Worklog 148](worklogs/148_committed_wl145_baseline_reconciliation_support_constrained_materialization.md)는 WL145 frozen event/representative를 변경 없이 exact replay했다. 248은 현재 artifact/source에서 재현되지 않는 prose-only 값이며, executable support replay는 314/3840, all-four materializable cell은 211이다.
+- 동일한 frozen representative에 대해 A full 96x40 rectangle과 B existing support mask의 all-four cell materialization을 비교했다. B는 면적 94.36%를 제거하고 materialized→oracle median을 32.40h에서 0.77h로 낮췄지만 oracle coverage <=h는 30.52%에서 29.19%로 감소했다.
+- 결과는 **D. MIXED / INCONCLUSIVE**다. B는 evidence-supported domain과 full parametric rectangle의 분리를 보여주는 진단이지만, canonical Surface Membership/NURBS trimming/continuation/Occluded Surface로 승격하지 않았다. 실제 Gaussian Scene A–F raw overlays와 fixed Original/Observed-Occluded pair는 output/148_wl145_baseline_reconciliation_support_constrained_materialization_audit/에 생성했다.
