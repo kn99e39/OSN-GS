@@ -498,3 +498,10 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - exact extrema owners는 `795, 947, 1104, 1527`이며, 저장된 camera/pixel/depth/XYZ/normal provenance만으로는 intended physical sheet인지 다른 structure인지 판정할 수 없어 모두 `AMBIGUOUS`로 남겼다. Synthetic A/B/C contract는 통과했지만 real-scene architecture verdict는 `UNRESOLVED`다.
 - full per-point JSON/CSV/NPZ, chart-space/common-world PNG, source-camera owner crop와 cross-view localization, canonical Gaussian `Original Scene`/`Observed-Occluded` pair는 `output/149_physical_sheet_evidence_vs_chart_extent_failure_attribution/`에 생성했고, 번호가 붙은 보존 복사본은 `temp/149_physical_sheet_evidence_vs_chart_extent_failure_attribution/`에 둔다.
 - filtering, robust PCA, chart trimming, refit, Surface Membership, continuation, true-occluded prototype, Candidate B 및 canonical production 변경은 수행하지 않았다.
+
+## 2026-09-02 Worklog 150 Boundary First / Local Surface Decomposition 계약 추적
+
+- [Worklog 150](worklogs/150_boundary_first_local_surface_decomposition_contract_trace.md)은 committed source/history와 frozen WL149 baseline을 읽어, 의도된 Boundary First/local-surface ownership contract와 실제 WL139→WL145→WL148→WL149 경로를 비교한 격리 진단이다.
+- event 1527은 human review 결과 `HUMAN_REVIEW_PHYSICAL_SHEET_STATUS: CLEAR_NOT_ON_INTENDED_SURFACE`로 별도 기록했으며, union row 1527과 frozen `v_min` ownership을 보존했다. 다른 sparse event에는 일반 rejection을 적용하지 않았다.
+- canonical constructor에는 pre-fit region/boundary gate가 남아 있지만 WL145 clean-oracle path는 이를 호출하지 않고 세 per-view cloud를 pooled XYZ로 합쳐 global PCA/extrema chart와 WL139 fit을 수행한다. WL148 B는 post-fit support materialization이므로 **WL148 B does NOT by itself restore Boundary First semantics.**
+- 아키텍처 verdict는 **B. ARCHITECTURE_BYPASS**다. canonical code, WL139/WL145/WL148/WL149 산출물, renderer/checkpoint/Candidate B/production continuation은 변경하지 않았고 focused tests 4개가 통과했다.

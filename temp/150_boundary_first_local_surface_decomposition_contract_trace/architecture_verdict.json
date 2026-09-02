@@ -1,0 +1,79 @@
+{
+  "boundary_first": "bypassed on WL139/WL145 clean-oracle path; canonical source retains pre-fit boundary gates",
+  "earliest_contract_loss": {
+    "finding": "The path never invokes construct_visible_nurbs_from_gaussians, form_surface_regions, boundary ordering, or the Boundary First materialization adapter before the WL139 fit.",
+    "location": {
+      "calls": [
+        "Path",
+        "_build_per_view_event_cloud",
+        "_camera_representative_outputs",
+        "_depth_map_from_package",
+        "_jsonable",
+        "_load_canonical_scene",
+        "_load_inputs",
+        "_manual_controls",
+        "_mask_camera_lookup",
+        "_output_readme",
+        "_pairwise_reports",
+        "_pca_chart_config",
+        "_render_to_pil",
+        "_save_candidate_outputs",
+        "_save_representative_outputs",
+        "_sha256_file",
+        "_sha256_rows",
+        "append",
+        "as_json",
+        "audit_raw_graphness",
+        "bool",
+        "concatenate",
+        "dumps",
+        "empty",
+        "get",
+        "graphness_report",
+        "int",
+        "items",
+        "len",
+        "list",
+        "mkdir",
+        "package_for",
+        "pop",
+        "render",
+        "resolve",
+        "startswith",
+        "str",
+        "write_text"
+      ],
+      "end_line": 696,
+      "function": "run_audit",
+      "line": 556,
+      "matched_source_lines": [
+        {
+          "line": 362,
+          "text": "def _pca_chart_config(points: np.ndarray, name: str, label: str) -> tuple[RepresentativeCaseConfig, dict[str, Any]]:"
+        },
+        {
+          "line": 583,
+          "text": "clean_points = np.concatenate([cloud.points for cloud in clouds], axis=0) if clear else np.empty((0, 3), dtype=np.float64)"
+        },
+        {
+          "line": 590,
+          "text": "config, chart_frame = _pca_chart_config(clean_points, control.name, control.surface_label)"
+        }
+      ],
+      "path": "devtools/demo/genuine_physical_sheet_oracle_clean_support_representative_audit.py",
+      "source_sha256": "f81eae01e1f2a8c306e40926dc712788fac4a1e94cb847dfc10152ada6aedcd8",
+      "status": "PRESENT"
+    },
+    "stage": "WL145 clean-oracle representative control path",
+    "timing": "BEFORE_REPRESENTATIVE_FIT"
+  },
+  "event_1527": {
+    "human_review": "CLEAR_NOT_ON_INTENDED_SURFACE",
+    "owns_v_min": true,
+    "remains_present": true
+  },
+  "local_surface_decomposition": "bypassed and local identity flattened before WL139 PCA/fit",
+  "repair_performed": false,
+  "verdict": "B. ARCHITECTURE_BYPASS",
+  "wl148_B": "WL148 B does NOT by itself restore Boundary First semantics."
+}

@@ -1,0 +1,81 @@
+{
+  "classification": {
+    "claim_that_canonical_full_scene_pipeline_failed": "OUTSIDE ORIGINAL CONTRACT",
+    "off_surface_event_controls_representative_chart_extent": "DIRECTLY TARGETED FAILURE",
+    "wl139_clean_oracle_global_pooling": "RELATED BUT NOT DIRECTLY TARGETED"
+  },
+  "human_review_scope": "Only event 1527 is overridden by the supplied human review; other sparse events remain untouched and are not broadly rejected.",
+  "reasoning": [
+    "Boundary First source rejects open/branch/ambiguous observed boundaries instead of synthesizing a rectangle and routes eligible boundary plus interior evidence into the fit.",
+    "Local surface formation creates region-owned identities before boundary admission and materialization.",
+    "An unrelated event defining a global representative extent is therefore exactly the class of cross-surface/domain ownership failure those contracts were designed to prevent.",
+    "WL139/WL145 explicitly defines a manual clean-oracle diagnostic and calls a physical-chart fitter directly; that demo scope is related to the failure but does not claim to execute the canonical constructor."
+  ],
+  "source_and_worklog_evidence": [
+    {
+      "exists": true,
+      "path": "docs/worklogs/4_boundary_first_review_geometry_semantics_and_crossing_gate.md",
+      "sha256": "8e9419defe3d14ddc22658020620aec715f84ea808eccf2f7175465584c654e8"
+    },
+    {
+      "exists": true,
+      "path": "docs/worklogs/6_boundary_first_star_shaped_anchor_correspondence.md",
+      "sha256": "2bec75ca34da390488becba4ea627b69db9c5b73a49e0cf9405921aa8e63cc98"
+    },
+    {
+      "exists": true,
+      "path": "docs/worklogs/10_consensus_aware_surface_region_formation_foundation.md",
+      "sha256": "57a74fa834dfed48376a6fc725ced463bda6d86a5c76c1fea031b634790c665f"
+    },
+    {
+      "exists": true,
+      "path": "docs/worklogs/14_ordered_boundary_to_visible_nurbs_materialization_adapter.md",
+      "sha256": "88be0cb7ca1d444000225c1a755e70518c2e3c8060f120330c8e22fb0f4f9efb"
+    },
+    {
+      "exists": true,
+      "path": "docs/worklogs/78_constructor_provenance_chart_frontier_semantics.md",
+      "sha256": "78561dd79891f0e87989f1ca76852f630197ad9f3ecf32f5b3eb57fce538c178"
+    },
+    {
+      "exists": true,
+      "path": "docs/worklogs/79_constructor_wide_chart_domain_coverage.md",
+      "sha256": "689b477e641fb8d542f95cc45dcf89ed97428ce0200ee8b6b3d1682c039967f5"
+    },
+    {
+      "exists": true,
+      "path": "docs/worklogs/85_evidence_scale_local_surface_topology_boundary.md",
+      "sha256": "4b89e62141d080e40b6b80ef317744ba6802b6a6c829d9f2aed389b4190f3449"
+    },
+    {
+      "exists": true,
+      "path": "docs/worklogs/86_partition_seam_parametric_chart_domain.md",
+      "sha256": "e3a6e31396602473667d26f76bfdff2cefbf67f7d31573a807e0ef34fc1bf80e"
+    },
+    {
+      "exists": true,
+      "path": "docs/worklogs/116_visible_nurbs_representation_contract_recovery_audit.md",
+      "sha256": "0cbc4938318b79da4ea7ae1487f3596bede5c155cbc31f28754b6443265e8654"
+    },
+    {
+      "exists": true,
+      "path": "docs/worklogs/117_holey_chart_fitting_coupling_attribution.md",
+      "sha256": "d8c602aa792e5bbd96cd75dbfba4743bba6dd36f50613c629470f0fbb6e486ec"
+    },
+    {
+      "exists": true,
+      "path": "docs/worklogs/139_physical_chart_surface_representative_closure.md",
+      "sha256": "03da32078593ce71ad44e63bc99cf46703a52d0f83b7ac99a14af23c00a3da83"
+    },
+    {
+      "exists": true,
+      "path": "docs/worklogs/145_genuine_physical_sheet_oracle_clean_support_representative.md",
+      "sha256": "498925ccae90928766eb1c7769b780261433db528856aa55f9331c7271fbd7bb"
+    },
+    {
+      "exists": true,
+      "path": "docs/worklogs/149_physical_sheet_evidence_vs_chart_extent_failure_attribution.md",
+      "sha256": "71f97b8e146c1dd00d1e551c5d0bb8e93a8ca93a4be49c4b8215ade439af8118"
+    }
+  ]
+}

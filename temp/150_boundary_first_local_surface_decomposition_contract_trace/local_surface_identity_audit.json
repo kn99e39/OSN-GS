@@ -1,0 +1,96 @@
+[
+  {
+    "assessment": "manual label is not physical-sheet proof",
+    "created": [
+      "physical_sheet_control label"
+    ],
+    "discarded": [
+      "no canonical region/boundary identity"
+    ],
+    "flattened": [],
+    "merged": [],
+    "preserved": [
+      "control name in per-view NPZ metadata"
+    ],
+    "transition": "manual image-space control"
+  },
+  {
+    "assessment": "renderer provenance exists without surface identity",
+    "created": [
+      "camera/pixel/depth/XYZ/normal provenance"
+    ],
+    "discarded": [
+      "primitive/contributor ID unavailable"
+    ],
+    "flattened": [],
+    "merged": [],
+    "preserved": [
+      "per-view sidecar fields"
+    ],
+    "transition": "per-view renderer event cloud"
+  },
+  {
+    "assessment": "first decisive population flattening",
+    "created": [],
+    "discarded": [
+      "region, local-surface, boundary ownership"
+    ],
+    "flattened": [
+      "all points into one XYZ population"
+    ],
+    "merged": [
+      "three camera clouds"
+    ],
+    "preserved": [
+      "row order only; retrospective camera lookup"
+    ],
+    "transition": "WL145 clean_points union"
+  },
+  {
+    "assessment": "cross-structure evidence can enter one PCA population",
+    "created": [
+      "one global PCA frame and rectangular extrema domain"
+    ],
+    "discarded": [
+      "ownership constraints"
+    ],
+    "flattened": [
+      "manual/camera semantics absent from PCA input"
+    ],
+    "merged": [
+      "all pooled rows share one chart"
+    ],
+    "preserved": [],
+    "transition": "WL145 PCA chart"
+  },
+  {
+    "assessment": "fit success is not surface identity",
+    "created": [
+      "one representative control grid"
+    ],
+    "discarded": [
+      "all sidecar provenance"
+    ],
+    "flattened": [
+      "one pooled representative"
+    ],
+    "merged": [],
+    "preserved": [
+      "XYZ and fixed physical UV only"
+    ],
+    "transition": "WL139 fitter"
+  },
+  {
+    "assessment": "post-fit support cannot retroactively constrain the fit",
+    "created": [
+      "post-fit occupancy selection"
+    ],
+    "discarded": [],
+    "flattened": [],
+    "merged": [],
+    "preserved": [
+      "frozen representative/support mask"
+    ],
+    "transition": "WL148 B materialization"
+  }
+]
