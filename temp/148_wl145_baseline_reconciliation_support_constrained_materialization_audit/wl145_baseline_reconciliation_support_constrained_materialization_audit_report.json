@@ -1,0 +1,790 @@
+{
+  "batch": "Worklog 148 committed WL145 baseline reconciliation and support-constrained materialization audit",
+  "status": "COMPLETED_ISOLATED_NON_CANONICAL_AUDIT",
+  "AGENT INTERPRETATION OF INTENT": "Separate the mathematical full parametric rectangle from an evidence-supported visible-surface materialization while holding the WL145/WL139 representative geometry exactly fixed.",
+  "PROMPT-REQUIRED DECISIONS": {
+    "historical_prose_support": "248 / 3840",
+    "committed_exact_replay_support": "314 / 3840",
+    "subsequent_quantitative_experiments_use": "314 / 3840 and exact support-mask hash",
+    "reason": "314 is reproduced by the committed 6f7482e _domain_accounting implementation and the preserved WL145 artifact; 248 has no committed executable provenance.",
+    "arm_b_name": "FROZEN SUPPORT-CONSTRAINED MATERIALIZATION",
+    "occupancy_relation": "all four existing support vertices must be True"
+  },
+  "AGENT-INTRODUCED OPERATIONAL CHOICES": {
+    "distance_population": "exact existing representative sample vertices incident to the materialized cells; cKDTree nearest-neighbour distances",
+    "topology_connectivity": "4-connected cell components",
+    "holes": "rejected cell components not touching the cell-grid border",
+    "area": "the existing WL145 per-cell ||du x dv|| convention",
+    "real_scene_cameras": [
+      "DSC08043.JPG",
+      "DSC07960.JPG",
+      "DSC08003.JPG"
+    ],
+    "no_threshold_tuning": true
+  },
+  "IMPLEMENTATION ASSUMPTIONS": {
+    "oracle": "frozen NPZ fit_points, exactly the 1586-point verified renderer-event union",
+    "representative": "frozen NPZ sampled_points and sampled_normals, 96 x 40 row-major grid",
+    "materialization_surface": "cell-incident existing sample vertices plus diagnostic mesh faces; no interpolated vertices",
+    "qualitative_review": "exported matched camera and common-world views remain review evidence, not automatic membership"
+  },
+  "IMPLEMENTATION FIDELITY STATEMENT": {
+    "fitting_called_after_frozen_load": false,
+    "representative_xyz_shared_by_a_and_b": true,
+    "representative_normals_shared_by_a_and_b": true,
+    "support_occupancy_changed": false,
+    "pca_recomputed": false,
+    "nurbs_refit": false,
+    "automatic_surface_membership": false,
+    "sh_or_appearance_selection": false,
+    "continuation": false,
+    "occluded_surface": false,
+    "candidate_b_modified": false
+  },
+  "GIT / BASELINE RECONCILIATION": {
+    "history": [
+      "41bcc661 worklog144",
+      "6f7482e worklog145 introduced",
+      "6197563 output-path normalization only",
+      "1f10a96 worklog147 mismatch documentation only"
+    ],
+    "wl145_implementation_commit": "6f7482e",
+    "current_head_at_export": "1f10a9684a6792fe142e9abe0f9fd624dce8c8ab",
+    "output_is_gitignored": true,
+    "historical_wl145_preserved": true
+  },
+  "248 PROSE DISCREPANCY CHECK": {
+    "historical_prose_value": 248,
+    "current_preserved_wl145_json_field": "supported_regions_four_connected",
+    "current_json_field_value": 211,
+    "fully_supported_cell_count_from_committed_relation": 211,
+    "historical_248_equals_fully_supported_cell_count": false,
+    "conclusion": "248 remains prose-only / provenance-unverified.",
+    "implementation_changed": false
+  },
+  "COMMITTED WL145 EXACT REPLAY": {
+    "event_union_count": 1586,
+    "event_union_sha256": "79855ad840164a923f8c4bb1c6935ce22cff8030bfedebf7a0dc4cd141026c78",
+    "event_camera_counts": {
+      "DSC08043.JPG": 754,
+      "DSC07960.JPG": 330,
+      "DSC08003.JPG": 502
+    },
+    "representative_sample_count": 3840,
+    "supported_vertices": 314,
+    "unsupported_vertices": 3526,
+    "support_mask_sha256": "23d00a22ae5ffc307ac3d5772c63c271291f535d2d383c63d68139708a6401d9",
+    "fully_supported_cells": 211,
+    "report_supported_regions_four_connected": 211,
+    "event_normals_available": true
+  },
+  "SUPPORT ANNOTATION SEMANTICS": {
+    "definition": "UV occupancy on a 96 x 40 raster",
+    "not_final_canonical_surface_membership": true,
+    "not_geometric_visibility_truth": true,
+    "not_distance_derived_support_field": true,
+    "not_canonical_trimmed_nurbs_domain": true,
+    "purpose": "diagnostic test of Parametric Domain != Evidence-Supported Visible Surface Domain"
+  },
+  "FULL-DOMAIN BASELINE": {
+    "name": "A_full_domain",
+    "materialized_vertex_count": 3840,
+    "materialized_vertex_indices_sha256": "75077b05e06ae7b46513463828ec99b0229c30f0a5d19ec514a7e8e39478e557",
+    "materialized_area": 3.253452181329477,
+    "oracle_to_materialized_surface": {
+      "status": "MEASURED",
+      "samples": 1586,
+      "median": 0.016070919210106636,
+      "p95": 0.02630393557125428,
+      "mean": 0.01629225645849717,
+      "median_over_h": 1.327573298111175,
+      "p95_over_h": 2.1728939112377126,
+      "mean_over_h": 1.3458573437839254,
+      "median_over_mu": 0.442524432703725,
+      "p95_over_mu": 0.7242979704125708,
+      "mean_over_mu": 0.4486191145946418
+    },
+    "materialized_surface_to_oracle": {
+      "status": "MEASURED",
+      "samples": 3840,
+      "median": 0.3922755683486361,
+      "p95": 0.9434770612312239,
+      "mean": 0.4185120074817608,
+      "median_over_h": 32.40477804863403,
+      "p95_over_h": 77.93797837545497,
+      "mean_over_h": 34.57209626953276,
+      "median_over_mu": 10.80159268287801,
+      "p95_over_mu": 25.979326125151655,
+      "mean_over_mu": 11.524032089844251
+    },
+    "normal_angular_error": {
+      "status": "MEASURED",
+      "samples": 1586,
+      "median_degrees": 12.641387226797274,
+      "p95_degrees": 58.47540871152134,
+      "mean_degrees": 18.77779307446724,
+      "distance_correspondence": "nearest materialized representative vertex",
+      "h": 0.012105485424399376,
+      "mu": 0.03631645627319813
+    },
+    "fixed_reference_coverage": {
+      "oracle_points": 1586,
+      "within_h_count": 484,
+      "within_h_fraction": 0.3051702395964691,
+      "within_mu_count": 1572,
+      "within_mu_fraction": 0.9911727616645649
+    },
+    "domain_accounting": {
+      "cell_grid_shape": [
+        95,
+        39
+      ],
+      "fully_supported_cells": 3705,
+      "rejected_cells": 0,
+      "materialized_connected_regions": 1,
+      "materialized_region_sizes": [
+        3705
+      ],
+      "isolated_cells": 0,
+      "rejected_connected_regions": 0,
+      "holes": 0,
+      "hole_sizes": [],
+      "connectivity": "4-connected",
+      "hole_definition": "rejected-cell component not touching the cell-grid border"
+    },
+    "materialized_geometry_source": "existing frozen representative vertices incident to materializable cells",
+    "distance_contract": "nearest vertex of the exported materialized mesh; no new/interpolated geometry",
+    "new_geometry_fitted": false,
+    "area_accounting": {
+      "area_retained_by_arm_b": null,
+      "area_removed_from_arm_a": 0.0,
+      "removed_fraction_from_arm_a": 0.0,
+      "retained_fraction_of_arm_a": 1.0,
+      "area_convention": "WL145 existing per-cell ||du x dv|| convention"
+    }
+  },
+  "FROZEN SUPPORT-CONSTRAINED MATERIALIZATION": {
+    "name": "B_support_constrained",
+    "materialized_vertex_count": 274,
+    "materialized_vertex_indices_sha256": "0c5d0e343192948a09bc413930bc04b53e71d4ed918ee3a26d5162fb294ca0e9",
+    "materialized_area": 0.18340839165677383,
+    "oracle_to_materialized_surface": {
+      "status": "MEASURED",
+      "samples": 1586,
+      "median": 0.016591721422947854,
+      "p95": 0.030522071968099813,
+      "mean": 0.019762955136122518,
+      "median_over_h": 1.3705952996735005,
+      "p95_over_h": 2.521342259153081,
+      "mean_over_h": 1.6325619703187635,
+      "median_over_mu": 0.4568650998911668,
+      "p95_over_mu": 0.8404474197176935,
+      "mean_over_mu": 0.5441873234395879
+    },
+    "materialized_surface_to_oracle": {
+      "status": "MEASURED",
+      "samples": 274,
+      "median": 0.009346476350112423,
+      "p95": 0.02456071112712273,
+      "mean": 0.010984142167359354,
+      "median_over_h": 0.7720860438420756,
+      "p95_over_h": 2.028891057736442,
+      "mean_over_h": 0.9073689969689375,
+      "median_over_mu": 0.2573620146140252,
+      "p95_over_mu": 0.6762970192454807,
+      "mean_over_mu": 0.30245633232297914
+    },
+    "normal_angular_error": {
+      "status": "MEASURED",
+      "samples": 1586,
+      "median_degrees": 12.641387226797274,
+      "p95_degrees": 58.47540871152134,
+      "mean_degrees": 18.770721513138778,
+      "distance_correspondence": "nearest materialized representative vertex",
+      "h": 0.012105485424399376,
+      "mu": 0.03631645627319813
+    },
+    "fixed_reference_coverage": {
+      "oracle_points": 1586,
+      "within_h_count": 463,
+      "within_h_fraction": 0.29192938209331654,
+      "within_mu_count": 1531,
+      "within_mu_fraction": 0.9653215636822194
+    },
+    "domain_accounting": {
+      "cell_grid_shape": [
+        95,
+        39
+      ],
+      "fully_supported_cells": 211,
+      "rejected_cells": 3494,
+      "materialized_connected_regions": 6,
+      "materialized_region_sizes": [
+        201,
+        4,
+        2,
+        2,
+        1,
+        1
+      ],
+      "isolated_cells": 2,
+      "rejected_connected_regions": 1,
+      "holes": 0,
+      "hole_sizes": [],
+      "connectivity": "4-connected",
+      "hole_definition": "rejected-cell component not touching the cell-grid border"
+    },
+    "materialized_geometry_source": "existing frozen representative vertices incident to materializable cells",
+    "distance_contract": "nearest vertex of the exported materialized mesh; no new/interpolated geometry",
+    "new_geometry_fitted": false,
+    "area_accounting": {
+      "area_retained_by_arm_b": 0.18340839165677383,
+      "area_removed_from_arm_a": 3.0700437896727033,
+      "removed_fraction_from_arm_a": 0.9436265291651447,
+      "retained_fraction_of_arm_a": 0.05637347083485536,
+      "area_convention": "WL145 existing per-cell ||du x dv|| convention"
+    }
+  },
+  "QUANTITATIVE A/B": {
+    "A_full_domain": {
+      "name": "A_full_domain",
+      "materialized_vertex_count": 3840,
+      "materialized_vertex_indices_sha256": "75077b05e06ae7b46513463828ec99b0229c30f0a5d19ec514a7e8e39478e557",
+      "materialized_area": 3.253452181329477,
+      "oracle_to_materialized_surface": {
+        "status": "MEASURED",
+        "samples": 1586,
+        "median": 0.016070919210106636,
+        "p95": 0.02630393557125428,
+        "mean": 0.01629225645849717,
+        "median_over_h": 1.327573298111175,
+        "p95_over_h": 2.1728939112377126,
+        "mean_over_h": 1.3458573437839254,
+        "median_over_mu": 0.442524432703725,
+        "p95_over_mu": 0.7242979704125708,
+        "mean_over_mu": 0.4486191145946418
+      },
+      "materialized_surface_to_oracle": {
+        "status": "MEASURED",
+        "samples": 3840,
+        "median": 0.3922755683486361,
+        "p95": 0.9434770612312239,
+        "mean": 0.4185120074817608,
+        "median_over_h": 32.40477804863403,
+        "p95_over_h": 77.93797837545497,
+        "mean_over_h": 34.57209626953276,
+        "median_over_mu": 10.80159268287801,
+        "p95_over_mu": 25.979326125151655,
+        "mean_over_mu": 11.524032089844251
+      },
+      "normal_angular_error": {
+        "status": "MEASURED",
+        "samples": 1586,
+        "median_degrees": 12.641387226797274,
+        "p95_degrees": 58.47540871152134,
+        "mean_degrees": 18.77779307446724,
+        "distance_correspondence": "nearest materialized representative vertex",
+        "h": 0.012105485424399376,
+        "mu": 0.03631645627319813
+      },
+      "fixed_reference_coverage": {
+        "oracle_points": 1586,
+        "within_h_count": 484,
+        "within_h_fraction": 0.3051702395964691,
+        "within_mu_count": 1572,
+        "within_mu_fraction": 0.9911727616645649
+      },
+      "domain_accounting": {
+        "cell_grid_shape": [
+          95,
+          39
+        ],
+        "fully_supported_cells": 3705,
+        "rejected_cells": 0,
+        "materialized_connected_regions": 1,
+        "materialized_region_sizes": [
+          3705
+        ],
+        "isolated_cells": 0,
+        "rejected_connected_regions": 0,
+        "holes": 0,
+        "hole_sizes": [],
+        "connectivity": "4-connected",
+        "hole_definition": "rejected-cell component not touching the cell-grid border"
+      },
+      "materialized_geometry_source": "existing frozen representative vertices incident to materializable cells",
+      "distance_contract": "nearest vertex of the exported materialized mesh; no new/interpolated geometry",
+      "new_geometry_fitted": false,
+      "area_accounting": {
+        "area_retained_by_arm_b": null,
+        "area_removed_from_arm_a": 0.0,
+        "removed_fraction_from_arm_a": 0.0,
+        "retained_fraction_of_arm_a": 1.0,
+        "area_convention": "WL145 existing per-cell ||du x dv|| convention"
+      }
+    },
+    "B_support_constrained": {
+      "name": "B_support_constrained",
+      "materialized_vertex_count": 274,
+      "materialized_vertex_indices_sha256": "0c5d0e343192948a09bc413930bc04b53e71d4ed918ee3a26d5162fb294ca0e9",
+      "materialized_area": 0.18340839165677383,
+      "oracle_to_materialized_surface": {
+        "status": "MEASURED",
+        "samples": 1586,
+        "median": 0.016591721422947854,
+        "p95": 0.030522071968099813,
+        "mean": 0.019762955136122518,
+        "median_over_h": 1.3705952996735005,
+        "p95_over_h": 2.521342259153081,
+        "mean_over_h": 1.6325619703187635,
+        "median_over_mu": 0.4568650998911668,
+        "p95_over_mu": 0.8404474197176935,
+        "mean_over_mu": 0.5441873234395879
+      },
+      "materialized_surface_to_oracle": {
+        "status": "MEASURED",
+        "samples": 274,
+        "median": 0.009346476350112423,
+        "p95": 0.02456071112712273,
+        "mean": 0.010984142167359354,
+        "median_over_h": 0.7720860438420756,
+        "p95_over_h": 2.028891057736442,
+        "mean_over_h": 0.9073689969689375,
+        "median_over_mu": 0.2573620146140252,
+        "p95_over_mu": 0.6762970192454807,
+        "mean_over_mu": 0.30245633232297914
+      },
+      "normal_angular_error": {
+        "status": "MEASURED",
+        "samples": 1586,
+        "median_degrees": 12.641387226797274,
+        "p95_degrees": 58.47540871152134,
+        "mean_degrees": 18.770721513138778,
+        "distance_correspondence": "nearest materialized representative vertex",
+        "h": 0.012105485424399376,
+        "mu": 0.03631645627319813
+      },
+      "fixed_reference_coverage": {
+        "oracle_points": 1586,
+        "within_h_count": 463,
+        "within_h_fraction": 0.29192938209331654,
+        "within_mu_count": 1531,
+        "within_mu_fraction": 0.9653215636822194
+      },
+      "domain_accounting": {
+        "cell_grid_shape": [
+          95,
+          39
+        ],
+        "fully_supported_cells": 211,
+        "rejected_cells": 3494,
+        "materialized_connected_regions": 6,
+        "materialized_region_sizes": [
+          201,
+          4,
+          2,
+          2,
+          1,
+          1
+        ],
+        "isolated_cells": 2,
+        "rejected_connected_regions": 1,
+        "holes": 0,
+        "hole_sizes": [],
+        "connectivity": "4-connected",
+        "hole_definition": "rejected-cell component not touching the cell-grid border"
+      },
+      "materialized_geometry_source": "existing frozen representative vertices incident to materializable cells",
+      "distance_contract": "nearest vertex of the exported materialized mesh; no new/interpolated geometry",
+      "new_geometry_fitted": false,
+      "area_accounting": {
+        "area_retained_by_arm_b": 0.18340839165677383,
+        "area_removed_from_arm_a": 3.0700437896727033,
+        "removed_fraction_from_arm_a": 0.9436265291651447,
+        "retained_fraction_of_arm_a": 0.05637347083485536,
+        "area_convention": "WL145 existing per-cell ||du x dv|| convention"
+      }
+    }
+  },
+  "COVERAGE ACCOUNTING": {
+    "A_full_domain": {
+      "oracle_points": 1586,
+      "within_h_count": 484,
+      "within_h_fraction": 0.3051702395964691,
+      "within_mu_count": 1572,
+      "within_mu_fraction": 0.9911727616645649
+    },
+    "B_support_constrained": {
+      "oracle_points": 1586,
+      "within_h_count": 463,
+      "within_h_fraction": 0.29192938209331654,
+      "within_mu_count": 1531,
+      "within_mu_fraction": 0.9653215636822194
+    }
+  },
+  "AREA ACCOUNTING": {
+    "A_full_domain": {
+      "area_retained_by_arm_b": null,
+      "area_removed_from_arm_a": 0.0,
+      "removed_fraction_from_arm_a": 0.0,
+      "retained_fraction_of_arm_a": 1.0,
+      "area_convention": "WL145 existing per-cell ||du x dv|| convention"
+    },
+    "B_support_constrained": {
+      "area_retained_by_arm_b": 0.18340839165677383,
+      "area_removed_from_arm_a": 3.0700437896727033,
+      "removed_fraction_from_arm_a": 0.9436265291651447,
+      "retained_fraction_of_arm_a": 0.05637347083485536,
+      "area_convention": "WL145 existing per-cell ||du x dv|| convention"
+    }
+  },
+  "DOMAIN TOPOLOGY": {
+    "A_full_domain": {
+      "cell_grid_shape": [
+        95,
+        39
+      ],
+      "fully_supported_cells": 3705,
+      "rejected_cells": 0,
+      "materialized_connected_regions": 1,
+      "materialized_region_sizes": [
+        3705
+      ],
+      "isolated_cells": 0,
+      "rejected_connected_regions": 0,
+      "holes": 0,
+      "hole_sizes": [],
+      "connectivity": "4-connected",
+      "hole_definition": "rejected-cell component not touching the cell-grid border"
+    },
+    "B_support_constrained": {
+      "cell_grid_shape": [
+        95,
+        39
+      ],
+      "fully_supported_cells": 211,
+      "rejected_cells": 3494,
+      "materialized_connected_regions": 6,
+      "materialized_region_sizes": [
+        201,
+        4,
+        2,
+        2,
+        1,
+        1
+      ],
+      "isolated_cells": 2,
+      "rejected_connected_regions": 1,
+      "holes": 0,
+      "hole_sizes": [],
+      "connectivity": "4-connected",
+      "hole_definition": "rejected-cell component not touching the cell-grid border"
+    }
+  },
+  "REAL-SCENE QUALITATIVE A/B": {
+    "status": "EXPORTED",
+    "identical_camera_framing": true,
+    "exports": {
+      "checkpoint": "C:\\Projects\\OSN-GS\\output\\arch_2dgs_coverage_first_surface\\2dgs_run1\\30000\\checkpoint.pt",
+      "checkpoint_iteration": 30000,
+      "camera_ids": [
+        "DSC08043.JPG",
+        "DSC07960.JPG",
+        "DSC08003.JPG"
+      ],
+      "camera_resolution": {
+        "DSC08043.JPG": [
+          648,
+          420
+        ],
+        "DSC07960.JPG": [
+          648,
+          420
+        ],
+        "DSC08003.JPG": [
+          648,
+          420
+        ]
+      },
+      "A_to_F": {
+        "DSC08043.JPG": {
+          "A_gaussian_scene": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\real_scene_camera_review\\DSC08043.JPG\\A_gaussian_scene.png",
+          "B_gaussian_plus_clean_oracle": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\real_scene_camera_review\\DSC08043.JPG\\B_gaussian_plus_clean_oracle.png",
+          "C_gaussian_plus_full_domain_representative": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\real_scene_camera_review\\DSC08043.JPG\\C_gaussian_plus_full_domain_representative.png",
+          "D_gaussian_plus_support_constrained_materialization": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\real_scene_camera_review\\DSC08043.JPG\\D_gaussian_plus_support_constrained_materialization.png",
+          "E_gaussian_plus_clean_oracle_plus_full_domain": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\real_scene_camera_review\\DSC08043.JPG\\E_gaussian_plus_clean_oracle_plus_full_domain.png",
+          "F_gaussian_plus_clean_oracle_plus_support_constrained": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\real_scene_camera_review\\DSC08043.JPG\\F_gaussian_plus_clean_oracle_plus_support_constrained.png"
+        },
+        "DSC07960.JPG": {
+          "A_gaussian_scene": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\real_scene_camera_review\\DSC07960.JPG\\A_gaussian_scene.png",
+          "B_gaussian_plus_clean_oracle": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\real_scene_camera_review\\DSC07960.JPG\\B_gaussian_plus_clean_oracle.png",
+          "C_gaussian_plus_full_domain_representative": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\real_scene_camera_review\\DSC07960.JPG\\C_gaussian_plus_full_domain_representative.png",
+          "D_gaussian_plus_support_constrained_materialization": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\real_scene_camera_review\\DSC07960.JPG\\D_gaussian_plus_support_constrained_materialization.png",
+          "E_gaussian_plus_clean_oracle_plus_full_domain": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\real_scene_camera_review\\DSC07960.JPG\\E_gaussian_plus_clean_oracle_plus_full_domain.png",
+          "F_gaussian_plus_clean_oracle_plus_support_constrained": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\real_scene_camera_review\\DSC07960.JPG\\F_gaussian_plus_clean_oracle_plus_support_constrained.png"
+        },
+        "DSC08003.JPG": {
+          "A_gaussian_scene": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\real_scene_camera_review\\DSC08003.JPG\\A_gaussian_scene.png",
+          "B_gaussian_plus_clean_oracle": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\real_scene_camera_review\\DSC08003.JPG\\B_gaussian_plus_clean_oracle.png",
+          "C_gaussian_plus_full_domain_representative": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\real_scene_camera_review\\DSC08003.JPG\\C_gaussian_plus_full_domain_representative.png",
+          "D_gaussian_plus_support_constrained_materialization": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\real_scene_camera_review\\DSC08003.JPG\\D_gaussian_plus_support_constrained_materialization.png",
+          "E_gaussian_plus_clean_oracle_plus_full_domain": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\real_scene_camera_review\\DSC08003.JPG\\E_gaussian_plus_clean_oracle_plus_full_domain.png",
+          "F_gaussian_plus_clean_oracle_plus_support_constrained": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\real_scene_camera_review\\DSC08003.JPG\\F_gaussian_plus_clean_oracle_plus_support_constrained.png"
+        }
+      },
+      "mandatory_original_scene": {
+        "DSC08043.JPG": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\mandatory_gaussian_visualization_pair\\DSC08043.JPG\\G_original_scene.png",
+        "DSC07960.JPG": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\mandatory_gaussian_visualization_pair\\DSC07960.JPG\\G_original_scene.png",
+        "DSC08003.JPG": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\mandatory_gaussian_visualization_pair\\DSC08003.JPG\\G_original_scene.png"
+      },
+      "mandatory_observed_occluded": {
+        "DSC08043.JPG": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\mandatory_gaussian_visualization_pair\\DSC08043.JPG\\H_observed_occluded.png",
+        "DSC07960.JPG": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\mandatory_gaussian_visualization_pair\\DSC07960.JPG\\H_observed_occluded.png",
+        "DSC08003.JPG": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\mandatory_gaussian_visualization_pair\\DSC08003.JPG\\H_observed_occluded.png"
+      },
+      "mandatory_pair_contract": {
+        "same_checkpoint": true,
+        "same_iteration": true,
+        "same_camera_framing": true,
+        "same_resolution": true,
+        "same_renderer_and_background": true,
+        "gaussian_row_count": 1190469,
+        "observed_count": 798304,
+        "occluded_count": 391457,
+        "unresolved_count": 708,
+        "colour_only_override": true,
+        "marker_gaussians_added": 0,
+        "protected_geometry_unchanged": true,
+        "palette": {
+          "OBSERVED": [
+            0.1,
+            0.85,
+            0.35
+          ],
+          "OCCLUDED": [
+            0.92,
+            0.18,
+            0.18
+          ],
+          "UNRESOLVED": [
+            0.6,
+            0.6,
+            0.62
+          ]
+        }
+      }
+    },
+    "review_note": "A-F overlays show the same rendered Gaussian background; only diagnostic geometry overlays differ. Mandatory Original Scene/Observed-Occluded pair is exported separately with fixed palette and identical Gaussian rows."
+  },
+  "CHART-SPACE DIAGNOSTIC": {
+    "png": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\chart_space_96x40_diagnostic.png",
+    "npz": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\chart_space_96x40_diagnostic.npz",
+    "grid_shape": [
+      96,
+      40
+    ],
+    "raw_oracle_uv_samples": 1586,
+    "smoothing_or_fill": false
+  },
+  "COMMON-WORLD MATCHED VIEWS": {
+    "A_full_domain": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\common_world_matched\\A_full_domain.png",
+    "B_support_constrained": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\common_world_matched\\B_support_constrained.png",
+    "A_B_matched": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\common_world_matched\\A_B_matched.png"
+  },
+  "PREVIEW_PNG": {
+    "chart_space_96x40_diagnostic.png": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\preview_png\\chart_space_96x40_diagnostic.png",
+    "common_world_A_B_matched.png": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\preview_png\\common_world_A_B_matched.png",
+    "real_scene_DSC08043.JPG_A_to_F.png": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\preview_png\\real_scene_DSC08043.JPG_A_to_F.png",
+    "mandatory_DSC08043.JPG_G_H.png": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\preview_png\\mandatory_DSC08043.JPG_G_H.png",
+    "real_scene_DSC07960.JPG_A_to_F.png": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\preview_png\\real_scene_DSC07960.JPG_A_to_F.png",
+    "mandatory_DSC07960.JPG_G_H.png": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\preview_png\\mandatory_DSC07960.JPG_G_H.png",
+    "real_scene_DSC08003.JPG_A_to_F.png": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\preview_png\\real_scene_DSC08003.JPG_A_to_F.png",
+    "mandatory_DSC08003.JPG_G_H.png": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\preview_png\\mandatory_DSC08003.JPG_G_H.png"
+  },
+  "ARCHITECTURE ATTRIBUTION": {
+    "case": "D_MIXED_OR_INCONCLUSIVE",
+    "basis": "B is evaluated with unchanged frozen geometry; attribution is based on measured coverage, surface-to-oracle error, and removed unsupported rectangle area.",
+    "representative_geometry_changed": false,
+    "occupancy_rule_promoted": false
+  },
+  "PROMOTED": [],
+  "RETAINED": [
+    "UV occupancy annotation as diagnostic baseline only",
+    "WL145 oracle/provenance",
+    "WL139 frozen representative XYZ/normals",
+    "h and mu",
+    "renderer/checkpoint/cameras",
+    "Candidate B"
+  ],
+  "REJECTED": [
+    "248-based replacement mask",
+    "support-mask tuning",
+    "canonical NURBS trimming",
+    "automatic Surface Membership",
+    "refit",
+    "continuation",
+    "Occluded Surface"
+  ],
+  "OPEN": [
+    "final canonical Surface Membership contract",
+    "whether UV occupancy is sufficient beyond this tabletop control",
+    "independent qualitative review of real-scene overlays"
+  ],
+  "FROZEN_INPUTS": {
+    "wl145_report": "C:\\Projects\\OSN-GS\\output\\145_genuine_physical_sheet_oracle_clean_support_representative_audit\\genuine_physical_sheet_oracle_clean_support_representative_audit_report.json",
+    "frozen_representative": "C:\\Projects\\OSN-GS\\output\\145_genuine_physical_sheet_oracle_clean_support_representative_audit\\tabletop_broad_planar_clean\\clean_support_representative\\wl139_frozen_representative.npz",
+    "wl139_report": "C:\\Projects\\OSN-GS\\output\\confirmed\\139_physical_chart_surface_representative\\physical_chart_surface_representative_report.json",
+    "representative_xyz_sha256": "5fe79de62c6842cb02a99fa940f2e3ffa7fcd4c51165db606c693029aa59c941",
+    "representative_normals_sha256": "e01b51ddc2bc43586fdb16f1772c0f3a4e99ec46a81bfbb8202f8c78377ad05b",
+    "fit_points_sha256": "79855ad840164a923f8c4bb1c6935ce22cff8030bfedebf7a0dc4cd141026c78",
+    "support_mask_sha256": "23d00a22ae5ffc307ac3d5772c63c271291f535d2d383c63d68139708a6401d9",
+    "h": 0.012105485424399376,
+    "mu": 0.03631645627319813
+  },
+  "outputs": {
+    "mesh": {
+      "A_full_domain": {
+        "ply": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\materialized_meshes\\A_full_domain.ply",
+        "vertex_count": 3840,
+        "face_count": 7410,
+        "vertex_indices_sha256": "75077b05e06ae7b46513463828ec99b0229c30f0a5d19ec514a7e8e39478e557",
+        "exact_representative_xyz": true,
+        "exact_representative_normals": true
+      },
+      "B_support_constrained": {
+        "ply": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\materialized_meshes\\B_support_constrained.ply",
+        "vertex_count": 274,
+        "face_count": 422,
+        "vertex_indices_sha256": "0c5d0e343192948a09bc413930bc04b53e71d4ed918ee3a26d5162fb294ca0e9",
+        "exact_representative_xyz": true,
+        "exact_representative_normals": true
+      },
+      "clean_oracle": {
+        "ply": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\materialized_meshes\\clean_oracle.ply",
+        "vertex_count": 1586,
+        "event_union_sha256": "79855ad840164a923f8c4bb1c6935ce22cff8030bfedebf7a0dc4cd141026c78"
+      },
+      "frozen_input_replay": {
+        "npz": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\frozen_inputs\\wl145_frozen_representative_replay.npz",
+        "event_union_exact_fit_points": true,
+        "representative_xyz_exact": true,
+        "representative_normals_exact": true
+      }
+    },
+    "chart": {
+      "png": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\chart_space_96x40_diagnostic.png",
+      "npz": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\chart_space_96x40_diagnostic.npz",
+      "grid_shape": [
+        96,
+        40
+      ],
+      "raw_oracle_uv_samples": 1586,
+      "smoothing_or_fill": false
+    },
+    "common_world": {
+      "A_full_domain": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\common_world_matched\\A_full_domain.png",
+      "B_support_constrained": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\common_world_matched\\B_support_constrained.png",
+      "A_B_matched": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\common_world_matched\\A_B_matched.png"
+    },
+    "real_scene": {
+      "checkpoint": "C:\\Projects\\OSN-GS\\output\\arch_2dgs_coverage_first_surface\\2dgs_run1\\30000\\checkpoint.pt",
+      "checkpoint_iteration": 30000,
+      "camera_ids": [
+        "DSC08043.JPG",
+        "DSC07960.JPG",
+        "DSC08003.JPG"
+      ],
+      "camera_resolution": {
+        "DSC08043.JPG": [
+          648,
+          420
+        ],
+        "DSC07960.JPG": [
+          648,
+          420
+        ],
+        "DSC08003.JPG": [
+          648,
+          420
+        ]
+      },
+      "A_to_F": {
+        "DSC08043.JPG": {
+          "A_gaussian_scene": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\real_scene_camera_review\\DSC08043.JPG\\A_gaussian_scene.png",
+          "B_gaussian_plus_clean_oracle": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\real_scene_camera_review\\DSC08043.JPG\\B_gaussian_plus_clean_oracle.png",
+          "C_gaussian_plus_full_domain_representative": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\real_scene_camera_review\\DSC08043.JPG\\C_gaussian_plus_full_domain_representative.png",
+          "D_gaussian_plus_support_constrained_materialization": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\real_scene_camera_review\\DSC08043.JPG\\D_gaussian_plus_support_constrained_materialization.png",
+          "E_gaussian_plus_clean_oracle_plus_full_domain": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\real_scene_camera_review\\DSC08043.JPG\\E_gaussian_plus_clean_oracle_plus_full_domain.png",
+          "F_gaussian_plus_clean_oracle_plus_support_constrained": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\real_scene_camera_review\\DSC08043.JPG\\F_gaussian_plus_clean_oracle_plus_support_constrained.png"
+        },
+        "DSC07960.JPG": {
+          "A_gaussian_scene": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\real_scene_camera_review\\DSC07960.JPG\\A_gaussian_scene.png",
+          "B_gaussian_plus_clean_oracle": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\real_scene_camera_review\\DSC07960.JPG\\B_gaussian_plus_clean_oracle.png",
+          "C_gaussian_plus_full_domain_representative": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\real_scene_camera_review\\DSC07960.JPG\\C_gaussian_plus_full_domain_representative.png",
+          "D_gaussian_plus_support_constrained_materialization": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\real_scene_camera_review\\DSC07960.JPG\\D_gaussian_plus_support_constrained_materialization.png",
+          "E_gaussian_plus_clean_oracle_plus_full_domain": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\real_scene_camera_review\\DSC07960.JPG\\E_gaussian_plus_clean_oracle_plus_full_domain.png",
+          "F_gaussian_plus_clean_oracle_plus_support_constrained": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\real_scene_camera_review\\DSC07960.JPG\\F_gaussian_plus_clean_oracle_plus_support_constrained.png"
+        },
+        "DSC08003.JPG": {
+          "A_gaussian_scene": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\real_scene_camera_review\\DSC08003.JPG\\A_gaussian_scene.png",
+          "B_gaussian_plus_clean_oracle": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\real_scene_camera_review\\DSC08003.JPG\\B_gaussian_plus_clean_oracle.png",
+          "C_gaussian_plus_full_domain_representative": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\real_scene_camera_review\\DSC08003.JPG\\C_gaussian_plus_full_domain_representative.png",
+          "D_gaussian_plus_support_constrained_materialization": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\real_scene_camera_review\\DSC08003.JPG\\D_gaussian_plus_support_constrained_materialization.png",
+          "E_gaussian_plus_clean_oracle_plus_full_domain": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\real_scene_camera_review\\DSC08003.JPG\\E_gaussian_plus_clean_oracle_plus_full_domain.png",
+          "F_gaussian_plus_clean_oracle_plus_support_constrained": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\real_scene_camera_review\\DSC08003.JPG\\F_gaussian_plus_clean_oracle_plus_support_constrained.png"
+        }
+      },
+      "mandatory_original_scene": {
+        "DSC08043.JPG": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\mandatory_gaussian_visualization_pair\\DSC08043.JPG\\G_original_scene.png",
+        "DSC07960.JPG": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\mandatory_gaussian_visualization_pair\\DSC07960.JPG\\G_original_scene.png",
+        "DSC08003.JPG": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\mandatory_gaussian_visualization_pair\\DSC08003.JPG\\G_original_scene.png"
+      },
+      "mandatory_observed_occluded": {
+        "DSC08043.JPG": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\mandatory_gaussian_visualization_pair\\DSC08043.JPG\\H_observed_occluded.png",
+        "DSC07960.JPG": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\mandatory_gaussian_visualization_pair\\DSC07960.JPG\\H_observed_occluded.png",
+        "DSC08003.JPG": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\mandatory_gaussian_visualization_pair\\DSC08003.JPG\\H_observed_occluded.png"
+      },
+      "mandatory_pair_contract": {
+        "same_checkpoint": true,
+        "same_iteration": true,
+        "same_camera_framing": true,
+        "same_resolution": true,
+        "same_renderer_and_background": true,
+        "gaussian_row_count": 1190469,
+        "observed_count": 798304,
+        "occluded_count": 391457,
+        "unresolved_count": 708,
+        "colour_only_override": true,
+        "marker_gaussians_added": 0,
+        "protected_geometry_unchanged": true,
+        "palette": {
+          "OBSERVED": [
+            0.1,
+            0.85,
+            0.35
+          ],
+          "OCCLUDED": [
+            0.92,
+            0.18,
+            0.18
+          ],
+          "UNRESOLVED": [
+            0.6,
+            0.6,
+            0.62
+          ]
+        }
+      }
+    },
+    "preview_png": {
+      "chart_space_96x40_diagnostic.png": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\preview_png\\chart_space_96x40_diagnostic.png",
+      "common_world_A_B_matched.png": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\preview_png\\common_world_A_B_matched.png",
+      "real_scene_DSC08043.JPG_A_to_F.png": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\preview_png\\real_scene_DSC08043.JPG_A_to_F.png",
+      "mandatory_DSC08043.JPG_G_H.png": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\preview_png\\mandatory_DSC08043.JPG_G_H.png",
+      "real_scene_DSC07960.JPG_A_to_F.png": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\preview_png\\real_scene_DSC07960.JPG_A_to_F.png",
+      "mandatory_DSC07960.JPG_G_H.png": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\preview_png\\mandatory_DSC07960.JPG_G_H.png",
+      "real_scene_DSC08003.JPG_A_to_F.png": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\preview_png\\real_scene_DSC08003.JPG_A_to_F.png",
+      "mandatory_DSC08003.JPG_G_H.png": "C:\\Projects\\OSN-GS\\output\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\preview_png\\mandatory_DSC08003.JPG_G_H.png"
+    }
+  }
+}
