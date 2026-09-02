@@ -1,0 +1,49 @@
+{
+  "baseline_event_count": 1586,
+  "event_1527": {
+    "candidate_c_assignment": "NOT_RUN_DUE_TO_CONTRACT_GAP",
+    "historical_v_min_owner": true,
+    "human_review": "CLEAR_NOT_ON_INTENDED_SURFACE",
+    "remains_present": true
+  },
+  "no_four_event_rejection_rule": true,
+  "owners": [
+    {
+      "candidate_c_assignment": "NOT_RUN_DUE_TO_CONTRACT_GAP",
+      "canonical_region_assignment": "NOT_REPRESENTABLE_FROM_RENDERER_EVENT_SCHEMA",
+      "chart_u": 1.358753543663656,
+      "chart_v": 0.9608081516014038,
+      "event_id": 795,
+      "historical_role": "u_min/u_max/v_min/v_max owner",
+      "source_camera": "DSC07960.JPG"
+    },
+    {
+      "candidate_c_assignment": "NOT_RUN_DUE_TO_CONTRACT_GAP",
+      "canonical_region_assignment": "NOT_REPRESENTABLE_FROM_RENDERER_EVENT_SCHEMA",
+      "chart_u": -0.3689544252907394,
+      "chart_v": 0.7834005261465414,
+      "event_id": 947,
+      "historical_role": "u_min/u_max/v_min/v_max owner",
+      "source_camera": "DSC07960.JPG"
+    },
+    {
+      "candidate_c_assignment": "NOT_RUN_DUE_TO_CONTRACT_GAP",
+      "canonical_region_assignment": "NOT_REPRESENTABLE_FROM_RENDERER_EVENT_SCHEMA",
+      "chart_u": 1.0627675913278287,
+      "chart_v": 1.2633397035700187,
+      "event_id": 1104,
+      "historical_role": "u_min/u_max/v_min/v_max owner",
+      "source_camera": "DSC08003.JPG"
+    },
+    {
+      "candidate_c_assignment": "NOT_RUN_DUE_TO_CONTRACT_GAP",
+      "canonical_region_assignment": "NOT_REPRESENTABLE_FROM_RENDERER_EVENT_SCHEMA",
+      "chart_u": 0.8083508388106155,
+      "chart_v": -0.5984138975738875,
+      "event_id": 1527,
+      "historical_role": "u_min/u_max/v_min/v_max owner",
+      "source_camera": "DSC08003.JPG"
+    }
+  ],
+  "source": "frozen WL149 EXTREMA OWNERSHIP and full_per_point_influence.json"
+}

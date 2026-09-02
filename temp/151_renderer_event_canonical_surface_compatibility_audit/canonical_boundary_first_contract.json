@@ -1,0 +1,2116 @@
+{
+  "boundary_adjacency_order_semantics": "directed compatible halfedges are recovered into OrderedBoundaryComponent objects with ordered source IDs",
+  "boundary_candidate_source": "world-space boundary halfedge candidates derived from positions, oriented normals, regions, graph, stable IDs, and support/termination semantics",
+  "closed_open_branch_ambiguous_semantics": {
+    "ambiguous": "unsupported/review; no synthetic rectangle",
+    "branch": "unsupported/review; no synthetic rectangle",
+    "open": "unsupported/review; no synthetic rectangle",
+    "ordered_closed_loop_outer": "eligible for pre-fit materialization after simple-loop validation"
+  },
+  "contract_name": "canonical Boundary First ownership/materialization",
+  "domain_control_timing": "PRE_FIT for eligible boundary-plus-interior input; later support occupancy is a distinct post-fit concern",
+  "exact_prefit_adapter_input": "materialize_visible_boundary_component(component, boundary_points, interior_points, boundary_ids, interior_ids, region status/provenance)",
+  "interior_core_requirement": "region-core interior IDs/points are supplied alongside ordered boundary points; reliable-core-only coverage is explicit",
+  "mechanics_required_for_invocation": [
+    "region-owned boundary halfedges",
+    "ordered directed component",
+    "valid closed-loop state and no branch nodes",
+    "world boundary points",
+    "region-core interior points",
+    "stable boundary/interior IDs"
+  ],
+  "ownership_requirement": [
+    "source region ID",
+    "source boundary component ID",
+    "ordered boundary point IDs",
+    "interior reliable point IDs",
+    "supporting source IDs and region status provenance"
+  ],
+  "required_region_input": "accepted SurfaceRegionCandidate regions plus canonical tangent frames and oriented normals",
+  "semantics_required_to_mean_physical_boundary": [
+    "boundary is owned by the correct local physical region",
+    "adjacency/order expresses one observed surface boundary",
+    "closed/open/branch/ambiguous state is meaningful for that region",
+    "interior/core support belongs to the same region"
+  ],
+  "source_evidence": {
+    "canonical_boundary_adapter": {
+      "calls": [
+        "VisibleBoundaryMaterializationInput",
+        "VisibleBoundaryMaterializationResult",
+        "all",
+        "cat",
+        "cdist",
+        "cpu",
+        "detach",
+        "evaluate",
+        "fit_torch_visible_surface_lsq",
+        "float",
+        "isfinite",
+        "linspace",
+        "mean",
+        "meshgrid",
+        "min",
+        "reshape",
+        "stack",
+        "tolist",
+        "tuple",
+        "type",
+        "validate_simple_closed_loop"
+      ],
+      "end_line": 104,
+      "function": "materialize_visible_boundary_component",
+      "line": 47,
+      "matched_source_lines": [
+        {
+          "line": 9,
+          "text": "from osn_gs.surface.torch_nurbs import TorchNURBSSurface, fit_torch_visible_surface_lsq"
+        },
+        {
+          "line": 16,
+          "text": "source_region_id: int"
+        },
+        {
+          "line": 49,
+          "text": "boundary_ids: tuple[Any, ...], interior_ids: tuple[Any, ...],"
+        },
+        {
+          "line": 64,
+          "text": "admissible = component.ordering_state == \"ordered_closed_loop\" and component.role_candidate == \"outer_boundary_candidate\" and not component.branch_node_ids"
+        },
+        {
+          "line": 81,
+          "text": "adapter_id=f\"adapter:{component.component_id}\", source_region_id=component.region_id,"
+        },
+        {
+          "line": 82,
+          "text": "source_boundary_component_id=component.component_id, ordered_boundary_point_ids=boundary_ids,"
+        },
+        {
+          "line": 83,
+          "text": "ordered_boundary_points=boundary_points, interior_reliable_point_ids=interior_ids,"
+        },
+        {
+          "line": 94,
+          "text": "surface, _ = fit_torch_visible_surface_lsq(observed, resolution_u=6, resolution_v=6, degree_u=2, degree_v=2)"
+        }
+      ],
+      "path": "osn_gs/surface/torch_visible_boundary_materialization_adapter.py",
+      "source_sha256": "da262572cd57457e3f035dba884482e059e14c0bb8e7b398ada8e6b3432cfc8f",
+      "status": "PRESENT"
+    },
+    "canonical_boundary_builder": {
+      "calls": [
+        "BoundaryFirstVisibleSurfaceResult",
+        "ValueError",
+        "_materialize_boundary_role_network",
+        "assess_multi_loop_correspondence",
+        "boundary_role_evidence",
+        "float",
+        "getattr",
+        "int",
+        "isinstance",
+        "len",
+        "list",
+        "max",
+        "measure_observed_boundary_source_fidelity",
+        "observed_boundary_curves_from_annulus_component",
+        "observed_outer_boundary_curve_from_component",
+        "payload",
+        "select_observed_interior_anchor",
+        "str"
+      ],
+      "end_line": 277,
+      "function": "build_boundary_first_visible_surface",
+      "line": 203,
+      "matched_source_lines": [
+        {
+          "line": 114,
+          "text": "def _materialize_boundary_role_network("
+        },
+        {
+          "line": 206,
+          "text": "component_points: Any | None = None,"
+        },
+        {
+          "line": 221,
+          "text": "outer = list(getattr(boundary_result, \"outer_loops\", ()))"
+        },
+        {
+          "line": 249,
+          "text": "fidelity_provenance = ({\"source_boundary_fidelity\": measure_observed_boundary_source_fidelity(outer_curve, component_points).payload()} if component_points is not None else {})"
+        },
+        {
+          "line": 257,
+          "text": "if component_points is None:"
+        },
+        {
+          "line": 260,
+          "text": "component_points,"
+        },
+        {
+          "line": 269,
+          "text": "return _materialize_boundary_role_network("
+        }
+      ],
+      "path": "osn_gs/surface/torch_boundary_first_visible_builder.py",
+      "source_sha256": "b4c1e50f113b6b43e315bea78bedcc51ec5ecd10bec6c8c0fb53a363625d50b3",
+      "status": "PRESENT"
+    },
+    "canonical_constructor": {
+      "calls": [
+        "OrderedBoundaryComponent",
+        "ValueError",
+        "VisibleSurfaceConstructionConfig",
+        "VisibleSurfaceConstructionResult",
+        "_orient_normals_along_accepted_topology",
+        "_state",
+        "append",
+        "as_tensor",
+        "build_boundary_compatibility",
+        "build_continuation_shells_from_input",
+        "build_manifold_affinity_graph",
+        "classify_all_region_boundary_statuses",
+        "construct_canonical_region_tangent_frames",
+        "construct_region_parametric_chart_boundaries",
+        "covariance_from_scale_rotation",
+        "enumerate",
+        "evaluate_structural_reliability",
+        "exp",
+        "extract_covariance_frame",
+        "extract_support_termination_candidates",
+        "extract_world_space_boundary_halfedge_candidates",
+        "find_inconsistent_eligible_component_ids",
+        "form_surface_regions",
+        "frozenset",
+        "get",
+        "int",
+        "len",
+        "materialize_visible_boundary_component",
+        "next",
+        "normalize_continuation_candidates",
+        "payload",
+        "range",
+        "recover_directed_boundary_components",
+        "resolve_termination_neighborhood_scale",
+        "segment_kind_counts",
+        "set",
+        "sorted",
+        "str",
+        "sum",
+        "tensor",
+        "tuple"
+      ],
+      "end_line": 466,
+      "function": "construct_visible_nurbs_from_gaussians",
+      "line": 143,
+      "matched_source_lines": [
+        {
+          "line": 5,
+          "text": "This module deliberately composes the covariance-guided evidence modules"
+        },
+        {
+          "line": 17,
+          "text": "from osn_gs.surface.torch_gaussian_covariance_frame import GaussianCovarianceFrame, extract_covariance_frame"
+        },
+        {
+          "line": 18,
+          "text": "from osn_gs.surface.torch_gaussian_manifold_affinity import ManifoldAffinityConfig, ManifoldAffinityGraph, build_manifold_affinity_graph"
+        },
+        {
+          "line": 19,
+          "text": "from osn_gs.surface.torch_gaussian_structural_reliability import StructuralReliabilityConfig, StructuralReliabilityResult, evaluate_structural_reliability"
+        },
+        {
+          "line": 20,
+          "text": "from osn_gs.surface.torch_gaussian_surface_region_formation import RegionFormationConfig, RegionFormationResult, form_surface_regions"
+        },
+        {
+          "line": 23,
+          "text": "from osn_gs.surface.torch_visible_boundary_materialization_adapter import VisibleBoundaryMaterializationResult, materialize_visible_boundary_component"
+        },
+        {
+          "line": 33,
+          "text": "from osn_gs.surface.torch_world_space_boundary_halfedges import WorldSpaceBoundaryHalfEdgeCandidate, extract_world_space_boundary_halfedge_candidates"
+        },
+        {
+          "line": 50,
+          "text": "covariance_frame: GaussianCovarianceFrame"
+        },
+        {
+          "line": 146,
+          "text": "covariance: Any | None = None,"
+        },
+        {
+          "line": 149,
+          "text": "stable_ids: Sequence[Any] | None = None,"
+        },
+        {
+          "line": 158,
+          "text": "Exactly one covariance representation is required: covariance, or the"
+        },
+        {
+          "line": 164,
+          "text": ":func:`evaluate_structural_reliability` call is skipped and this result is"
+        },
+        {
+          "line": 169,
+          "text": "still run exclusively on ``positions``/``covariance`` UNLESS"
+        },
+        {
+          "line": 183,
+          "text": ":func:`build_manifold_affinity_graph`. ``None`` preserves the prior"
+        },
+        {
+          "line": 187,
+          "text": "from osn_gs.surface.torch_gaussian_covariance_frame import covariance_from_scale_rotation"
+        },
+        {
+          "line": 192,
+          "text": "ids = tuple(range(count)) if stable_ids is None else tuple(stable_ids)"
+        },
+        {
+          "line": 194,
+          "text": "raise ValueError(\"stable_ids must be unique and match positions.\")"
+        },
+        {
+          "line": 195,
+          "text": "if covariance is None:"
+        },
+        {
+          "line": 197,
+          "text": "raise ValueError(\"provide covariance or both log_scales and rotations.\")"
+        },
+        {
+          "line": 198,
+          "text": "covariance = covariance_from_scale_rotation(torch.exp(torch.as_tensor(log_scales)), rotations)"
+        },
+        {
+          "line": 200,
+          "text": "frame = extract_covariance_frame(covariance)"
+        },
+        {
+          "line": 202,
+          "text": "reliability = evaluate_structural_reliability(positions, frame, config=config.reliability)"
+        },
+        {
+          "line": 203,
+          "text": "graph = build_manifold_affinity_graph("
+        },
+        {
+          "line": 207,
+          "text": "regions = form_surface_regions(positions, frame, reliability, graph, config=config.regions, ids=ids)"
+        },
+        {
+          "line": 215,
+          "text": "relation_halfedges = extract_world_space_boundary_halfedge_candidates(positions, oriented_normals, regions, graph, ids=ids)"
+        },
+        {
+          "line": 225,
+          "text": "# exactly as build_manifold_affinity_graph resolves it), not the raw"
+        },
+        {
+          "line": 279,
+          "text": "attempts.append(materialize_visible_boundary_component("
+        },
+        {
+          "line": 336,
+          "text": "parametric_chart_attempts_list.append(materialize_visible_boundary_component("
+        }
+      ],
+      "path": "osn_gs/surface/torch_visible_surface_construction.py",
+      "source_sha256": "2feddf30da17917a5188d765cc87641151d165ae51d76cbb4baad0b08d14cf3e",
+      "status": "PRESENT"
+    },
+    "canonical_initialize": {
+      "calls": [
+        "RuntimeError",
+        "TorchPipelineState",
+        "_assign_uv_support_masks",
+        "_baseline_compatible_scale_rotation",
+        "_canonical_construction_indices",
+        "_canonical_initial_covariance",
+        "_empty_occlusion_curves",
+        "_nearest_canonical_sample_indices",
+        "_new_model",
+        "_patch_confidence_from_regions",
+        "_propagate_canonical_patch_ids",
+        "_surfel_compatible_scale_rotation",
+        "clamp_min",
+        "construct_visible_nurbs_from_gaussians",
+        "cpu",
+        "detach",
+        "enumerate",
+        "float",
+        "full",
+        "get",
+        "initialize",
+        "int",
+        "items",
+        "len",
+        "nonzero",
+        "numel",
+        "ones",
+        "print",
+        "project_torch_points_to_nurbs",
+        "require_torch",
+        "reshape",
+        "sum",
+        "tensor",
+        "tolist",
+        "tuple",
+        "zeros"
+      ],
+      "end_line": 527,
+      "function": "_initialize_canonical",
+      "line": 366,
+      "matched_source_lines": [
+        {
+          "line": 123,
+          "text": "representative_stable_ids: tuple[Any, ...]"
+        },
+        {
+          "line": 316,
+          "text": "construction_points = points[construction_indices]"
+        },
+        {
+          "line": 319,
+          "text": "construction_points,"
+        },
+        {
+          "line": 324,
+          "text": "nearest = self._nearest_canonical_sample_indices(points, construction_points)"
+        },
+        {
+          "line": 326,
+          "text": "float(construction_points.shape[0]) / float(points.shape[0])"
+        },
+        {
+          "line": 377,
+          "text": "construction_points = points[construction_indices]"
+        },
+        {
+          "line": 389,
+          "text": "construction_points,"
+        },
+        {
+          "line": 396,
+          "text": "points, construction_points"
+        },
+        {
+          "line": 403,
+          "text": "float(construction_points.shape[0]) / float(points.shape[0])"
+        },
+        {
+          "line": 413,
+          "text": "construction_points,"
+        },
+        {
+          "line": 415,
+          "text": "stable_ids=tuple("
+        },
+        {
+          "line": 420,
+          "text": "materialized = construction.materialized_visible_nurbs_surfaces"
+        },
+        {
+          "line": 506,
+          "text": "self._assign_uv_support_masks(model, surface_patches)"
+        },
+        {
+          "line": 564,
+          "text": "stable_ids: Any,"
+        },
+        {
+          "line": 568,
+          "text": "``points``/``covariance``/``opacity``/``stable_ids`` describe the FULL"
+        },
+        {
+          "line": 578,
+          "text": "stable_ids_list = list(stable_ids)"
+        },
+        {
+          "line": 583,
+          "text": "stable_ids_list,"
+        },
+        {
+          "line": 590,
+          "text": "rep_stable_ids = tuple(stable_ids_list[i] for i in rep_indices.detach().cpu().tolist())"
+        },
+        {
+          "line": 647,
+          "text": "points, frame_full, opacity, intrinsic_full, rep_points, rep_frame, rep_stable_ids,"
+        },
+        {
+          "line": 664,
+          "text": "rep_points, covariance=rep_covariance, stable_ids=rep_stable_ids, reliability=reliability,"
+        },
+        {
+          "line": 675,
+          "text": "full_stable_ids=stable_ids_list,"
+        },
+        {
+          "line": 680,
+          "text": "rep_points, covariance=rep_covariance, stable_ids=rep_stable_ids, reliability=reliability,"
+        },
+        {
+          "line": 689,
+          "text": "representative_stable_ids=rep_stable_ids,"
+        },
+        {
+          "line": 694,
+          "text": "points, covariance, stable_ids_list, bundle,"
+        },
+        {
+          "line": 699,
+          "text": "self, points: Any, covariance: Any, full_stable_ids: list[Any], bundle: CanonicalConstructionWithEvidence,"
+        },
+        {
+          "line": 704,
+          "text": "ordering, and chart eligibility (``materialized_visible_nurbs_surfaces``"
+        },
+        {
+          "line": 711,
+          "text": "(\"physical\", item) for item in bundle.construction.materialized_visible_nurbs_surfaces if item.surface is not None"
+        },
+        {
+          "line": 718,
+          "text": "stable_to_local = {stable_id: local for local, stable_id in enumerate(bundle.representative_stable_ids)}"
+        },
+        {
+          "line": 720,
+          "text": "(len(bundle.representative_stable_ids),), -1, dtype=torch.long, device=points.device,"
+        },
+        {
+          "line": 752,
+          "text": "full_evidence_points, full_evidence_stable_ids = collect_region_owned_evidence("
+        },
+        {
+          "line": 753,
+          "text": "points, full_stable_ids, propagated, patch_id,"
+        },
+        {
+          "line": 757,
+          "text": "full_evidence_points, full_evidence_stable_ids, representative_support_count,"
+        },
+        {
+          "line": 1047,
+          "text": "eligible_stable_ids = tuple("
+        },
+        {
+          "line": 1052,
+          "text": "points, covariance, eligible_opacity, eligible_stable_ids"
+        },
+        {
+          "line": 1055,
+          "text": "sample_stable_ids = bundle.representative_stable_ids"
+        },
+        {
+          "line": 1058,
+          "text": "event[\"canonical_sample_count\"] = len(sample_stable_ids)"
+        },
+        {
+          "line": 1059,
+          "text": "event[\"canonical_representative_stable_ids\"] = sample_stable_ids"
+        },
+        {
+          "line": 1070,
+          "text": "materialized = construction.materialized_visible_nurbs_surfaces"
+        },
+        {
+          "line": 1094,
+          "text": "for local_id, stable_id in enumerate(sample_stable_ids)"
+        },
+        {
+          "line": 1097,
+          "text": "(len(sample_stable_ids),), -1, dtype=torch.long, device=points.device"
+        },
+        {
+          "line": 1150,
+          "text": "sample_count = max(1, len(sample_stable_ids))"
+        },
+        {
+          "line": 1320,
+          "text": "construction_points = points[construction_local_indices]"
+        },
+        {
+          "line": 1322,
+          "text": "construction_points, covariance_scales=None, covariance_rotations=None"
+        },
+        {
+          "line": 1324,
+          "text": "stable_ids = tuple("
+        },
+        {
+          "line": 1328,
+          "text": "construction_points,"
+        },
+        {
+          "line": 1330,
+          "text": "stable_ids=stable_ids,"
+        },
+        {
+          "line": 1332,
+          "text": "materialized = construction.materialized_visible_nurbs_surfaces"
+        },
+        {
+          "line": 1349,
+          "text": "stable_to_model = {stable_id: stable_id for stable_id in stable_ids}"
+        },
+        {
+          "line": 1389,
+          "text": "self._assign_uv_support_masks(model, patches)"
+        },
+        {
+          "line": 1410,
+          "text": "def _assign_uv_support_masks("
+        }
+      ],
+      "path": "osn_gs/core/torch_pipeline.py",
+      "source_sha256": "1310192368a3dcc1e52f83a4b0b9d0fbf25b346a6c1db48f04f1b563c3eb3b07",
+      "status": "PRESENT"
+    },
+    "canonical_region_formation": {
+      "calls": [
+        "RegionFormationConfig",
+        "RegionFormationResult",
+        "SurfaceRegionCandidate",
+        "ValueError",
+        "_UnionFind",
+        "_build_relation_adjacency",
+        "_pair_key",
+        "_seed_core_components",
+        "abs",
+        "add",
+        "any",
+        "append",
+        "enumerate",
+        "find",
+        "float",
+        "get",
+        "int",
+        "isinstance",
+        "items",
+        "iter",
+        "keys",
+        "len",
+        "max",
+        "mean",
+        "merged_root",
+        "min",
+        "next",
+        "normalize",
+        "pop",
+        "range",
+        "replace",
+        "require_torch",
+        "set",
+        "setdefault",
+        "sort",
+        "sorted",
+        "stack",
+        "str",
+        "sum",
+        "tuple",
+        "union"
+      ],
+      "end_line": 1406,
+      "function": "form_surface_regions",
+      "line": 992,
+      "matched_source_lines": [
+        {
+          "line": 11,
+          "text": "local tangent-frame path consistency, and the absence of contradictory"
+        },
+        {
+          "line": 20,
+          "text": "It only consumes the worklog 113/115 contract (covariance frame, structural"
+        },
+        {
+          "line": 21,
+          "text": "reliability, manifold-affinity graph) and produces a richer, still-isolated"
+        },
+        {
+          "line": 29,
+          "text": "from osn_gs.surface.torch_gaussian_covariance_frame import GaussianCovarianceFrame"
+        },
+        {
+          "line": 38,
+          "text": "from osn_gs.surface.torch_gaussian_structural_reliability import ("
+        },
+        {
+          "line": 115,
+          "text": "# Tangent-frame / path consistency (§7)."
+        },
+        {
+          "line": 254,
+          "text": "tangent_frame_divergence: float"
+        },
+        {
+          "line": 264,
+          "text": "\"tangent_frame_divergence\": self.tangent_frame_divergence,"
+        },
+        {
+          "line": 273,
+          "text": "\"\"\"Tangent-frame transport / path-consistency evidence for a candidate edge (§7).\"\"\""
+        },
+        {
+          "line": 302,
+          "text": "member_ids: tuple[Any, ...]"
+        },
+        {
+          "line": 303,
+          "text": "core_member_ids: tuple[Any, ...]"
+        },
+        {
+          "line": 304,
+          "text": "attached_ambiguous_member_ids: tuple[Any, ...]"
+        },
+        {
+          "line": 305,
+          "text": "rejected_excluded_ids: tuple[Any, ...]"
+        },
+        {
+          "line": 306,
+          "text": "internal_accepted_edge_ids: tuple[tuple[Any, Any], ...]"
+        },
+        {
+          "line": 307,
+          "text": "internal_ambiguous_edge_ids: tuple[tuple[Any, Any], ...]"
+        },
+        {
+          "line": 308,
+          "text": "boundary_conflict_edge_ids: tuple[tuple[Any, Any], ...]"
+        },
+        {
+          "line": 309,
+          "text": "intrinsic_reliability_stats: dict[str, Any]"
+        },
+        {
+          "line": 311,
+          "text": "tangent_frame_consistency_stats: dict[str, Any]"
+        },
+        {
+          "line": 322,
+          "text": "\"member_ids\": list(self.member_ids),"
+        },
+        {
+          "line": 323,
+          "text": "\"core_member_ids\": list(self.core_member_ids),"
+        },
+        {
+          "line": 324,
+          "text": "\"attached_ambiguous_member_ids\": list(self.attached_ambiguous_member_ids),"
+        },
+        {
+          "line": 325,
+          "text": "\"rejected_excluded_ids\": list(self.rejected_excluded_ids),"
+        },
+        {
+          "line": 326,
+          "text": "\"internal_accepted_edge_ids\": [list(e) for e in self.internal_accepted_edge_ids],"
+        },
+        {
+          "line": 327,
+          "text": "\"internal_ambiguous_edge_ids\": [list(e) for e in self.internal_ambiguous_edge_ids],"
+        },
+        {
+          "line": 328,
+          "text": "\"boundary_conflict_edge_ids\": [list(e) for e in self.boundary_conflict_edge_ids],"
+        },
+        {
+          "line": 329,
+          "text": "\"intrinsic_reliability_stats\": self.intrinsic_reliability_stats,"
+        },
+        {
+          "line": 331,
+          "text": "\"tangent_frame_consistency_stats\": self.tangent_frame_consistency_stats,"
+        },
+        {
+          "line": 343,
+          "text": "node_region_id: tuple[int, ...]"
+        },
+        {
+          "line": 345,
+          "text": "unresolved_membership_ids: tuple[Any, ...]"
+        },
+        {
+          "line": 351,
+          "text": "\"node_region_id\": list(self.node_region_id),"
+        },
+        {
+          "line": 353,
+          "text": "\"unresolved_membership_ids\": list(self.unresolved_membership_ids),"
+        },
+        {
+          "line": 380,
+          "text": "def _build_relation_adjacency(count: int, graph: ManifoldAffinityGraph) -> tuple["
+        },
+        {
+          "line": 388,
+          "text": "for edge in graph.edges:"
+        },
+        {
+          "line": 409,
+          "text": "reliability: StructuralReliabilityResult, frame: GaussianCovarianceFrame, config: RegionFormationConfig,"
+        },
+        {
+          "line": 439,
+          "text": "1 for n in common_candidates if reliability.intrinsic.intrinsic_class[n] == INTRINSIC_REJECTED"
+        },
+        {
+          "line": 448,
+          "text": "# disagreement means a/b are not really describing the same local frame"
+        },
+        {
+          "line": 453,
+          "text": "align_a = float((frame.normal_candidate[a] * frame.normal_candidate[n]).sum().abs())"
+        },
+        {
+          "line": 454,
+          "text": "align_b = float((frame.normal_candidate[b] * frame.normal_candidate[n]).sum().abs())"
+        },
+        {
+          "line": 526,
+          "text": "a: int, b: int, consensus: EdgeConsensusMetrics, same_surface: list[set[int]], frame: GaussianCovarianceFrame,"
+        },
+        {
+          "line": 533,
+          "text": "mean_normal_a = torch.stack([frame.normal_candidate[n] for n in neighbors_a]).mean(dim=0)"
+        },
+        {
+          "line": 535,
+          "text": "mean_normal_a = frame.normal_candidate[a]"
+        },
+        {
+          "line": 537,
+          "text": "mean_normal_b = torch.stack([frame.normal_candidate[n] for n in neighbors_b]).mean(dim=0)"
+        },
+        {
+          "line": 539,
+          "text": "mean_normal_b = frame.normal_candidate[b]"
+        },
+        {
+          "line": 542,
+          "text": "tangent_frame_divergence = 1.0 - float((mean_normal_a * mean_normal_b).sum().abs())"
+        },
+        {
+          "line": 558,
+          "text": "and tangent_frame_divergence <= config.bridge_tangent_divergence_threshold"
+        },
+        {
+          "line": 563,
+          "text": "elif splits or tangent_frame_divergence > config.bridge_tangent_divergence_threshold or consensus.shared_same_surface_neighbor_count < config.bridge_min_shared_neighbor_for_well_supported:"
+        },
+        {
+          "line": 567,
+          "text": "if tangent_frame_divergence > config.bridge_tangent_divergence_threshold:"
+        },
+        {
+          "line": 568,
+          "text": "reasons.append(\"local_tangent_frame_divergence_between_endpoints_neighborhoods\")"
+        },
+        {
+          "line": 579,
+          "text": "tangent_frame_divergence=tangent_frame_divergence,"
+        },
+        {
+          "line": 612,
+          "text": "a: int, b: int, same_surface: list[set[int]], frame: GaussianCovarianceFrame, config: RegionFormationConfig,"
+        },
+        {
+          "line": 616,
+          "text": "direct_alignment = float((frame.normal_candidate[a] * frame.normal_candidate[b]).sum().abs())"
+        },
+        {
+          "line": 634,
+          "text": "align = float((frame.normal_candidate[n1] * frame.normal_candidate[n2]).sum().abs())"
+        },
+        {
+          "line": 636,
+          "text": "axis = torch.linalg.cross(frame.normal_candidate[n1], frame.normal_candidate[n2])"
+        },
+        {
+          "line": 652,
+          "text": "torch_positions_available = hasattr(frame, \"tangent_major_scale\")"
+        },
+        {
+          "line": 655,
+          "text": "scale = float((frame.tangent_major_scale[n1] + frame.tangent_major_scale[n2]) / 2.0)"
+        },
+        {
+          "line": 657,
+          "text": "direct_scale = float((frame.tangent_major_scale[a] + frame.tangent_major_scale[b]) / 2.0)"
+        },
+        {
+          "line": 736,
+          "text": "by_pair: dict[tuple[int, int], Any], reliability: StructuralReliabilityResult,"
+        },
+        {
+          "line": 737,
+          "text": "frame: GaussianCovarianceFrame, config: RegionFormationConfig, uf: _UnionFind,"
+        },
+        {
+          "line": 765,
+          "text": "path_result = _evaluate_path_consistency(a, b, same_surface, frame, config)"
+        },
+        {
+          "line": 810,
+          "text": "a, b, consensus_by_pair[(a, b)], same_surface, frame, len(edges), config,"
+        },
+        {
+          "line": 834,
+          "text": "reliability: StructuralReliabilityResult, frame: GaussianCovarianceFrame,"
+        },
+        {
+          "line": 856,
+          "text": "intrinsic_class_lookup = reliability.intrinsic.intrinsic_class"
+        },
+        {
+          "line": 884,
+          "text": "consensus_by_pair[(a, b)] = _compute_edge_consensus(a, b, same_surface, crease, parallel_separate, candidate_neighbors, by_pair, reliability, frame, config)"
+        },
+        {
+          "line": 887,
+          "text": "# then by (a, b) index for tie-breaking (positions here are already the"
+        },
+        {
+          "line": 899,
+          "text": "by_pair, reliability, frame, config, uf, consensus_by_pair, bridge_by_pair,"
+        },
+        {
+          "line": 913,
+          "text": "path_result = _evaluate_path_consistency(a, b, same_surface, frame, config)"
+        },
+        {
+          "line": 926,
+          "text": "# normalized by `frame.normal_thickness` -- an individual Gaussian"
+        },
+        {
+          "line": 930,
+          "text": "# distribution for edges the affinity graph ALREADY classified"
+        },
+        {
+          "line": 949,
+          "text": "# claimed, using the affinity graph's OWN already-correctly-scaled"
+        },
+        {
+          "line": 977,
+          "text": "bridge = _evaluate_bridge_veto(a, b, consensus, same_surface, frame, crossing_count, config)"
+        },
+        {
+          "line": 993,
+          "text": "positions: Any,"
+        },
+        {
+          "line": 994,
+          "text": "frame: GaussianCovarianceFrame,"
+        },
+        {
+          "line": 995,
+          "text": "reliability: StructuralReliabilityResult,"
+        },
+        {
+          "line": 996,
+          "text": "graph: ManifoldAffinityGraph,"
+        },
+        {
+          "line": 999,
+          "text": "ids: Sequence[Any] | None = None,"
+        },
+        {
+          "line": 1005,
+          "text": "edge that would merge two independent components, and tangent-frame path"
+        },
+        {
+          "line": 1007,
+          "text": "diagnostic-level foundation -- no ordered boundary graph, no NURBS patch"
+        },
+        {
+          "line": 1011,
+          "text": "count = int(reliability.intrinsic.conditioning_score.shape[0])"
+        },
+        {
+          "line": 1012,
+          "text": "ids = tuple(ids) if ids is not None else tuple(range(count))"
+        },
+        {
+          "line": 1013,
+          "text": "if len(ids) != count:"
+        },
+        {
+          "line": 1014,
+          "text": "raise ValueError(\"ids must have the same length as the reliability result.\")"
+        },
+        {
+          "line": 1016,
+          "text": "same_surface, crease, parallel_separate, candidate_neighbors, by_pair = _build_relation_adjacency(count, graph)"
+        },
+        {
+          "line": 1018,
+          "text": "broad_candidate_graph = (sum(len(neighbors) for neighbors in candidate_neighbors) / max(count, 1)) > 12.0"
+        },
+        {
+          "line": 1019,
+          "text": "config = replace(config, enable_nonlocal_shortcut_filter=broad_candidate_graph)"
+        },
+        {
+          "line": 1022,
+          "text": "count, same_surface, crease, parallel_separate, candidate_neighbors, by_pair, reliability, frame, config,"
+        },
+        {
+          "line": 1030,
+          "text": "intrinsic_class = reliability.intrinsic.intrinsic_class"
+        },
+        {
+          "line": 1031,
+          "text": "contextual_class = reliability.contextual.contextual_class"
+        },
+        {
+          "line": 1086,
+          "text": "node_region_id = [-1] * count"
+        },
+        {
+          "line": 1091,
+          "text": "ordered_roots = sorted(components.keys(), key=lambda r: ids[r] if not isinstance(ids[r], (int, float)) else ids[r])"
+        },
+        {
+          "line": 1107,
+          "text": "node_region_id[n] = region_id"
+        },
+        {
+          "line": 1112,
+          "text": "unresolved_membership_ids: list[Any] = []"
+        },
+        {
+          "line": 1117,
+          "text": "if node_region_id[n] == -1 and intrinsic_class[n] != INTRINSIC_REJECTED"
+        },
+        {
+          "line": 1119,
+          "text": "unassigned.sort(key=lambda n: str(ids[n]))"
+        },
+        {
+          "line": 1123,
+          "text": "region_id = node_region_id[neighbor]"
+        },
+        {
+          "line": 1190,
+          "text": "node_region_id[n] = top_region"
+        },
+        {
+          "line": 1197,
+          "text": "if ids[n] not in unresolved_membership_ids:"
+        },
+        {
+          "line": 1198,
+          "text": "unresolved_membership_ids.append(ids[n])"
+        },
+        {
+          "line": 1207,
+          "text": "node_region_id[n] = -1"
+        },
+        {
+          "line": 1214,
+          "text": "ra, rb = node_region_id[a], node_region_id[b]"
+        },
+        {
+          "line": 1242,
+          "text": "side_a_nodes = {e[0] for e in edges} | {e[1] for e in edges if node_region_id[e[1]] == ra}"
+        },
+        {
+          "line": 1243,
+          "text": "side_b_nodes = {e[1] for e in edges} | {e[0] for e in edges if node_region_id[e[0]] == rb}"
+        },
+        {
+          "line": 1248,
+          "text": "if node_region_id[nb] in (ra, rb):"
+        },
+        {
+          "line": 1257,
+          "text": "final_region_ids = sorted({merged_root(i) for i in range(len(regions))})"
+        },
+        {
+          "line": 1258,
+          "text": "remap = {old: new for new, old in enumerate(final_region_ids)}"
+        },
+        {
+          "line": 1260,
+          "text": "if node_region_id[n] != -1:"
+        },
+        {
+          "line": 1261,
+          "text": "node_region_id[n] = remap[merged_root(node_region_id[n])]"
+        },
+        {
+          "line": 1266,
+          "text": "for new_id in range(len(final_region_ids)):"
+        },
+        {
+          "line": 1267,
+          "text": "member_nodes = [n for n in range(count) if node_region_id[n] == new_id]"
+        },
+        {
+          "line": 1283,
+          "text": "id_pair = (ids[a], ids[b])"
+        },
+        {
+          "line": 1304,
+          "text": "# Disconnected-core-subgraph check (fragmentation signal)."
+        },
+        {
+          "line": 1340,
+          "text": "mean_normal = torch.stack([frame.normal_candidate[n] for n in core_set]).mean(dim=0)"
+        },
+        {
+          "line": 1343,
+          "text": "1.0 - float((frame.normal_candidate[n] * mean_normal).sum().abs()) for n in core_set"
+        },
+        {
+          "line": 1348,
+          "text": "scale_values = [float(frame.tangent_major_scale[n]) for n in member_nodes]"
+        },
+        {
+          "line": 1378,
+          "text": "member_ids=tuple(ids[n] for n in member_nodes),"
+        },
+        {
+          "line": 1379,
+          "text": "core_member_ids=tuple(ids[n] for n in core_nodes),"
+        },
+        {
+          "line": 1380,
+          "text": "attached_ambiguous_member_ids=tuple(ids[n] for n in attached_nodes),"
+        },
+        {
+          "line": 1381,
+          "text": "rejected_excluded_ids=tuple("
+        },
+        {
+          "line": 1382,
+          "text": "ids[n] for n in range(count)"
+        },
+        {
+          "line": 1385,
+          "text": "internal_accepted_edge_ids=tuple(internal_accepted),"
+        },
+        {
+          "line": 1386,
+          "text": "internal_ambiguous_edge_ids=tuple(internal_ambiguous),"
+        },
+        {
+          "line": 1387,
+          "text": "boundary_conflict_edge_ids=tuple(boundary_conflict),"
+        },
+        {
+          "line": 1388,
+          "text": "intrinsic_reliability_stats=intrinsic_stats,"
+        },
+        {
+          "line": 1390,
+          "text": "tangent_frame_consistency_stats=tangent_stats,"
+        },
+        {
+          "line": 1401,
+          "text": "node_region_id=tuple(node_region_id),"
+        },
+        {
+          "line": 1403,
+          "text": "unresolved_membership_ids=tuple(unresolved_membership_ids),"
+        }
+      ],
+      "path": "osn_gs/surface/torch_gaussian_surface_region_formation.py",
+      "source_sha256": "f09aa47840e6ee10390e24771378b6d4fbdbb49251b2ef50c9ea1dbc9e381f93",
+      "status": "PRESENT"
+    },
+    "diagnostic_decomposition_only": {
+      "calls": [
+        "ProxySurfaceDecompositionDiagnostics",
+        "ProxySurfaceRegion",
+        "RuntimeError",
+        "ValueError",
+        "_RegionState",
+        "_canonical_int_pair",
+        "_canonical_leaf_pair",
+        "_coerce_config",
+        "_evaluate_pair",
+        "_validate_candidate_config",
+        "add",
+        "append",
+        "build_surface_cell_candidate_graph",
+        "cat",
+        "clear",
+        "discard",
+        "enumerate",
+        "evaluate_and_enqueue",
+        "fit_quadratic_surface_proxy",
+        "float",
+        "get",
+        "heappop",
+        "heappush",
+        "int",
+        "items",
+        "len",
+        "list",
+        "numel",
+        "pop",
+        "require_torch",
+        "set",
+        "setdefault",
+        "sort",
+        "sorted",
+        "to",
+        "tuple",
+        "update",
+        "values"
+      ],
+      "end_line": 611,
+      "function": "build_proxy_surface_components_diagnostics",
+      "line": 368,
+      "matched_source_lines": [
+        {
+          "line": 3,
+          "text": "\"\"\"Diagnostics-only merge-only proxy surface decomposition."
+        }
+      ],
+      "path": "osn_gs/surface/torch_surface_decomposition.py",
+      "source_sha256": "5c1a41a5be11e51a20465f91c1488d777dd6ba739c043517eb2312cac6284551",
+      "status": "PRESENT"
+    },
+    "renderer_event_generation": {
+      "calls": [
+        "AssertionError",
+        "PerViewEventCloud",
+        "ValueError",
+        "_estimate_local_normals",
+        "_point_in_polygon",
+        "_reconstruct_world_from_renderer_pixel_depth",
+        "_renderer_projected_pixels",
+        "_sha256_array",
+        "_sha256_json",
+        "_sha256_rows",
+        "abs",
+        "all",
+        "allclose",
+        "arange",
+        "as_json",
+        "asarray",
+        "astype",
+        "column_stack",
+        "empty",
+        "float",
+        "int",
+        "isfinite",
+        "len",
+        "max",
+        "mean",
+        "meshgrid",
+        "min",
+        "nonzero",
+        "norm",
+        "polygon_for",
+        "reshape",
+        "str",
+        "sum"
+      ],
+      "end_line": 316,
+      "function": "_build_per_view_event_cloud",
+      "line": 232,
+      "matched_source_lines": [
+        {
+          "line": 141,
+          "text": "local_normals: np.ndarray"
+        },
+        {
+          "line": 208,
+          "text": "def _estimate_local_normals(points: np.ndarray, neighbors: int = LOCAL_NORMAL_NEIGHBORS) -> np.ndarray:"
+        },
+        {
+          "line": 276,
+          "text": "local_normals=_estimate_local_normals(points),"
+        },
+        {
+          "line": 362,
+          "text": "local_normals=cloud.local_normals,"
+        },
+        {
+          "line": 420,
+          "text": "second_normals = second.local_normals"
+        },
+        {
+          "line": 422,
+          "text": "if len(first.local_normals) == len(first.points) and len(second.local_normals) == len(second.points):"
+        },
+        {
+          "line": 425,
+          "text": "& np.all(np.isfinite(first.local_normals), axis=1)"
+        },
+        {
+          "line": 429,
+          "text": "cosine = np.sum(first.local_normals[valid] * second_normals[first_indices[valid]], axis=1)"
+        },
+        {
+          "line": 440,
+          "text": "if len(second.local_normals) == len(second.points) and len(first.local_normals) == len(first.points):"
+        },
+        {
+          "line": 443,
+          "text": "& np.all(np.isfinite(second.local_normals), axis=1)"
+        },
+        {
+          "line": 444,
+          "text": "& np.all(np.isfinite(first.local_normals[second_indices]), axis=1)"
+        },
+        {
+          "line": 447,
+          "text": "cosine = np.sum(second.local_normals[valid_reverse] * first.local_normals[second_indices[valid_reverse]], axis=1)"
+        }
+      ],
+      "path": "devtools/demo/per_view_renderer_surface_correspondence_physical_sheet_oracle_audit.py",
+      "source_sha256": "cd2618c488563b788496f590783a9ae2f10ff2654793db21a58d6582f63a9f4f",
+      "status": "PRESENT"
+    },
+    "renderer_event_save": {
+      "calls": [
+        "_draw_polygon_outline",
+        "_draw_renderer_projected_points",
+        "_event_cloud_summary",
+        "_save_candidate_world_plot",
+        "_write_ply",
+        "append",
+        "asarray",
+        "enumerate",
+        "mkdir",
+        "save",
+        "savez_compressed",
+        "str"
+      ],
+      "end_line": 359,
+      "function": "_save_candidate_outputs",
+      "line": 310,
+      "matched_source_lines": [
+        {
+          "line": 244,
+          "text": "\"source_camera\": cloud.camera_name,"
+        },
+        {
+          "line": 322,
+          "text": "cloud_root / \"event_cloud_with_provenance.npz\","
+        },
+        {
+          "line": 329,
+          "text": "source_camera=np.asarray(cloud.camera_name),"
+        },
+        {
+          "line": 643,
+          "text": "\"source_cameras\": list(CAMERAS),"
+        }
+      ],
+      "path": "devtools/demo/genuine_physical_sheet_oracle_clean_support_representative_audit.py",
+      "source_sha256": "f81eae01e1f2a8c306e40926dc712788fac4a1e94cb847dfc10152ada6aedcd8",
+      "status": "PRESENT"
+    },
+    "wl139_fitter": {
+      "calls": [
+        "AssertionError",
+        "PhysicalChartRepresentative",
+        "TorchNURBSSurface",
+        "_basis_values",
+        "_case_coordinates",
+        "_fixed_physical_uv",
+        "_greville_abscissae",
+        "_normalised_axis",
+        "_physical_domain",
+        "_second_difference_penalty",
+        "_sha256_rows",
+        "abs",
+        "as_tensor",
+        "asarray",
+        "astype",
+        "column_stack",
+        "copy",
+        "cpu",
+        "detach",
+        "deterministic_indices",
+        "einsum",
+        "evaluate",
+        "evaluate_with_normals",
+        "eye",
+        "float",
+        "int",
+        "is_available",
+        "knot_vectors",
+        "len",
+        "linspace",
+        "lstsq",
+        "max",
+        "meshgrid",
+        "no_grad",
+        "norm",
+        "numpy",
+        "ones",
+        "reshape",
+        "solve",
+        "stack",
+        "zeros"
+      ],
+      "end_line": 564,
+      "function": "fit_physical_chart_surface",
+      "line": 457,
+      "matched_source_lines": [
+        {
+          "line": 431,
+          "text": "def _fixed_physical_uv("
+        },
+        {
+          "line": 470,
+          "text": "fit_indices = deterministic_indices(len(points), int(max_fit_points))"
+        },
+        {
+          "line": 473,
+          "text": "fit_uv, fit_n = _fixed_physical_uv(fit_points, config, domain_u, domain_v)"
+        },
+        {
+          "line": 742,
+          "text": "frontier_uv, _frontier_n = _fixed_physical_uv("
+        }
+      ],
+      "path": "devtools/demo/physical_chart_surface_representative.py",
+      "source_sha256": "2bc0319e8d26e28d4fe2362a23cfe29561abcfbe92ca6c561a5e4d2b949e5b71",
+      "status": "PRESENT"
+    },
+    "wl145_union": {
+      "calls": [
+        "Path",
+        "_build_per_view_event_cloud",
+        "_camera_representative_outputs",
+        "_depth_map_from_package",
+        "_jsonable",
+        "_load_canonical_scene",
+        "_load_inputs",
+        "_manual_controls",
+        "_mask_camera_lookup",
+        "_output_readme",
+        "_pairwise_reports",
+        "_pca_chart_config",
+        "_render_to_pil",
+        "_save_candidate_outputs",
+        "_save_representative_outputs",
+        "_sha256_file",
+        "_sha256_rows",
+        "append",
+        "as_json",
+        "audit_raw_graphness",
+        "bool",
+        "concatenate",
+        "dumps",
+        "empty",
+        "get",
+        "graphness_report",
+        "int",
+        "items",
+        "len",
+        "list",
+        "mkdir",
+        "package_for",
+        "pop",
+        "render",
+        "resolve",
+        "startswith",
+        "str",
+        "write_text"
+      ],
+      "end_line": 696,
+      "function": "run_audit",
+      "line": 556,
+      "matched_source_lines": [
+        {
+          "line": 89,
+          "text": "RAW_VISIBLE_SURFACE = ("
+        },
+        {
+          "line": 362,
+          "text": "def _pca_chart_config(points: np.ndarray, name: str, label: str) -> tuple[RepresentativeCaseConfig, dict[str, Any]]:"
+        },
+        {
+          "line": 583,
+          "text": "clean_points = np.concatenate([cloud.points for cloud in clouds], axis=0) if clear else np.empty((0, 3), dtype=np.float64)"
+        },
+        {
+          "line": 590,
+          "text": "config, chart_frame = _pca_chart_config(clean_points, control.name, control.surface_label)"
+        },
+        {
+          "line": 716,
+          "text": "parser.add_argument(\"--raw-visible-surface\", type=Path, default=RAW_VISIBLE_SURFACE)"
+        }
+      ],
+      "path": "devtools/demo/genuine_physical_sheet_oracle_clean_support_representative_audit.py",
+      "source_sha256": "f81eae01e1f2a8c306e40926dc712788fac4a1e94cb847dfc10152ada6aedcd8",
+      "status": "PRESENT"
+    },
+    "wl148_replay": {
+      "calls": [
+        "AssertionError",
+        "FileNotFoundError",
+        "_cell_mask_from_support",
+        "_config_from_json",
+        "_domain_accounting",
+        "_sha256_array",
+        "_sha256_rows",
+        "array_equal",
+        "asarray",
+        "astype",
+        "concatenate",
+        "exists",
+        "float",
+        "get",
+        "int",
+        "issubset",
+        "join",
+        "len",
+        "load",
+        "loads",
+        "pop",
+        "read_text",
+        "set",
+        "str",
+        "sum",
+        "zip"
+      ],
+      "end_line": 456,
+      "function": "_load_frozen_baseline",
+      "line": 341,
+      "matched_source_lines": [
+        {
+          "line": 1,
+          "text": "\"\"\"Worklog 148: replay WL145 and compare two frozen materializations."
+        },
+        {
+          "line": 3,
+          "text": "This is an isolated, non-canonical audit.  It loads the exact WL145 frozen"
+        },
+        {
+          "line": 4,
+          "text": "oracle and representative artifact, verifies the committed 314/3840 support"
+        },
+        {
+          "line": 28,
+          "text": "from devtools.demo.genuine_physical_sheet_oracle_clean_support_representative_audit import (  # noqa: E402"
+        },
+        {
+          "line": 35,
+          "text": "from devtools.demo.physical_chart_surface_representative import (  # noqa: E402"
+        },
+        {
+          "line": 48,
+          "text": "from devtools.demo.scale_separated_visible_surface_representative import (  # noqa: E402"
+        },
+        {
+          "line": 54,
+          "text": "WL145_OUTPUT_ROOT = REPO_ROOT / \"output\" / \"145_genuine_physical_sheet_oracle_clean_support_representative_audit\""
+        },
+        {
+          "line": 55,
+          "text": "WL145_REPORT = WL145_OUTPUT_ROOT / \"genuine_physical_sheet_oracle_clean_support_representative_audit_report.json\""
+        },
+        {
+          "line": 59,
+          "text": "/ \"clean_support_representative\""
+        },
+        {
+          "line": 60,
+          "text": "/ \"wl139_frozen_representative.npz\""
+        },
+        {
+          "line": 62,
+          "text": "WL139_REPORT = REPO_ROOT / \"output\" / \"confirmed\" / \"139_physical_chart_surface_representative\" / \"physical_chart_surface_representative_report.json\""
+        },
+        {
+          "line": 290,
+          "text": "\"distance_correspondence\": \"nearest materialized representative vertex\","
+        },
+        {
+          "line": 300,
+          "text": "representative_points: np.ndarray,"
+        },
+        {
+          "line": 302,
+          "text": "representative_normals: np.ndarray,"
+        },
+        {
+          "line": 308,
+          "text": "materialized_points = representative_points[vertex_indices]"
+        },
+        {
+          "line": 323,
+          "text": "representative_normals[vertex_indices],"
+        },
+        {
+          "line": 335,
+          "text": "\"materialized_geometry_source\": \"existing frozen representative vertices incident to materializable cells\","
+        },
+        {
+          "line": 341,
+          "text": "def _load_frozen_baseline("
+        },
+        {
+          "line": 343,
+          "text": "representative_path: Path = FROZEN_REPRESENTATIVE,"
+        },
+        {
+          "line": 349,
+          "text": "for path in (report_path, representative_path, wl139_report_path):"
+        },
+        {
+          "line": 355,
+          "text": "representative_result = case[\"conditional_wl139_representative\"]"
+        },
+        {
+          "line": 358,
+          "text": "frozen = np.load(representative_path)"
+        },
+        {
+          "line": 360,
+          "text": "if not required.issubset(set(frozen.files)):"
+        },
+        {
+          "line": 361,
+          "text": "raise AssertionError(f\"frozen representative is missing {required - set(frozen.files)}\")"
+        },
+        {
+          "line": 362,
+          "text": "fit_points = np.asarray(frozen[\"fit_points\"], dtype=np.float64)"
+        },
+        {
+          "line": 363,
+          "text": "representative_points = np.asarray(frozen[\"sampled_points\"], dtype=np.float64)"
+        },
+        {
+          "line": 364,
+          "text": "representative_normals = np.asarray(frozen[\"sampled_normals\"], dtype=np.float64)"
+        },
+        {
+          "line": 380,
+          "text": "raise AssertionError(\"frozen fit_points are not the exact ordered WL145 per-view event union\")"
+        },
+        {
+          "line": 394,
+          "text": "raise AssertionError(\"frozen fit_points fingerprint failed\")"
+        },
+        {
+          "line": 395,
+          "text": "if len(representative_points) != REPRESENTATIVE_COUNT:"
+        },
+        {
+          "line": 396,
+          "text": "raise AssertionError(\"frozen representative sample count failed\")"
+        },
+        {
+          "line": 397,
+          "text": "if representative_points.shape != representative_normals.shape or representative_points.shape != (REPRESENTATIVE_COUNT, 3):"
+        },
+        {
+          "line": 398,
+          "text": "raise AssertionError(\"frozen representative point/normal shape failed\")"
+        },
+        {
+          "line": 399,
+          "text": "if _sha256_array(representative_points) != FROZEN_REPRESENTATIVE_XYZ_SHA256:"
+        },
+        {
+          "line": 400,
+          "text": "raise AssertionError(\"frozen representative XYZ fingerprint failed\")"
+        },
+        {
+          "line": 401,
+          "text": "if _sha256_array(representative_normals) != FROZEN_REPRESENTATIVE_NORMALS_SHA256:"
+        },
+        {
+          "line": 402,
+          "text": "raise AssertionError(\"frozen representative normal fingerprint failed\")"
+        },
+        {
+          "line": 410,
+          "text": "domain = _domain_accounting(event_union, config, representative_points)"
+        },
+        {
+          "line": 428,
+          "text": "\"representative_result\": representative_result,"
+        },
+        {
+          "line": 434,
+          "text": "\"representative_points\": representative_points,"
+        },
+        {
+          "line": 435,
+          "text": "\"representative_normals\": representative_normals,"
+        },
+        {
+          "line": 448,
+          "text": "\"representative_sample_count\": REPRESENTATIVE_COUNT,"
+        },
+        {
+          "line": 500,
+          "text": "points = baseline[\"representative_points\"]"
+        },
+        {
+          "line": 501,
+          "text": "normals = baseline[\"representative_normals\"]"
+        },
+        {
+          "line": 514,
+          "text": "\"exact_representative_xyz\": True,"
+        },
+        {
+          "line": 515,
+          "text": "\"exact_representative_normals\": True,"
+        },
+        {
+          "line": 521,
+          "text": "replay_path = root / \"frozen_inputs\" / \"wl145_frozen_representative_replay.npz\""
+        },
+        {
+          "line": 528,
+          "text": "sampled_points=baseline[\"representative_points\"],"
+        },
+        {
+          "line": 529,
+          "text": "sampled_normals=baseline[\"representative_normals\"],"
+        },
+        {
+          "line": 533,
+          "text": "output[\"frozen_input_replay\"] = {"
+        },
+        {
+          "line": 536,
+          "text": "\"representative_xyz_exact\": True,"
+        },
+        {
+          "line": 537,
+          "text": "\"representative_normals_exact\": True,"
+        },
+        {
+          "line": 577,
+          "text": "figure.suptitle(\"WL145 frozen support semantics: 96 x 40; no smoothing/fill\")"
+        },
+        {
+          "line": 608,
+          "text": "points = baseline[\"representative_points\"]"
+        },
+        {
+          "line": 626,
+          "text": "surface = Poly3DCollection([grid[[i, i + 1, i + 1, i], [j, j, j + 1, j + 1]] for i in range(SAMPLE_COUNT_U - 1) for j in range(SAMPLE_COUNT_V - 1)], alpha=0.42, facecolor=\"#00aede\", edgecolor=\"none\", label=\"full-domain representative\")"
+        },
+        {
+          "line": 648,
+          "text": "\"A_full_domain\": save(\"A_full_domain.png\", \"A: clean oracle + full-domain representative\", show_full=True, show_support=False),"
+        },
+        {
+          "line": 649,
+          "text": "\"B_support_constrained\": save(\"B_support_constrained.png\", \"B: clean oracle + frozen support-constrained materialization\", show_full=False, show_support=True),"
+        },
+        {
+          "line": 677,
+          "text": "raise AssertionError(\"Candidate B state archive checkpoint differs from requested frozen checkpoint\")"
+        },
+        {
+          "line": 691,
+          "text": "representative = baseline[\"representative_points\"]"
+        },
+        {
+          "line": 693,
+          "text": "support = representative[support_indices]"
+        },
+        {
+          "line": 698,
+          "text": "c = _draw_renderer_projected_points(a, representative, camera, FULL_DOMAIN_RGB, radius=2.1, alpha=0.98)"
+        },
+        {
+          "line": 700,
+          "text": "e = _draw_renderer_projected_points(b, representative, camera, FULL_DOMAIN_RGB, radius=2.1, alpha=0.98)"
+        },
+        {
+          "line": 705,
+          "text": "\"C_gaussian_plus_full_domain_representative\": c,"
+        },
+        {
+          "line": 717,
+          "text": "\"이 camera 폴더의 A-F는 동일한 frozen Gaussian render를 배경으로 한다. \""
+        },
+        {
+          "line": 718,
+          "text": "\"A는 Gaussian Scene, B는 clean oracle, C는 full-domain representative, \""
+        },
+        {
+          "line": 719,
+          "text": "\"D는 frozen support-constrained materialization, E/F는 oracle과 각 representative의 결합이다.\\n\\n\""
+        },
+        {
+          "line": 726,
+          "text": "# frozen Candidate B; only in-memory display colour tensors are replaced."
+        },
+        {
+          "line": 821,
+          "text": "\"C_gaussian_plus_full_domain_representative\","
+        },
+        {
+          "line": 875,
+          "text": "baseline = _load_frozen_baseline(Path(arguments.wl145_report), Path(arguments.representative), Path(arguments.wl139_report), Path(arguments.event_root))"
+        },
+        {
+          "line": 878,
+          "text": "cell_areas = _cell_areas(baseline[\"representative_points\"])"
+        },
+        {
+          "line": 881,
+          "text": "\"A_full_domain\": _arm_metrics(\"A_full_domain\", full_cells, baseline[\"oracle_points\"], baseline[\"representative_points\"], baseline[\"oracle_normals\"], baseline[\"representative_normals\"], cell_areas, baseline[\"h\"], baseline[\"mu\"]),"
+        },
+        {
+          "line": 882,
+          "text": "\"B_support_constrained\": _arm_metrics(\"B_support_constrained\", baseline[\"cell_mask\"], baseline[\"oracle_points\"], baseline[\"representative_points\"], baseline[\"oracle_normals\"], baseline[\"representative_normals\"], cell_areas, baseline[\"h\"], baseline[\"mu\"]),"
+        },
+        {
+          "line": 903,
+          "text": "\"A는 frozen representative의 전체 96x40 cell rectangle, B는 WL145 exact all-four \""
+        },
+        {
+          "line": 904,
+          "text": "\"support cell만 사용한다. vertex는 기존 representative row이며 새 vertex/fit은 없다.\\n\","
+        },
+        {
+          "line": 931,
+          "text": "\"AGENT INTERPRETATION OF INTENT\": \"Separate the mathematical full parametric rectangle from an evidence-supported visible-surface materialization while holding the WL145/WL139 representative geometry exactly fixed.\","
+        },
+        {
+          "line": 941,
+          "text": "\"distance_population\": \"exact existing representative sample vertices incident to the materialized cells; cKDTree nearest-neighbour distances\","
+        },
+        {
+          "line": 949,
+          "text": "\"oracle\": \"frozen NPZ fit_points, exactly the 1586-point verified renderer-event union\","
+        },
+        {
+          "line": 950,
+          "text": "\"representative\": \"frozen NPZ sampled_points and sampled_normals, 96 x 40 row-major grid\","
+        },
+        {
+          "line": 955,
+          "text": "\"fitting_called_after_frozen_load\": False,"
+        },
+        {
+          "line": 956,
+          "text": "\"representative_xyz_shared_by_a_and_b\": True,"
+        },
+        {
+          "line": 957,
+          "text": "\"representative_normals_shared_by_a_and_b\": True,"
+        },
+        {
+          "line": 1003,
+          "text": "\"basis\": \"B is evaluated with unchanged frozen geometry; attribution is based on measured coverage, surface-to-oracle error, and removed unsupported rectangle area.\","
+        },
+        {
+          "line": 1004,
+          "text": "\"representative_geometry_changed\": False,"
+        },
+        {
+          "line": 1008,
+          "text": "\"RETAINED\": [\"UV occupancy annotation as diagnostic baseline only\", \"WL145 oracle/provenance\", \"WL139 frozen representative XYZ/normals\", \"h and mu\", \"renderer/checkpoint/cameras\", \"Candidate B\"],"
+        },
+        {
+          "line": 1013,
+          "text": "\"frozen_representative\": str(Path(arguments.representative).resolve()),"
+        },
+        {
+          "line": 1015,
+          "text": "\"representative_xyz_sha256\": FROZEN_REPRESENTATIVE_XYZ_SHA256,"
+        },
+        {
+          "line": 1016,
+          "text": "\"representative_normals_sha256\": FROZEN_REPRESENTATIVE_NORMALS_SHA256,"
+        },
+        {
+          "line": 1028,
+          "text": "\"이 output은 WL145 exact baseline을 먼저 검증한 뒤 동일 frozen WL139 representative에 대해 full-domain(A)와 frozen support-constrained(B)를 비교한 격리 진단이다.\\n\\n\""
+        },
+        {
+          "line": 1031,
+          "text": "\"- A/B geometry: 동일한 frozen representative XYZ/normals\\n\""
+        },
+        {
+          "line": 1042,
+          "text": "parser.add_argument(\"--representative\", type=Path, default=FROZEN_REPRESENTATIVE)"
+        }
+      ],
+      "path": "devtools/demo/wl145_baseline_reconciliation_support_constrained_materialization.py",
+      "source_sha256": "296e88bcb2fe30a82f7ab49a372ae5443c44ddd7febd6acae12fd525807a94da",
+      "status": "PRESENT"
+    },
+    "wl149_attribution": {
+      "calls": [
+        "AssertionError",
+        "Path",
+        "_extent",
+        "_fixed_axis_loo",
+        "_full_pca_loo",
+        "_jsonable",
+        "_load_canonical_scene",
+        "_load_frozen_baseline",
+        "_load_provenance",
+        "_load_wl148_artifact",
+        "_merge_rows",
+        "_owners",
+        "_pca_frame",
+        "_provenance_rows",
+        "_render_to_pil",
+        "_save_chart_plot",
+        "_save_mandatory_pair",
+        "_save_owner_reviews",
+        "_sha256_array",
+        "_sha256_rows",
+        "_summary",
+        "_synthetic_contracts",
+        "_topology_accounting",
+        "_world_plot",
+        "_write_csv",
+        "allclose",
+        "any",
+        "arange",
+        "argmax",
+        "argmin",
+        "asarray",
+        "astype",
+        "column_stack",
+        "dumps",
+        "enumerate",
+        "get",
+        "int",
+        "items",
+        "len",
+        "list",
+        "mean",
+        "mkdir",
+        "next",
+        "ptp",
+        "render",
+        "resolve",
+        "savez_compressed",
+        "set",
+        "sorted",
+        "str",
+        "sum",
+        "values",
+        "write_text"
+      ],
+      "end_line": 639,
+      "function": "run_audit",
+      "line": 534,
+      "matched_source_lines": [
+        {
+          "line": 108,
+          "text": "\"v_min\": float(low[1]), \"v_max\": float(high[1]),"
+        },
+        {
+          "line": 141,
+          "text": "for event_id in range(len(projected)):"
+        },
+        {
+          "line": 142,
+          "text": "loo = _extent(np.delete(projected, event_id, axis=0))"
+        },
+        {
+          "line": 144,
+          "text": "\"event_id\": int(event_id),"
+        },
+        {
+          "line": 145,
+          "text": "\"projected_u\": float(projected[event_id, 0]),"
+        },
+        {
+          "line": 146,
+          "text": "\"projected_v\": float(projected[event_id, 1]),"
+        },
+        {
+          "line": 147,
+          "text": "\"projected_n\": float(projected[event_id, 2]),"
+        },
+        {
+          "line": 148,
+          "text": "\"is_u_min_owner\": event_id in umin, \"is_u_max_owner\": event_id in umax,"
+        },
+        {
+          "line": 149,
+          "text": "\"is_v_min_owner\": event_id in vmin, \"is_v_max_owner\": event_id in vmax,"
+        },
+        {
+          "line": 164,
+          "text": "row[\"event_id\"],"
+        },
+        {
+          "line": 191,
+          "text": "for event_id in range(len(points)):"
+        },
+        {
+          "line": 192,
+          "text": "rest = np.delete(points, event_id, axis=0)"
+        },
+        {
+          "line": 201,
+          "text": "\"event_id\": int(event_id),"
+        },
+        {
+          "line": 217,
+          "text": "row[\"event_id\"],"
+        },
+        {
+          "line": 242,
+          "text": "\"event_id\": np.arange(offset, offset + count, dtype=np.int64),"
+        },
+        {
+          "line": 261,
+          "text": "\"event_id\": int(i), \"source_camera\": str(provenance[\"source_camera\"][i]),"
+        },
+        {
+          "line": 278,
+          "text": "fixed_map = {r[\"event_id\"]: r for r in fixed}"
+        },
+        {
+          "line": 279,
+          "text": "pca_map = {r[\"event_id\"]: r for r in pca}"
+        },
+        {
+          "line": 282,
+          "text": "event_id = row[\"event_id\"]"
+        },
+        {
+          "line": 284,
+          "text": "merged.update({\"fixed_\" + key: value for key, value in fixed_map[event_id].items() if key != \"event_id\"})"
+        },
+        {
+          "line": 285,
+          "text": "merged.update({\"pca_\" + key: value for key, value in pca_map[event_id].items() if key != \"event_id\"})"
+        },
+        {
+          "line": 304,
+          "text": "row_a = {row[\"event_id\"]: row for row in rows_a}[far_id]"
+        },
+        {
+          "line": 313,
+          "text": "row_b_fixed = {row[\"event_id\"]: row for row in rows_b}[rotating_id]"
+        },
+        {
+          "line": 314,
+          "text": "row_b_pca = {row[\"event_id\"]: row for row in rows_pca_b}[rotating_id]"
+        },
+        {
+          "line": 327,
+          "text": "\"point_not_automatically_rejected\": True, \"far_event_id\": far_id,"
+        },
+        {
+          "line": 351,
+          "text": "review_ids = sorted(set(int(r[\"event_id\"]) for r in fixed_ranking[:REVIEW_RANK_COUNT]) | set(int(r[\"event_id\"]) for r in pca_ranking[:REVIEW_RANK_COUNT]))"
+        },
+        {
+          "line": 470,
+          "text": "for event_id in sorted(owner_ids):"
+        },
+        {
+          "line": 471,
+          "text": "camera_name = str(provenance[\"source_camera\"][event_id])"
+        },
+        {
+          "line": 472,
+          "text": "x, y = float(provenance[\"source_pixel_x\"][event_id]), float(provenance[\"source_pixel_y\"][event_id])"
+        },
+        {
+          "line": 473,
+          "text": "label = \"ID \" + str(event_id)"
+        },
+        {
+          "line": 474,
+          "text": "owner_root = root / \"extrema_owner_reviews\" / f\"event_{event_id:04d}_{camera_name}\""
+        },
+        {
+          "line": 480,
+          "text": "clean_path = owner_root / \"source_camera_clean_oracle_event_id.png\""
+        },
+        {
+          "line": 485,
+          "text": "projection = project_world_points(baseline[\"oracle_points\"][event_id:event_id+1], cameras[target_name])"
+        },
+        {
+          "line": 491,
+          "text": "output[str(event_id)] = {"
+        },
+        {
+          "line": 492,
+          "text": "\"event_id\": event_id, \"source_camera\": camera_name, \"source_pixel\": [x, y],"
+        },
+        {
+          "line": 547,
+          "text": "\"v_min_owner_ids\": _owners(projected[:, 1], int(np.argmin(projected[:, 1]))),"
+        },
+        {
+          "line": 556,
+          "text": "row[\"review_extrema_owner\"] = int(row[\"event_id\"]) in owner_ids"
+        },
+        {
+          "line": 557,
+          "text": "row[\"fixed_area_rank\"] = next(i for i, r in enumerate(fixed_ranking, 1) if r[\"event_id\"] == row[\"event_id\"])"
+        },
+        {
+          "line": 558,
+          "text": "row[\"pca_area_rank\"] = next(i for i, r in enumerate(pca_ranking, 1) if r[\"event_id\"] == row[\"event_id\"])"
+        },
+        {
+          "line": 580,
+          "text": "\"owner_provenance\": [r for r in p_rows if r[\"event_id\"] in owner_ids],"
+        },
+        {
+          "line": 584,
+          "text": "(root / \"full_per_point_influence.json\").write_text(json.dumps(_jsonable(rows), indent=2), encoding=\"utf-8\")"
+        },
+        {
+          "line": 585,
+          "text": "_write_csv(root / \"full_per_point_influence.csv\", rows)"
+        },
+        {
+          "line": 586,
+          "text": "np.savez_compressed(root / \"full_per_point_influence.npz\", event_id=np.arange(len(rows), dtype=np.int64), projected_uvn=projected, fixed_area_reduction=np.asarray([r[\"fixed_extent_reduction_rectangular_chart_area\"] for r in rows]), pca_area_reduction=np.asarray([r[\"pca_extent_reduction_rectangular_chart_area\"] for r in rows]), pca_axis_angles_degrees=np.asarray([[r[\"pca_axis_u_angle_degrees\"], r[\"pca_axis_v_angle_degrees\"], r[\"pca_axis_n_angle_degrees\"]] for r in rows]))"
+        },
+        {
+          "line": 589,
+          "text": "for event_id in sorted(owner_ids):"
+        },
+        {
+          "line": 590,
+          "text": "_world_plot(root, baseline, provenance, owner_ids, owner_id=event_id)"
+        },
+        {
+          "line": 604,
+          "text": "owner_status = {str(i): {\"event_id\": i, \"status\": \"AMBIGUOUS\", \"basis\": \"No stored primitive/contributor identity or ground-truth physical-sheet label; camera/pixel/depth/XYZ/normal alone is insufficient.\"} for i in sorted(owner_ids)}"
+        },
+        {
+          "line": 611,
+          "text": "camera_accounting[camera] = {\"event_count\": len(camera_rows), \"exact_extrema_owner_ids\": sorted(r[\"event_id\"] for r in camera_rows if r[\"event_id\"] in owner_ids), \"chart_u_summary\": _summary([r[\"chart_u\"] for r in camera_rows]), \"chart_v_summary\": _summary([r[\"chart_v\"] for r in camera_rows])}"
+        },
+        {
+          "line": 612,
+          "text": "provenance_report = {\"event_count\": len(rows), \"event_id_definition\": \"row order in frozen WL145 per-view union, camera order DSC08043, DSC07960, DSC08003\", \"fields_available\": [\"event_id\", \"source_camera\", \"source_pixel_x\", \"source_pixel_y\", \"renderer_median_event_depth\", \"world_xyz\", \"event_normal\", \"chart_u\", \"chart_v\", \"chart_n\"], \"missing_required_fields\": [], \"exact_extrema_owner_ids\": sorted(owner_ids), \"exact_extrema_owner_rows\": [r for r in rows if r[\"event_id\"] in owner_ids], \"camera_accounting\": camera_accounting, \"complete_influence_ranking_available\": True}"
+        },
+        {
+          "line": 634,
+          "text": "\"OUTPUTS\": {\"baseline_reconciliation\": str((root / \"baseline_reconciliation.json\").resolve()), \"chart_attribution\": str((root / \"chart_attribution.json\").resolve()), \"full_per_point_json\": str((root / \"full_per_point_influence.json\").resolve()), \"full_per_point_csv\": str((root / \"full_per_point_influence.csv\").resolve()), \"full_per_point_npz\": str((root / \"full_per_point_influence.npz\").resolve()), \"chart_space\": chart_plot, \"common_world\": common_plot, \"renderer_event_provenance\": str((root / \"renderer_event_provenance.json\").resolve()), \"architecture_verdict\": str((root / \"architecture_verdict.json\").resolve()), \"scene\": scene},"
+        },
+        {
+          "line": 644,
+          "text": "print(json.dumps({\"status\": report[\"status\"], \"architecture_verdict\": report[\"ARCHITECTURE RESULT\"][\"verdict\"], \"event_count\": report[\"BASELINE RECONCILIATION\"][\"event_count\"], \"exact_extrema_owner_ids\": sorted(set(report[\"EXTREMA OWNERSHIP\"][\"u_min_owner_ids\"] + report[\"EXTREMA OWNERSHIP\"][\"u_max_owner_ids\"] + report[\"EXTREMA OWNERSHIP\"][\"v_min_owner_ids\"] + report[\"EXTREMA OWNERSHIP\"][\"v_max_owner_ids\"])), \"synthetic_pass\": report[\"SYNTHETIC CONTRACT RESULTS\"][\"all_synthetic_contracts_pass\"]}, indent=2))"
+        }
+      ],
+      "path": "devtools/demo/physical_sheet_evidence_vs_chart_extent_failure_attribution.py",
+      "source_sha256": "cc0ba492544345f7902ddaea92b04fbdd7f31b6ff0152fc03b3e0b35a8d6c583",
+      "status": "PRESENT"
+    }
+  }
+}
