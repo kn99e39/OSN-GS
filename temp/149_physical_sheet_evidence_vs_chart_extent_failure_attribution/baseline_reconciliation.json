@@ -1,0 +1,42 @@
+{
+  "event_count": 1586,
+  "event_union_sha256": "79855ad840164a923f8c4bb1c6935ce22cff8030bfedebf7a0dc4cd141026c78",
+  "camera_counts": {
+    "DSC08043.JPG": 754,
+    "DSC07960.JPG": 330,
+    "DSC08003.JPG": 502
+  },
+  "representative_shape": [
+    3840,
+    3
+  ],
+  "representative_xyz_sha256": "5fe79de62c6842cb02a99fa940f2e3ffa7fcd4c51165db606c693029aa59c941",
+  "representative_normals_sha256": "e01b51ddc2bc43586fdb16f1772c0f3a4e99ec46a81bfbb8202f8c78377ad05b",
+  "support_vertices": 314,
+  "unsupported_vertices": 3526,
+  "support_mask_sha256": "23d00a22ae5ffc307ac3d5772c63c271291f535d2d383c63d68139708a6401d9",
+  "fully_supported_cells": 211,
+  "wl148_temp_artifact": {
+    "report_path": "C:\\Projects\\OSN-GS\\temp\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\wl145_baseline_reconciliation_support_constrained_materialization_audit_report.json",
+    "report_sha256": "266baaa192d92006ff6d8a7aea0c0a530296a159668c83b295bae6542c140280",
+    "replay_path": "C:\\Projects\\OSN-GS\\temp\\148_wl145_baseline_reconciliation_support_constrained_materialization_audit\\frozen_inputs\\wl145_frozen_representative_replay.npz",
+    "replay_sha256": "6464e391882151c254ccdbd8cbb92c31b9b76879a130e5bc9238af8ec5955687",
+    "exact_replay": true,
+    "report_baseline": {
+      "event_union_count": 1586,
+      "event_union_sha256": "79855ad840164a923f8c4bb1c6935ce22cff8030bfedebf7a0dc4cd141026c78",
+      "event_camera_counts": {
+        "DSC08043.JPG": 754,
+        "DSC07960.JPG": 330,
+        "DSC08003.JPG": 502
+      },
+      "representative_sample_count": 3840,
+      "supported_vertices": 314,
+      "unsupported_vertices": 3526,
+      "support_mask_sha256": "23d00a22ae5ffc307ac3d5772c63c271291f535d2d383c63d68139708a6401d9",
+      "fully_supported_cells": 211,
+      "report_supported_regions_four_connected": 211,
+      "event_normals_available": true
+    }
+  }
+}

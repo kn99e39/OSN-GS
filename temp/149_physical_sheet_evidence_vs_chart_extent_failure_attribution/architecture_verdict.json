@@ -1,0 +1,110 @@
+{
+  "architecture_verdict": "UNRESOLVED",
+  "next_frontier": "obtain defensible physical-sheet/contributor identity before ordering membership-first versus chart-first correction",
+  "mechanically_established": [
+    "global PCA plus coordinate extrema produces the frozen rectangle",
+    "fixed-axis and full-PCA LOO distributions are available for all 1586 events",
+    "exact extrema owners and provenance review bundle are exported"
+  ],
+  "not_established": [
+    "owner events are not automatically proven wrong-sheet",
+    "owner events are not automatically proven legitimate same-sheet evidence",
+    "no filtering or chart heuristic is justified"
+  ],
+  "owner_review_status": {
+    "795": {
+      "event_id": 795,
+      "status": "AMBIGUOUS",
+      "basis": "No stored primitive/contributor identity or ground-truth physical-sheet label; camera/pixel/depth/XYZ/normal alone is insufficient.",
+      "exported_review_bundle": {
+        "event_id": 795,
+        "source_camera": "DSC07960.JPG",
+        "source_pixel": [
+          394.0,
+          190.0
+        ],
+        "source_camera_gaussian_render": "C:\\Projects\\OSN-GS\\output\\149_physical_sheet_evidence_vs_chart_extent_failure_attribution\\extrema_owner_reviews\\event_0795_DSC07960.JPG\\source_camera_gaussian_event_marked.png",
+        "source_camera_clean_oracle_overlay": "C:\\Projects\\OSN-GS\\output\\149_physical_sheet_evidence_vs_chart_extent_failure_attribution\\extrema_owner_reviews\\event_0795_DSC07960.JPG\\source_camera_clean_oracle_event_id.png",
+        "readable_local_crop": "C:\\Projects\\OSN-GS\\output\\149_physical_sheet_evidence_vs_chart_extent_failure_attribution\\extrema_owner_reviews\\event_0795_DSC07960.JPG\\source_camera_local_crop.png",
+        "cross_view_projection_localization": {
+          "DSC08043.JPG": "C:\\Projects\\OSN-GS\\output\\149_physical_sheet_evidence_vs_chart_extent_failure_attribution\\extrema_owner_reviews\\event_0795_DSC07960.JPG\\cross_view_projection\\projected_to_DSC08043.JPG.png",
+          "DSC07960.JPG": "C:\\Projects\\OSN-GS\\output\\149_physical_sheet_evidence_vs_chart_extent_failure_attribution\\extrema_owner_reviews\\event_0795_DSC07960.JPG\\cross_view_projection\\projected_to_DSC07960.JPG.png",
+          "DSC08003.JPG": "C:\\Projects\\OSN-GS\\output\\149_physical_sheet_evidence_vs_chart_extent_failure_attribution\\extrema_owner_reviews\\event_0795_DSC07960.JPG\\cross_view_projection\\projected_to_DSC08003.JPG.png"
+        },
+        "review_status": "AMBIGUOUS",
+        "review_basis": "Frozen provenance has camera/pixel/depth/XYZ/normal but no primitive/contributor identity or ground-truth physical-sheet label."
+      }
+    },
+    "947": {
+      "event_id": 947,
+      "status": "AMBIGUOUS",
+      "basis": "No stored primitive/contributor identity or ground-truth physical-sheet label; camera/pixel/depth/XYZ/normal alone is insufficient.",
+      "exported_review_bundle": {
+        "event_id": 947,
+        "source_camera": "DSC07960.JPG",
+        "source_pixel": [
+          393.0,
+          195.0
+        ],
+        "source_camera_gaussian_render": "C:\\Projects\\OSN-GS\\output\\149_physical_sheet_evidence_vs_chart_extent_failure_attribution\\extrema_owner_reviews\\event_0947_DSC07960.JPG\\source_camera_gaussian_event_marked.png",
+        "source_camera_clean_oracle_overlay": "C:\\Projects\\OSN-GS\\output\\149_physical_sheet_evidence_vs_chart_extent_failure_attribution\\extrema_owner_reviews\\event_0947_DSC07960.JPG\\source_camera_clean_oracle_event_id.png",
+        "readable_local_crop": "C:\\Projects\\OSN-GS\\output\\149_physical_sheet_evidence_vs_chart_extent_failure_attribution\\extrema_owner_reviews\\event_0947_DSC07960.JPG\\source_camera_local_crop.png",
+        "cross_view_projection_localization": {
+          "DSC08043.JPG": "C:\\Projects\\OSN-GS\\output\\149_physical_sheet_evidence_vs_chart_extent_failure_attribution\\extrema_owner_reviews\\event_0947_DSC07960.JPG\\cross_view_projection\\projected_to_DSC08043.JPG.png",
+          "DSC07960.JPG": "C:\\Projects\\OSN-GS\\output\\149_physical_sheet_evidence_vs_chart_extent_failure_attribution\\extrema_owner_reviews\\event_0947_DSC07960.JPG\\cross_view_projection\\projected_to_DSC07960.JPG.png",
+          "DSC08003.JPG": "C:\\Projects\\OSN-GS\\output\\149_physical_sheet_evidence_vs_chart_extent_failure_attribution\\extrema_owner_reviews\\event_0947_DSC07960.JPG\\cross_view_projection\\projected_to_DSC08003.JPG.png"
+        },
+        "review_status": "AMBIGUOUS",
+        "review_basis": "Frozen provenance has camera/pixel/depth/XYZ/normal but no primitive/contributor identity or ground-truth physical-sheet label."
+      }
+    },
+    "1104": {
+      "event_id": 1104,
+      "status": "AMBIGUOUS",
+      "basis": "No stored primitive/contributor identity or ground-truth physical-sheet label; camera/pixel/depth/XYZ/normal alone is insufficient.",
+      "exported_review_bundle": {
+        "event_id": 1104,
+        "source_camera": "DSC08003.JPG",
+        "source_pixel": [
+          260.0,
+          158.0
+        ],
+        "source_camera_gaussian_render": "C:\\Projects\\OSN-GS\\output\\149_physical_sheet_evidence_vs_chart_extent_failure_attribution\\extrema_owner_reviews\\event_1104_DSC08003.JPG\\source_camera_gaussian_event_marked.png",
+        "source_camera_clean_oracle_overlay": "C:\\Projects\\OSN-GS\\output\\149_physical_sheet_evidence_vs_chart_extent_failure_attribution\\extrema_owner_reviews\\event_1104_DSC08003.JPG\\source_camera_clean_oracle_event_id.png",
+        "readable_local_crop": "C:\\Projects\\OSN-GS\\output\\149_physical_sheet_evidence_vs_chart_extent_failure_attribution\\extrema_owner_reviews\\event_1104_DSC08003.JPG\\source_camera_local_crop.png",
+        "cross_view_projection_localization": {
+          "DSC08043.JPG": "C:\\Projects\\OSN-GS\\output\\149_physical_sheet_evidence_vs_chart_extent_failure_attribution\\extrema_owner_reviews\\event_1104_DSC08003.JPG\\cross_view_projection\\projected_to_DSC08043.JPG.png",
+          "DSC07960.JPG": "C:\\Projects\\OSN-GS\\output\\149_physical_sheet_evidence_vs_chart_extent_failure_attribution\\extrema_owner_reviews\\event_1104_DSC08003.JPG\\cross_view_projection\\projected_to_DSC07960.JPG.png",
+          "DSC08003.JPG": "C:\\Projects\\OSN-GS\\output\\149_physical_sheet_evidence_vs_chart_extent_failure_attribution\\extrema_owner_reviews\\event_1104_DSC08003.JPG\\cross_view_projection\\projected_to_DSC08003.JPG.png"
+        },
+        "review_status": "AMBIGUOUS",
+        "review_basis": "Frozen provenance has camera/pixel/depth/XYZ/normal but no primitive/contributor identity or ground-truth physical-sheet label."
+      }
+    },
+    "1527": {
+      "event_id": 1527,
+      "status": "AMBIGUOUS",
+      "basis": "No stored primitive/contributor identity or ground-truth physical-sheet label; camera/pixel/depth/XYZ/normal alone is insufficient.",
+      "exported_review_bundle": {
+        "event_id": 1527,
+        "source_camera": "DSC08003.JPG",
+        "source_pixel": [
+          259.0,
+          169.0
+        ],
+        "source_camera_gaussian_render": "C:\\Projects\\OSN-GS\\output\\149_physical_sheet_evidence_vs_chart_extent_failure_attribution\\extrema_owner_reviews\\event_1527_DSC08003.JPG\\source_camera_gaussian_event_marked.png",
+        "source_camera_clean_oracle_overlay": "C:\\Projects\\OSN-GS\\output\\149_physical_sheet_evidence_vs_chart_extent_failure_attribution\\extrema_owner_reviews\\event_1527_DSC08003.JPG\\source_camera_clean_oracle_event_id.png",
+        "readable_local_crop": "C:\\Projects\\OSN-GS\\output\\149_physical_sheet_evidence_vs_chart_extent_failure_attribution\\extrema_owner_reviews\\event_1527_DSC08003.JPG\\source_camera_local_crop.png",
+        "cross_view_projection_localization": {
+          "DSC08043.JPG": "C:\\Projects\\OSN-GS\\output\\149_physical_sheet_evidence_vs_chart_extent_failure_attribution\\extrema_owner_reviews\\event_1527_DSC08003.JPG\\cross_view_projection\\projected_to_DSC08043.JPG.png",
+          "DSC07960.JPG": "C:\\Projects\\OSN-GS\\output\\149_physical_sheet_evidence_vs_chart_extent_failure_attribution\\extrema_owner_reviews\\event_1527_DSC08003.JPG\\cross_view_projection\\projected_to_DSC07960.JPG.png",
+          "DSC08003.JPG": "C:\\Projects\\OSN-GS\\output\\149_physical_sheet_evidence_vs_chart_extent_failure_attribution\\extrema_owner_reviews\\event_1527_DSC08003.JPG\\cross_view_projection\\projected_to_DSC08003.JPG.png"
+        },
+        "review_status": "AMBIGUOUS",
+        "review_basis": "Frozen provenance has camera/pixel/depth/XYZ/normal but no primitive/contributor identity or ground-truth physical-sheet label."
+      }
+    }
+  },
+  "evidence_limitation": "frozen provenance has camera/pixel/depth/XYZ/normal but no primitive/contributor identity or ground-truth physical-sheet label",
+  "synthetic_pass_does_not_establish_real_scene_result": true
+}

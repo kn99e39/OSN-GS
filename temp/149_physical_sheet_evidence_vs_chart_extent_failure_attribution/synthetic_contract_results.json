@@ -1,0 +1,17 @@
+{
+  "fixture_A_compact_planar_plus_far_same_plane": {
+    "fixed_axis_extent_leverage_detected": true,
+    "point_not_automatically_rejected": true,
+    "far_event_id": 25
+  },
+  "fixture_B_compact_population_plus_rotating_point": {
+    "orientation_leverage_distinguished": true,
+    "fixed_axis_area_reduction": -0.0,
+    "joint_axis_rotation_degrees": 3.2853360201619886
+  },
+  "fixture_C_no_dominant_individual_extrema": {
+    "no_dominant_individual_extent_leverage": true,
+    "automatic_rejection_decision": false
+  },
+  "all_synthetic_contracts_pass": true
+}

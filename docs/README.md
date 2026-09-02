@@ -491,3 +491,10 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - [Worklog 148](worklogs/148_committed_wl145_baseline_reconciliation_support_constrained_materialization.md)는 WL145 frozen event/representative를 변경 없이 exact replay했다. 248은 현재 artifact/source에서 재현되지 않는 prose-only 값이며, executable support replay는 314/3840, all-four materializable cell은 211이다.
 - 동일한 frozen representative에 대해 A full 96x40 rectangle과 B existing support mask의 all-four cell materialization을 비교했다. B는 면적 94.36%를 제거하고 materialized→oracle median을 32.40h에서 0.77h로 낮췄지만 oracle coverage <=h는 30.52%에서 29.19%로 감소했다.
 - 결과는 **D. MIXED / INCONCLUSIVE**다. B는 evidence-supported domain과 full parametric rectangle의 분리를 보여주는 진단이지만, canonical Surface Membership/NURBS trimming/continuation/Occluded Surface로 승격하지 않았다. 실제 Gaussian Scene A–F raw overlays와 fixed Original/Observed-Occluded pair는 output/148_wl145_baseline_reconciliation_support_constrained_materialization_audit/에 생성했다.
+
+## 2026-09-02 Worklog 149 Physical-Sheet Evidence vs Chart-Extent Failure Attribution
+
+- [Worklog 149](worklogs/149_physical_sheet_evidence_vs_chart_extent_failure_attribution.md)는 WL148의 `1586` event union, frozen representative, support mask를 exact replay한 뒤, fixed-axis extrema leverage와 full-PCA orientation leverage를 모든 event에 대해 분리한 격리 진단이다.
+- exact extrema owners는 `795, 947, 1104, 1527`이며, 저장된 camera/pixel/depth/XYZ/normal provenance만으로는 intended physical sheet인지 다른 structure인지 판정할 수 없어 모두 `AMBIGUOUS`로 남겼다. Synthetic A/B/C contract는 통과했지만 real-scene architecture verdict는 `UNRESOLVED`다.
+- full per-point JSON/CSV/NPZ, chart-space/common-world PNG, source-camera owner crop와 cross-view localization, canonical Gaussian `Original Scene`/`Observed-Occluded` pair는 `output/149_physical_sheet_evidence_vs_chart_extent_failure_attribution/`에 생성했고, 번호가 붙은 보존 복사본은 `temp/149_physical_sheet_evidence_vs_chart_extent_failure_attribution/`에 둔다.
+- filtering, robust PCA, chart trimming, refit, Surface Membership, continuation, true-occluded prototype, Candidate B 및 canonical production 변경은 수행하지 않았다.
