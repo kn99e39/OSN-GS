@@ -1,0 +1,17 @@
+{
+  "observation_provenance": {
+    "renderer_observation_to_tsdf_cell": "NOT_PERSISTED_PER_EVENT; fuse_views retains only mean field value and support_count",
+    "tsdf_cell_to_active_marching_cubes_cell": "DETERMINISTIC_IN_SOURCE_BUT_NOT_PERSISTED; extraction local cell ownership is discarded",
+    "active_cell_to_face": "DETERMINISTIC_IN_SOURCE_BUT_NOT_PERSISTED; typed ExtractedSurface carries faces but no source-cell IDs",
+    "face_to_seam_welded_vertex": "DETERMINISTIC_IN_SOURCE_BUT_NOT_PERSISTED; weld returns arrays without sidecar",
+    "camera_set_per_field_cell": "NOT_AVAILABLE",
+    "event_set_per_surface_element": "EVENT_LEVEL_NOT_AVAILABLE",
+    "component_camera_aggregation": "NOT_AVAILABLE_WITHOUT_INFERENCE"
+  },
+  "physical_sheet_membership": {
+    "status": "NOT_PROVIDED",
+    "reason": "native zero-set topology/evidence support is not a physical-sheet identity contract",
+    "new_membership": false
+  },
+  "forbidden_posthoc_mapping": false
+}

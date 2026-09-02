@@ -4,6 +4,8 @@
 
 각 worklog가 만드는 실측 export는 `output/`(gitignore됨) 아래 번호가 매겨진 폴더에 쌓인다 — 폴더 명명·`confirmed/` 이동·preview_png 배치 규약은 [output/ 폴더 관리 규약](../output_folder_conventions.md)을 참조한다.
 
+- [Worklog 153: WL127 Raw Visible Surface 재생성과 construction provenance 회복 감사](153_raw_visible_surface_replay_construction_provenance_audit.md)
+
 ## 유지 기록
 
 - `1_phase_g_uncertain_gaussian_proposal_foundation.md`: 불확실 Gaussian proposal 기반과 Gate G 승인 근거

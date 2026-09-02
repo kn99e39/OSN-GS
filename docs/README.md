@@ -519,3 +519,10 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - 현재 확인 가능한 `RENDERER_MEDIAN_SURFACE_POINTS/point_cloud.ply`는 `1,212,365` vertex와 `0` face의 vertex-only artifact이며, matching TSDF `ExtractedSurface` replay cache가 없다. event/TSDF-cell→surface-element provenance와 physical-sheet ownership도 없다.
 - 따라서 carrier는 **INELIGIBLE_CARRIER**로 판정했고 secondary gap은 `RAW_SURFACE_PROVENANCE_GAP` 및 `PHYSICAL_SHEET_MEMBERSHIP_GAP`이다. event 1527은 삭제하지 않고 `CLEAR_NOT_ON_INTENDED_SURFACE`와 `NOT MAPPABLE UNDER EXISTING CONTRACT`로 보존했다.
 - Candidate D, synthetic contracts, Candidate D real-scene replay와 새 visualization은 실행하지 않았다. canonical 코드와 WL139–WL151 historical 결과는 변경하지 않았고 focused tests 4개가 통과했다.
+
+## 2026-09-02 Worklog 153 WL127 Raw Visible Surface 재생성과 construction provenance 회복 감사
+
+- [Worklog 153](worklogs/153_raw_visible_surface_replay_construction_provenance_audit.md)은 WL152의 vertex-only point artifact를 typed `ExtractedSurface`의 대체 입력으로 사용하지 않고, `943a764`의 frozen renderer-median → projective TSDF → all-eight-corner Marching Cubes core를 161 camera로 재생했다.
+- authoritative voxel `76,720,314`, eligible cell `21,235,312`, vertices `28,694,040`, faces `45,116,659`, connected components `582,646`가 WL127 기록과 일치하여 `SEMANTICALLY_EXACT_REPLAY`를 얻었고, face-native topology accounting을 완료했다. 다만 closure는 max 60 round에서도 닫히지 않았으며 누락 방향으로만 제한했다.
+- per-event/camera/source-cell provenance는 historical typed carrier에 저장되지 않았고 event 1527은 보존하되 `EVENT_LEVEL_NOT_AVAILABLE`로 남겼다. 네 physical-sheet review case는 모두 `NOT_REVIEWABLE`; verdict는 `TOPOLOGY_RECOVERED_PROVENANCE_GAP`이다.
+- canonical production/renderer/checkpoint/Candidate B/physical-sheet membership/NURBS/Occluded Surface는 변경·실행하지 않았다. 결과는 `output/153_raw_visible_surface_replay_construction_provenance_audit/` 및 번호 보존 `temp/153_raw_visible_surface_replay_construction_provenance_audit/`에 있다.

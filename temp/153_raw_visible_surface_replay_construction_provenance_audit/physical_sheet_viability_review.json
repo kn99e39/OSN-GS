@@ -1,0 +1,30 @@
+{
+  "contract": "native topology is reviewed without creating physical-sheet membership",
+  "cases": [
+    {
+      "case": "clean_tabletop",
+      "existing_region": "table_top",
+      "classification": "NOT_REVIEWABLE",
+      "reason": "no native semantic sheet label or deterministic camera/event lineage"
+    },
+    {
+      "case": "tabletop_side_relationship",
+      "existing_region": "table_side_curved",
+      "classification": "NOT_REVIEWABLE",
+      "reason": "a connected component cannot be promoted to same-sheet or distinct-sheet identity"
+    },
+    {
+      "case": "vase_or_curved_neighbor",
+      "existing_region": "vase/neighbor review context",
+      "classification": "NOT_REVIEWABLE",
+      "reason": "no physical-sheet membership in ExtractedSurface"
+    },
+    {
+      "case": "background_lower_geometry",
+      "existing_region": "hedge/patio/lower review context",
+      "classification": "NOT_REVIEWABLE",
+      "reason": "no semantic identity; no split by normals or geometry thresholds"
+    }
+  ],
+  "interpretation": "The replay makes native mesh connectivity measurable, but the required real-scene physical-sheet labels are not part of WL127's carrier. All four review cases therefore remain NOT_REVIEWABLE rather than being inferred."
+}

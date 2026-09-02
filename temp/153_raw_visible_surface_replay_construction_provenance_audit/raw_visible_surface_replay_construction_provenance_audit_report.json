@@ -1,0 +1,1038 @@
+{
+  "1. CURRENT ARCHITECTURE QUESTION": "What topology and renderer-grounded construction lineage does the actual WL127 typed ExtractedSurface provide?",
+  "2. WL152 BASELINE RECONCILIATION": {
+    "checks": {
+      "event_count": true,
+      "event_union_sha256": true,
+      "event_1527": true,
+      "event_1527_v_min_owner": true,
+      "event_1527_human_review_preserved": true,
+      "representative_shape": true,
+      "support_vertices": true,
+      "support_mask_sha256": true,
+      "all_four_supported_cells": true,
+      "raw_point_ply_sha256": true,
+      "raw_point_ply_vertices": true,
+      "raw_point_ply_faces": true
+    },
+    "wl152_baseline": {
+      "wl149_wl151_exact": true,
+      "event_count": 1586,
+      "event_union_sha256": "79855ad840164a923f8c4bb1c6935ce22cff8030bfedebf7a0dc4cd141026c78",
+      "event_1527": {
+        "event_id": 1527,
+        "source_camera": "DSC08003.JPG",
+        "source_pixel": [
+          259,
+          169
+        ],
+        "world_xyz": [
+          0.07806993070364089,
+          0.762390534692282,
+          1.5849404821876258
+        ],
+        "v_min_owner": true,
+        "human_review": "CLEAR_NOT_ON_INTENDED_SURFACE"
+      },
+      "historical_extrema_owner_ids": [
+        795,
+        947,
+        1104,
+        1527
+      ],
+      "representative_shape": [
+        3840,
+        3
+      ],
+      "support_vertices": 314,
+      "support_mask_sha256": "23d00a22ae5ffc307ac3d5772c63c271291f535d2d383c63d68139708a6401d9",
+      "all_four_supported_cells": 211,
+      "raw_visible_surface_artifact": {
+        "path": "output/confirmed/127_osn_gs_evidence_bounded_projective_tsdf/RENDERER_MEDIAN_SURFACE_POINTS/iteration_0000001/point_cloud.ply",
+        "sha256": "fcdd26129737b6610e86837e5138e084ed3cfb95a80d6db2692b9cf70427107a",
+        "bytes": 63043320,
+        "format": "format binary_little_endian 1.0",
+        "elements": {
+          "vertex": 1212365
+        },
+        "properties": {
+          "vertex": [
+            "x",
+            "y",
+            "z",
+            "f_dc_0",
+            "f_dc_1",
+            "f_dc_2",
+            "opacity",
+            "scale_0",
+            "scale_1",
+            "rot_0",
+            "rot_1",
+            "rot_2",
+            "rot_3"
+          ]
+        },
+        "header": "ply\nformat binary_little_endian 1.0\nelement vertex 1212365\nproperty float x\nproperty float y\nproperty float z\nproperty float f_dc_0\nproperty float f_dc_1\nproperty float f_dc_2\nproperty float opacity\nproperty float scale_0\nproperty float scale_1\nproperty float rot_0\nproperty float rot_1\nproperty float rot_2\nproperty float rot_3\nend_header\n",
+        "has_faces": false
+      },
+      "raw_visible_surface_exact_replay": {
+        "expected_source_commit": "943a764",
+        "mesh_cache_path": "output/confirmed/127_osn_gs_evidence_bounded_projective_tsdf/_cache/mesh.npz",
+        "mesh_cache_exists": false,
+        "field_cache_path": "output/confirmed/127_osn_gs_evidence_bounded_projective_tsdf/_cache/field.npz",
+        "field_cache_exists": false,
+        "available_artifact_is_the_extracted_tsdf_mesh": false,
+        "status": "AVAILABLE_POINT_CLOUD_ONLY_TSDF_MESH_REPLAY_UNAVAILABLE"
+      }
+    }
+  },
+  "3. HISTORICAL RAW-SURFACE CONSTRUCTION CONTRACT": {
+    "identifiable": true,
+    "status": "IDENTIFIABLE",
+    "input_manifest": {
+      "checkpoint_iteration": 30000,
+      "camera_contract": {
+        "images": "images_8",
+        "sparse_dir": "sparse/0",
+        "resolution": -1,
+        "llffhold": 8,
+        "expected_train_cameras": 161
+      },
+      "files": {
+        "checkpoint": {
+          "path": "output/arch_2dgs_coverage_first_surface/2dgs_run1/30000/checkpoint.pt",
+          "status": "AVAILABLE_AND_HASHED",
+          "sha256": "4e49b916d668acf5eb0a1cc31b979caa86c5fd8743ac9632f36d7e9c1c72c9e2",
+          "bytes": 896444213
+        },
+        "colmap_cameras": {
+          "path": "DATASET/sparse/0/cameras.bin",
+          "status": "AVAILABLE_AND_HASHED",
+          "sha256": "8472cc1a821db10de24155a120abfacec9268c39b562b924f8993ca0e0f299e4",
+          "bytes": 64
+        },
+        "colmap_images": {
+          "path": "DATASET/sparse/0/images.bin",
+          "status": "AVAILABLE_AND_HASHED",
+          "sha256": "9490fc63d509ab5bcff3d85771402dd6c623809dbf0fa250a05a29bb3cea8c41",
+          "bytes": 47011789
+        },
+        "llff_pose_bounds": {
+          "path": "DATASET/poses_bounds.npy",
+          "status": "AVAILABLE_AND_HASHED",
+          "sha256": "47e0303343c0f60e3a6440d2dd743b9828657ed029a74327d972537b83d099cc",
+          "bytes": 25288
+        },
+        "camera_image_dimensions": {
+          "path": "DATASET/images_8",
+          "status": "AVAILABLE_AND_HASHED",
+          "metadata_sha256": "b02266251a4a1a95856329958c5035086b07f238c1736fc7f01c4bd1139edb18",
+          "count": 185,
+          "note": "WL127 loader consumes image dimensions only; image pixels are not loaded into the evidence path"
+        },
+        "renderer_median_depth_maps": {
+          "status": "RECONSTRUCTIBLE_FROM_FROZEN_INPUT",
+          "source": "checkpoint + camera matrices + canonical renderer median-depth channel",
+          "preserved_all_161_maps": false
+        },
+        "historical_typed_surface_arrays": {
+          "status": "MISSING",
+          "note": "WL152 confirmed only a vertex-only point PLY; no historical vertices/faces/support/value/h arrays or hashes were retained"
+        },
+        "wl127_field_cache": {
+          "path": "output/confirmed/127_osn_gs_evidence_bounded_projective_tsdf/_cache/field.npz",
+          "status": "MISSING"
+        },
+        "wl127_mesh_cache": {
+          "path": "output/confirmed/127_osn_gs_evidence_bounded_projective_tsdf/_cache/mesh.npz",
+          "status": "MISSING"
+        },
+        "canonical_median_depth_renderer_extension": {
+          "path": "C:\\Users\\dna10\\AppData\\Local\\Temp\\osn_gs_diff_surfel_rasterization_qdepth\\osn_gs_diff_surfel_rasterization_qdepth_c.pyd",
+          "status": "AVAILABLE_AND_HASHED",
+          "sha256": "4476a4791a612c98fcc5aefa80e79d88bf13dd4a8d043e4fc4112c3e77ac7028",
+          "note": "prebuilt WL127-compatible qdepth extension; used only as a process-local loader input, never modified"
+        }
+      },
+      "historical_h": 0.012105485424399376,
+      "historical_mu": 0.03631645627319813,
+      "historical_tsdf": {
+        "truncation": "mu = 3h",
+        "fusion_weight": 1,
+        "minimum_view_rule": false,
+        "unknown": "absence from sparse field",
+        "candidate_enumeration": "renderer-event voxel seeds followed by WL127 closure growth, max_rounds=60",
+        "extraction_block": 64,
+        "batch_blocks": 6,
+        "eligibility": "all eight corners authoritative AND min(phi)<=0<=max(phi)",
+        "seam_welding": "exact h*1e-6 quantized position key; seam duplicates only"
+      }
+    },
+    "source_manifest": {
+      "historical_commit": "943a764",
+      "core_files": {
+        "evidence_bounded_tsdf/__init__.py": {
+          "path": "scripts/devtools/evidence_bounded_tsdf/__init__.py",
+          "historical_commit": "943a764",
+          "expected_blob": "966b2ef08b8c388644a85cc8897fa49a25e061e1",
+          "current_blob": "966b2ef08b8c388644a85cc8897fa49a25e061e1",
+          "exact": true
+        },
+        "evidence_bounded_tsdf/field.py": {
+          "path": "scripts/devtools/evidence_bounded_tsdf/field.py",
+          "historical_commit": "943a764",
+          "expected_blob": "fc325d34000797cbfce0fc110ae4f6e3f3a8c134",
+          "current_blob": "fc325d34000797cbfce0fc110ae4f6e3f3a8c134",
+          "exact": true
+        },
+        "evidence_bounded_tsdf/extraction.py": {
+          "path": "scripts/devtools/evidence_bounded_tsdf/extraction.py",
+          "historical_commit": "943a764",
+          "expected_blob": "43b438e497ad299b7b42b3948147b4e75121eaa9",
+          "current_blob": "43b438e497ad299b7b42b3948147b4e75121eaa9",
+          "exact": true
+        },
+        "evidence_bounded_tsdf/scale.py": {
+          "path": "scripts/devtools/evidence_bounded_tsdf/scale.py",
+          "historical_commit": "943a764",
+          "expected_blob": "cfdda34645db05f1675981fcd633d5b7bc6c5298",
+          "current_blob": "cfdda34645db05f1675981fcd633d5b7bc6c5298",
+          "exact": true
+        },
+        "evidence_bounded_tsdf_stages.py": {
+          "path": "scripts/devtools/evidence_bounded_tsdf_stages.py",
+          "historical_commit": "943a764",
+          "expected_blob": "e051866d23e752ead64232184b61668031917b0a",
+          "current_blob": "e051866d23e752ead64232184b61668031917b0a",
+          "exact": true
+        }
+      },
+      "core_exact": true,
+      "driver_note": "Current evidence_bounded_projective_tsdf.py differs only in later diagnostic/export code; WL153 invokes the unchanged scale/field/extraction core directly."
+    }
+  },
+  "4. REPLAY INPUT AVAILABILITY": {
+    "checkpoint_iteration": 30000,
+    "camera_contract": {
+      "images": "images_8",
+      "sparse_dir": "sparse/0",
+      "resolution": -1,
+      "llffhold": 8,
+      "expected_train_cameras": 161
+    },
+    "files": {
+      "checkpoint": {
+        "path": "output/arch_2dgs_coverage_first_surface/2dgs_run1/30000/checkpoint.pt",
+        "status": "AVAILABLE_AND_HASHED",
+        "sha256": "4e49b916d668acf5eb0a1cc31b979caa86c5fd8743ac9632f36d7e9c1c72c9e2",
+        "bytes": 896444213
+      },
+      "colmap_cameras": {
+        "path": "DATASET/sparse/0/cameras.bin",
+        "status": "AVAILABLE_AND_HASHED",
+        "sha256": "8472cc1a821db10de24155a120abfacec9268c39b562b924f8993ca0e0f299e4",
+        "bytes": 64
+      },
+      "colmap_images": {
+        "path": "DATASET/sparse/0/images.bin",
+        "status": "AVAILABLE_AND_HASHED",
+        "sha256": "9490fc63d509ab5bcff3d85771402dd6c623809dbf0fa250a05a29bb3cea8c41",
+        "bytes": 47011789
+      },
+      "llff_pose_bounds": {
+        "path": "DATASET/poses_bounds.npy",
+        "status": "AVAILABLE_AND_HASHED",
+        "sha256": "47e0303343c0f60e3a6440d2dd743b9828657ed029a74327d972537b83d099cc",
+        "bytes": 25288
+      },
+      "camera_image_dimensions": {
+        "path": "DATASET/images_8",
+        "status": "AVAILABLE_AND_HASHED",
+        "metadata_sha256": "b02266251a4a1a95856329958c5035086b07f238c1736fc7f01c4bd1139edb18",
+        "count": 185,
+        "note": "WL127 loader consumes image dimensions only; image pixels are not loaded into the evidence path"
+      },
+      "renderer_median_depth_maps": {
+        "status": "RECONSTRUCTIBLE_FROM_FROZEN_INPUT",
+        "source": "checkpoint + camera matrices + canonical renderer median-depth channel",
+        "preserved_all_161_maps": false
+      },
+      "historical_typed_surface_arrays": {
+        "status": "MISSING",
+        "note": "WL152 confirmed only a vertex-only point PLY; no historical vertices/faces/support/value/h arrays or hashes were retained"
+      },
+      "wl127_field_cache": {
+        "path": "output/confirmed/127_osn_gs_evidence_bounded_projective_tsdf/_cache/field.npz",
+        "status": "MISSING"
+      },
+      "wl127_mesh_cache": {
+        "path": "output/confirmed/127_osn_gs_evidence_bounded_projective_tsdf/_cache/mesh.npz",
+        "status": "MISSING"
+      },
+      "canonical_median_depth_renderer_extension": {
+        "path": "C:\\Users\\dna10\\AppData\\Local\\Temp\\osn_gs_diff_surfel_rasterization_qdepth\\osn_gs_diff_surfel_rasterization_qdepth_c.pyd",
+        "status": "AVAILABLE_AND_HASHED",
+        "sha256": "4476a4791a612c98fcc5aefa80e79d88bf13dd4a8d043e4fc4112c3e77ac7028",
+        "note": "prebuilt WL127-compatible qdepth extension; used only as a process-local loader input, never modified"
+      }
+    },
+    "historical_h": 0.012105485424399376,
+    "historical_mu": 0.03631645627319813,
+    "historical_tsdf": {
+      "truncation": "mu = 3h",
+      "fusion_weight": 1,
+      "minimum_view_rule": false,
+      "unknown": "absence from sparse field",
+      "candidate_enumeration": "renderer-event voxel seeds followed by WL127 closure growth, max_rounds=60",
+      "extraction_block": 64,
+      "batch_blocks": 6,
+      "eligibility": "all eight corners authoritative AND min(phi)<=0<=max(phi)",
+      "seam_welding": "exact h*1e-6 quantized position key; seam duplicates only"
+    }
+  },
+  "5. RAW VISIBLE SURFACE REPLAY": {
+    "authoritative_voxels": 76720314,
+    "eligible_cells": 21235312,
+    "vertices": 28694040,
+    "faces": 45116659,
+    "h": 0.012105485424399376,
+    "mu": 0.03631645627319813,
+    "closure": {
+      "closed": false,
+      "rounds_run": 60,
+      "max_rounds": 60,
+      "rounds": [
+        {
+          "round": 0,
+          "tested": 10614923,
+          "authoritative_total": 10581414
+        },
+        {
+          "round": 1,
+          "tested": 53367996,
+          "new_authoritative": 44072783,
+          "authoritative_total": 54654197,
+          "new_authoritative_fraction_of_total": 0.8063933864036096
+        },
+        {
+          "round": 2,
+          "tested": 58317556,
+          "new_authoritative": 17969869,
+          "authoritative_total": 72624066,
+          "new_authoritative_fraction_of_total": 0.24743683450607132
+        },
+        {
+          "round": 3,
+          "tested": 54932673,
+          "new_authoritative": 2785257,
+          "authoritative_total": 75409323,
+          "new_authoritative_fraction_of_total": 0.03693518107833961
+        },
+        {
+          "round": 4,
+          "tested": 22104568,
+          "new_authoritative": 307385,
+          "authoritative_total": 75716708,
+          "new_authoritative_fraction_of_total": 0.004059672007927233
+        },
+        {
+          "round": 5,
+          "tested": 2382228,
+          "new_authoritative": 79371,
+          "authoritative_total": 75796079,
+          "new_authoritative_fraction_of_total": 0.0010471649859354862
+        },
+        {
+          "round": 6,
+          "tested": 509322,
+          "new_authoritative": 32908,
+          "authoritative_total": 75828987,
+          "new_authoritative_fraction_of_total": 0.0004339765214059895
+        },
+        {
+          "round": 7,
+          "tested": 151823,
+          "new_authoritative": 25445,
+          "authoritative_total": 75854432,
+          "new_authoritative_fraction_of_total": 0.00033544513259291166
+        },
+        {
+          "round": 8,
+          "tested": 71499,
+          "new_authoritative": 23701,
+          "authoritative_total": 75878133,
+          "new_authoritative_fraction_of_total": 0.00031235613032281647
+        },
+        {
+          "round": 9,
+          "tested": 62364,
+          "new_authoritative": 22266,
+          "authoritative_total": 75900399,
+          "new_authoritative_fraction_of_total": 0.00029335814163506573
+        },
+        {
+          "round": 10,
+          "tested": 57252,
+          "new_authoritative": 21012,
+          "authoritative_total": 75921411,
+          "new_authoritative_fraction_of_total": 0.0002767598721261911
+        },
+        {
+          "round": 11,
+          "tested": 53396,
+          "new_authoritative": 19900,
+          "authoritative_total": 75941311,
+          "new_authoritative_fraction_of_total": 0.0002620444622031874
+        },
+        {
+          "round": 12,
+          "tested": 49656,
+          "new_authoritative": 19081,
+          "authoritative_total": 75960392,
+          "new_authoritative_fraction_of_total": 0.00025119670261838564
+        },
+        {
+          "round": 13,
+          "tested": 46941,
+          "new_authoritative": 18083,
+          "authoritative_total": 75978475,
+          "new_authoritative_fraction_of_total": 0.00023800161822147653
+        },
+        {
+          "round": 14,
+          "tested": 44398,
+          "new_authoritative": 17259,
+          "authoritative_total": 75995734,
+          "new_authoritative_fraction_of_total": 0.00022710485301714436
+        },
+        {
+          "round": 15,
+          "tested": 42225,
+          "new_authoritative": 16432,
+          "authoritative_total": 76012166,
+          "new_authoritative_fraction_of_total": 0.0002161759211018931
+        },
+        {
+          "round": 16,
+          "tested": 40157,
+          "new_authoritative": 15838,
+          "authoritative_total": 76028004,
+          "new_authoritative_fraction_of_total": 0.0002083179771495777
+        },
+        {
+          "round": 17,
+          "tested": 38133,
+          "new_authoritative": 15526,
+          "authoritative_total": 76043530,
+          "new_authoritative_fraction_of_total": 0.00020417253118049623
+        },
+        {
+          "round": 18,
+          "tested": 36646,
+          "new_authoritative": 15473,
+          "authoritative_total": 76059003,
+          "new_authoritative_fraction_of_total": 0.0002034341680760659
+        },
+        {
+          "round": 19,
+          "tested": 36317,
+          "new_authoritative": 15371,
+          "authoritative_total": 76074374,
+          "new_authoritative_fraction_of_total": 0.00020205227058457293
+        },
+        {
+          "round": 20,
+          "tested": 35669,
+          "new_authoritative": 15392,
+          "authoritative_total": 76089766,
+          "new_authoritative_fraction_of_total": 0.0002022873877677584
+        },
+        {
+          "round": 21,
+          "tested": 35441,
+          "new_authoritative": 15466,
+          "authoritative_total": 76105232,
+          "new_authoritative_fraction_of_total": 0.00020321861708535362
+        },
+        {
+          "round": 22,
+          "tested": 35545,
+          "new_authoritative": 15535,
+          "authoritative_total": 76120767,
+          "new_authoritative_fraction_of_total": 0.0002040835978439366
+        },
+        {
+          "round": 23,
+          "tested": 35367,
+          "new_authoritative": 15681,
+          "authoritative_total": 76136448,
+          "new_authoritative_fraction_of_total": 0.0002059591747700129
+        },
+        {
+          "round": 24,
+          "tested": 35340,
+          "new_authoritative": 15860,
+          "authoritative_total": 76152308,
+          "new_authoritative_fraction_of_total": 0.0002082668328319084
+        },
+        {
+          "round": 25,
+          "tested": 35701,
+          "new_authoritative": 15966,
+          "authoritative_total": 76168274,
+          "new_authoritative_fraction_of_total": 0.00020961483254826018
+        },
+        {
+          "round": 26,
+          "tested": 35895,
+          "new_authoritative": 16002,
+          "authoritative_total": 76184276,
+          "new_authoritative_fraction_of_total": 0.00021004334280212887
+        },
+        {
+          "round": 27,
+          "tested": 35990,
+          "new_authoritative": 16145,
+          "authoritative_total": 76200421,
+          "new_authoritative_fraction_of_total": 0.00021187546982187933
+        },
+        {
+          "round": 28,
+          "tested": 36351,
+          "new_authoritative": 16256,
+          "authoritative_total": 76216677,
+          "new_authoritative_fraction_of_total": 0.00021328665378575872
+        },
+        {
+          "round": 29,
+          "tested": 36709,
+          "new_authoritative": 16393,
+          "authoritative_total": 76233070,
+          "new_authoritative_fraction_of_total": 0.00021503790940073645
+        },
+        {
+          "round": 30,
+          "tested": 37020,
+          "new_authoritative": 16594,
+          "authoritative_total": 76249664,
+          "new_authoritative_fraction_of_total": 0.00021762718849488964
+        },
+        {
+          "round": 31,
+          "tested": 37193,
+          "new_authoritative": 16864,
+          "authoritative_total": 76266528,
+          "new_authoritative_fraction_of_total": 0.0002211192831539414
+        },
+        {
+          "round": 32,
+          "tested": 37783,
+          "new_authoritative": 17095,
+          "authoritative_total": 76283623,
+          "new_authoritative_fraction_of_total": 0.0002240979036876631
+        },
+        {
+          "round": 33,
+          "tested": 38261,
+          "new_authoritative": 17345,
+          "authoritative_total": 76300968,
+          "new_authoritative_fraction_of_total": 0.00022732345938258607
+        },
+        {
+          "round": 34,
+          "tested": 38811,
+          "new_authoritative": 17538,
+          "authoritative_total": 76318506,
+          "new_authoritative_fraction_of_total": 0.00022980009592955082
+        },
+        {
+          "round": 35,
+          "tested": 39184,
+          "new_authoritative": 17282,
+          "authoritative_total": 76335788,
+          "new_authoritative_fraction_of_total": 0.00022639446651156596
+        },
+        {
+          "round": 36,
+          "tested": 38560,
+          "new_authoritative": 16991,
+          "authoritative_total": 76352779,
+          "new_authoritative_fraction_of_total": 0.0002225328301409959
+        },
+        {
+          "round": 37,
+          "tested": 37631,
+          "new_authoritative": 17176,
+          "authoritative_total": 76369955,
+          "new_authoritative_fraction_of_total": 0.0002249051999572345
+        },
+        {
+          "round": 38,
+          "tested": 37974,
+          "new_authoritative": 17207,
+          "authoritative_total": 76387162,
+          "new_authoritative_fraction_of_total": 0.00022526036508595514
+        },
+        {
+          "round": 39,
+          "tested": 38145,
+          "new_authoritative": 17072,
+          "authoritative_total": 76404234,
+          "new_authoritative_fraction_of_total": 0.0002234431144221667
+        },
+        {
+          "round": 40,
+          "tested": 38089,
+          "new_authoritative": 16923,
+          "authoritative_total": 76421157,
+          "new_authoritative_fraction_of_total": 0.0002214439124495328
+        },
+        {
+          "round": 41,
+          "tested": 37857,
+          "new_authoritative": 16699,
+          "authoritative_total": 76437856,
+          "new_authoritative_fraction_of_total": 0.0002184650495691559
+        },
+        {
+          "round": 42,
+          "tested": 37299,
+          "new_authoritative": 16533,
+          "authoritative_total": 76454389,
+          "new_authoritative_fraction_of_total": 0.00021624657807415085
+        },
+        {
+          "round": 43,
+          "tested": 36985,
+          "new_authoritative": 16423,
+          "authoritative_total": 76470812,
+          "new_authoritative_fraction_of_total": 0.0002147616792665939
+        },
+        {
+          "round": 44,
+          "tested": 36743,
+          "new_authoritative": 16215,
+          "authoritative_total": 76487027,
+          "new_authoritative_fraction_of_total": 0.0002119967350803163
+        },
+        {
+          "round": 45,
+          "tested": 36312,
+          "new_authoritative": 16094,
+          "authoritative_total": 76503121,
+          "new_authoritative_fraction_of_total": 0.00021037050240081055
+        },
+        {
+          "round": 46,
+          "tested": 36095,
+          "new_authoritative": 15866,
+          "authoritative_total": 76518987,
+          "new_authoritative_fraction_of_total": 0.00020734723004108772
+        },
+        {
+          "round": 47,
+          "tested": 35679,
+          "new_authoritative": 15484,
+          "authoritative_total": 76534471,
+          "new_authoritative_fraction_of_total": 0.0002023140657756686
+        },
+        {
+          "round": 48,
+          "tested": 34814,
+          "new_authoritative": 15213,
+          "authoritative_total": 76549684,
+          "new_authoritative_fraction_of_total": 0.00019873367472032934
+        },
+        {
+          "round": 49,
+          "tested": 34238,
+          "new_authoritative": 14950,
+          "authoritative_total": 76564634,
+          "new_authoritative_fraction_of_total": 0.00019525986371201097
+        },
+        {
+          "round": 50,
+          "tested": 33527,
+          "new_authoritative": 14624,
+          "authoritative_total": 76579258,
+          "new_authoritative_fraction_of_total": 0.00019096554839954181
+        },
+        {
+          "round": 51,
+          "tested": 32769,
+          "new_authoritative": 14409,
+          "authoritative_total": 76593667,
+          "new_authoritative_fraction_of_total": 0.00018812260287785933
+        },
+        {
+          "round": 52,
+          "tested": 32310,
+          "new_authoritative": 14240,
+          "authoritative_total": 76607907,
+          "new_authoritative_fraction_of_total": 0.0001858815957470291
+        },
+        {
+          "round": 53,
+          "tested": 31744,
+          "new_authoritative": 14154,
+          "authoritative_total": 76622061,
+          "new_authoritative_fraction_of_total": 0.00018472486664121446
+        },
+        {
+          "round": 54,
+          "tested": 31458,
+          "new_authoritative": 14118,
+          "authoritative_total": 76636179,
+          "new_authoritative_fraction_of_total": 0.00018422108440453432
+        },
+        {
+          "round": 55,
+          "tested": 31402,
+          "new_authoritative": 14075,
+          "authoritative_total": 76650254,
+          "new_authoritative_fraction_of_total": 0.00018362626691360997
+        },
+        {
+          "round": 56,
+          "tested": 31288,
+          "new_authoritative": 14039,
+          "authoritative_total": 76664293,
+          "new_authoritative_fraction_of_total": 0.0001831230609535524
+        },
+        {
+          "round": 57,
+          "tested": 31164,
+          "new_authoritative": 14048,
+          "authoritative_total": 76678341,
+          "new_authoritative_fraction_of_total": 0.00018320688497942334
+        },
+        {
+          "round": 58,
+          "tested": 31195,
+          "new_authoritative": 14011,
+          "authoritative_total": 76692352,
+          "new_authoritative_fraction_of_total": 0.00018269096767302168
+        },
+        {
+          "round": 59,
+          "tested": 31038,
+          "new_authoritative": 13990,
+          "authoritative_total": 76706342,
+          "new_authoritative_fraction_of_total": 0.0001823838764205442
+        },
+        {
+          "round": 60,
+          "tested": 31023,
+          "new_authoritative": 13972,
+          "authoritative_total": 76720314,
+          "new_authoritative_fraction_of_total": 0.00018211604295571574
+        }
+      ],
+      "closure_certificate": "NOT CLOSED at max_rounds. The residual growth is reported per round and attributed below; the authoritative set is a strict SUBSET of the true one, so anything it omits is omitted surface, never invented surface.",
+      "residual_growth_attribution": {
+        "authoritative_voxels_with_support_count_1": 27328305,
+        "fraction_support_count_1": 0.3562068971719798,
+        "last_round_new_authoritative": 13972,
+        "last_round_new_as_fraction_of_total": 0.00018211604295571574,
+        "voxel_distance_from_world_origin": {
+          "fraction_beyond_10_world_units": 0.6639125851335802,
+          "fraction_beyond_20_world_units": 0.04019297939786847,
+          "fraction_beyond_50_world_units": 0.015787982828120335,
+          "fraction_beyond_100_world_units": 0.012407887173141653
+        },
+        "note": "the un-closed frontier is far-field single-view band, not scene body; the reconstruction is a strict SUBSET of the true authoritative set, so what it omits is omitted surface, never invented surface"
+      }
+    },
+    "field_sha256": "8373322759588716ec7e19ac13cd329cbc0221d660212db54bc731c63a59e124",
+    "typed_surface_sha256": "7e5df59a09877fcc1eebd1ab12d4c43a12d3dd352869fdb846c82d64678b495a",
+    "depth_maps_sha256": "bbcc2913a5443b5d9930d5d55d5ed023e61dcb134026792ab3431179ac7a99e4",
+    "typed_surface_arrays": {
+      "vertices_sha256": "a8be7caf9ff4eb857db21a00a9dda821b232a775cf2c9c8ce2e3fc4261b4bb3d",
+      "faces_sha256": "901260ccaca07464f7e331a249e4c0da9476c4949884a9c87053310e250cbef8",
+      "vertex_support_count_sha256": "0d10e46fa99672b92d09c33e33f86f38ac430926f718e2357cfa6caafc565251",
+      "vertex_field_value_sha256": "ba1440dcb53cd312b4c660dcb5df827778c1db059cb42f190e89df7b87f94d62"
+    },
+    "expected_wl127_quantities_match": true,
+    "replay_fidelity": "SEMANTICALLY_EXACT_REPLAY"
+  },
+  "6. EXTRACTEDSURFACE CONTRACT": "vertices, faces, vertex_support_count, vertex_field_value, h; serialized under WL153 replay_cache when replayed",
+  "7. CONSTRUCTION-PROVENANCE LINEAGE": {
+    "observation_provenance": {
+      "renderer_observation_to_tsdf_cell": "NOT_PERSISTED_PER_EVENT; fuse_views retains only mean field value and support_count",
+      "tsdf_cell_to_active_marching_cubes_cell": "DETERMINISTIC_IN_SOURCE_BUT_NOT_PERSISTED; extraction local cell ownership is discarded",
+      "active_cell_to_face": "DETERMINISTIC_IN_SOURCE_BUT_NOT_PERSISTED; typed ExtractedSurface carries faces but no source-cell IDs",
+      "face_to_seam_welded_vertex": "DETERMINISTIC_IN_SOURCE_BUT_NOT_PERSISTED; weld returns arrays without sidecar",
+      "camera_set_per_field_cell": "NOT_AVAILABLE",
+      "event_set_per_surface_element": "EVENT_LEVEL_NOT_AVAILABLE",
+      "component_camera_aggregation": "NOT_AVAILABLE_WITHOUT_INFERENCE"
+    },
+    "physical_sheet_membership": {
+      "status": "NOT_PROVIDED",
+      "reason": "native zero-set topology/evidence support is not a physical-sheet identity contract",
+      "new_membership": false
+    },
+    "forbidden_posthoc_mapping": false
+  },
+  "8. NATIVE TOPOLOGY ACCOUNTING": {
+    "vertex_count": 28694040,
+    "face_count": 45116659,
+    "unique_edge_count": 73751737,
+    "connected_component_count": 582646,
+    "component_vertex_size_distribution": {
+      "count": 582646,
+      "min": 3.0,
+      "median": 6.0,
+      "p95": 35.0,
+      "max": 18897107.0
+    },
+    "component_face_size_distribution": {
+      "count": 582646,
+      "min": 1.0,
+      "median": 4.0,
+      "p95": 40.0,
+      "max": 33111314.0
+    },
+    "largest_components_by_vertices": [
+      [
+        18897107,
+        1479,
+        33111314
+      ],
+      [
+        169287,
+        540016,
+        292088
+      ],
+      [
+        143774,
+        399867,
+        226242
+      ],
+      [
+        114227,
+        465371,
+        178109
+      ],
+      [
+        112149,
+        573949,
+        190004
+      ],
+      [
+        109745,
+        193353,
+        211325
+      ],
+      [
+        81098,
+        147791,
+        141126
+      ],
+      [
+        77231,
+        518379,
+        129140
+      ],
+      [
+        55037,
+        115482,
+        99840
+      ],
+      [
+        48154,
+        440409,
+        77337
+      ],
+      [
+        44124,
+        466508,
+        66306
+      ],
+      [
+        38012,
+        43178,
+        66827
+      ],
+      [
+        35414,
+        549044,
+        56250
+      ],
+      [
+        34528,
+        505893,
+        54322
+      ],
+      [
+        32501,
+        540265,
+        52206
+      ],
+      [
+        27526,
+        284960,
+        46057
+      ],
+      [
+        26978,
+        374563,
+        41891
+      ],
+      [
+        26227,
+        428170,
+        39174
+      ],
+      [
+        26103,
+        484487,
+        42017
+      ],
+      [
+        23850,
+        582645,
+        47064
+      ]
+    ],
+    "boundary_edge_count": 12153565,
+    "boundary_component_count": 880791,
+    "boundary_loop_count_when_well_defined": null,
+    "boundary_degree": {
+      "vertices": 12005409,
+      "min_degree": 1,
+      "max_degree": 6,
+      "all_degree_two": false
+    },
+    "non_manifold_edge_count": 35,
+    "isolated_vertex_count": 0,
+    "degenerate_index_face_count": 28,
+    "zero_area_face_count": 28,
+    "operation_contract": "faces adjacency only; no component selection, merge, split, hole repair, or boundary closure"
+  },
+  "9. PHYSICAL-SHEET VIABILITY REVIEW": {
+    "contract": "native topology is reviewed without creating physical-sheet membership",
+    "cases": [
+      {
+        "case": "clean_tabletop",
+        "existing_region": "table_top",
+        "classification": "NOT_REVIEWABLE",
+        "reason": "no native semantic sheet label or deterministic camera/event lineage"
+      },
+      {
+        "case": "tabletop_side_relationship",
+        "existing_region": "table_side_curved",
+        "classification": "NOT_REVIEWABLE",
+        "reason": "a connected component cannot be promoted to same-sheet or distinct-sheet identity"
+      },
+      {
+        "case": "vase_or_curved_neighbor",
+        "existing_region": "vase/neighbor review context",
+        "classification": "NOT_REVIEWABLE",
+        "reason": "no physical-sheet membership in ExtractedSurface"
+      },
+      {
+        "case": "background_lower_geometry",
+        "existing_region": "hedge/patio/lower review context",
+        "classification": "NOT_REVIEWABLE",
+        "reason": "no semantic identity; no split by normals or geometry thresholds"
+      }
+    ],
+    "interpretation": "The replay makes native mesh connectivity measurable, but the required real-scene physical-sheet labels are not part of WL127's carrier. All four review cases therefore remain NOT_REVIEWABLE rather than being inferred."
+  },
+  "10. EVIDENCE PROVENANCE VIABILITY": {
+    "observation_provenance": {
+      "renderer_observation_to_tsdf_cell": "NOT_PERSISTED_PER_EVENT; fuse_views retains only mean field value and support_count",
+      "tsdf_cell_to_active_marching_cubes_cell": "DETERMINISTIC_IN_SOURCE_BUT_NOT_PERSISTED; extraction local cell ownership is discarded",
+      "active_cell_to_face": "DETERMINISTIC_IN_SOURCE_BUT_NOT_PERSISTED; typed ExtractedSurface carries faces but no source-cell IDs",
+      "face_to_seam_welded_vertex": "DETERMINISTIC_IN_SOURCE_BUT_NOT_PERSISTED; weld returns arrays without sidecar",
+      "camera_set_per_field_cell": "NOT_AVAILABLE",
+      "event_set_per_surface_element": "EVENT_LEVEL_NOT_AVAILABLE",
+      "component_camera_aggregation": "NOT_AVAILABLE_WITHOUT_INFERENCE"
+    },
+    "physical_sheet_membership": {
+      "status": "NOT_PROVIDED",
+      "reason": "native zero-set topology/evidence support is not a physical-sheet identity contract",
+      "new_membership": false
+    },
+    "forbidden_posthoc_mapping": false
+  },
+  "11. EVENT 1527 TRACE": {
+    "event_id": 1527,
+    "human_review": "CLEAR_NOT_ON_INTENDED_SURFACE",
+    "blacklist": false,
+    "source_camera": "DSC08003.JPG",
+    "source_pixel": [
+      259,
+      169
+    ],
+    "historical_v_min_owner": true,
+    "surface_trace": "EVENT_LEVEL_NOT_AVAILABLE",
+    "reason": "event ID is preserved in WL149/WL152 input provenance, but WL127 field fusion and extraction do not carry event/camera/source-cell IDs into ExtractedSurface"
+  },
+  "12. BOUNDARY SEMANTICS": {
+    "topological_boundary": "computed from face edge incidence only",
+    "observed_physical_boundary": "not established",
+    "promotion_justified": false,
+    "possible_causes": [
+      "evidence mask termination",
+      "reconstruction volume termination",
+      "extraction support limit",
+      "genuine observed termination"
+    ],
+    "rule": "native mesh boundary != observed physical-surface boundary without an existing deterministic ownership contract"
+  },
+  "13. ARCHITECTURE VERDICT": {
+    "verdict": "TOPOLOGY_RECOVERED_PROVENANCE_GAP",
+    "replay_fidelity": "SEMANTICALLY_EXACT_REPLAY",
+    "native_topology": "RECOVERED_AND_ACCOUNTED",
+    "observation_provenance": "SOURCE_LINEAGE_ONLY_NO_PER_ELEMENT_IDS",
+    "physical_sheet_membership": "SEPARATE_ABSTRACTION_STILL_REQUIRED",
+    "event_1527": "EVENT_LEVEL_NOT_AVAILABLE",
+    "canonical_production_modified": false,
+    "candidate_nurbs_or_membership": "NOT_RUN"
+  },
+  "14. RETAINED / REJECTED / OPEN": {
+    "RETAINED": [
+      "WL127 point artifact and WL152 exact baseline",
+      "943a764 TSDF core",
+      "event 1527 and CLEAR_NOT_ON_INTENDED_SURFACE",
+      "canonical renderer/checkpoint/cameras"
+    ],
+    "REJECTED": [
+      "point cloud promoted to mesh",
+      "post-hoc event-to-mesh correspondence",
+      "connectivity repair",
+      "physical-sheet inference",
+      "NURBS or membership fitting"
+    ],
+    "OPEN": [
+      "per-event/camera/source-cell sidecars in a future behavior-neutral instrumentation pass",
+      "physical-sheet membership contract",
+      "promotion of topological boundaries to observed boundaries"
+    ]
+  },
+  "INTENT ALIGNMENT": {
+    "baseline_reconciled": true,
+    "new_geometry_inference": false,
+    "connectivity_repair": false,
+    "representative_fitting": false,
+    "canonical_modified": false,
+    "event_1527_blacklisted": false
+  },
+  "IMPLEMENTATION FIDELITY": {
+    "historical_core_blob_match": true,
+    "typed_result_serialized": true,
+    "provenance_behavior_neutral": true,
+    "no_posthoc_correspondence": true
+  },
+  "ARCHITECTURE RESULT": {
+    "verdict": "TOPOLOGY_RECOVERED_PROVENANCE_GAP",
+    "replay_fidelity": "SEMANTICALLY_EXACT_REPLAY",
+    "native_topology": "RECOVERED_AND_ACCOUNTED",
+    "observation_provenance": "SOURCE_LINEAGE_ONLY_NO_PER_ELEMENT_IDS",
+    "physical_sheet_membership": "SEPARATE_ABSTRACTION_STILL_REQUIRED",
+    "event_1527": "EVENT_LEVEL_NOT_AVAILABLE",
+    "canonical_production_modified": false,
+    "candidate_nurbs_or_membership": "NOT_RUN"
+  }
+}

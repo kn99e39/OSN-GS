@@ -1,0 +1,7 @@
+{
+  "path": "output/confirmed/127_osn_gs_evidence_bounded_projective_tsdf/RENDERER_MEDIAN_SURFACE_POINTS/iteration_0000001/point_cloud.ply",
+  "entity": "vertex-only renderer-median point artifact",
+  "typed_extracted_surface": "not preserved in confirmed WL127 output",
+  "faces": 0,
+  "topology": "unavailable before replay"
+}
