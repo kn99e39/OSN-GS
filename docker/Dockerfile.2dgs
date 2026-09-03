@@ -4,8 +4,10 @@
 # torch 2.1.2+cu118 and the compiled 3DGS `diff_gaussian_rasterization`) with:
 #   * the runtime python dependencies `requirements.txt` lists but the base
 #     image did not install (tqdm, websockets), plus `ninja` for JIT builds and
-#     `pytest` for the focused/regression suites, and `scipy`/`plyfile`, which
-#     the OSN-GS structural-evidence analysis chain imports;
+#     `pytest` for the focused/regression suites, and `scipy`/`plyfile`/
+#     `scikit-image`, which the OSN-GS structural-evidence analysis chain
+#     (including `scripts/devtools/evidence_bounded_tsdf`, which needs
+#     `skimage.measure.marching_cubes`) imports;
 #   * a compiled build of the vendored official 2DGS surfel rasterizer.
 #
 # The surfel rasterizer is the UNMODIFIED upstream
@@ -32,8 +34,9 @@ RUN python3.10 -m pip install --no-cache-dir \
         pytest \
         'numpy==1.26.4' \
         'scipy==1.13.1' \
+        'scikit-image==0.22.0' \
         plyfile \
-    && python3.10 -c "import numpy, scipy, torch; assert numpy.__version__.startswith('1.'), numpy.__version__; torch.zeros(1).numpy(); print('numpy', numpy.__version__, 'scipy', scipy.__version__)"
+    && python3.10 -c "import numpy, scipy, skimage, torch; assert numpy.__version__.startswith('1.'), numpy.__version__; torch.zeros(1).numpy(); print('numpy', numpy.__version__, 'scipy', scipy.__version__, 'scikit-image', skimage.__version__)"
 
 COPY osn_gs/render/vendor /tmp/osn_gs_vendor
 RUN python3.10 -m pip install --no-build-isolation /tmp/osn_gs_vendor/diff_surfel_rasterization \

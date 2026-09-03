@@ -154,7 +154,7 @@ def _cylinder_surface(
     y = radius * torch.sin(grid_angle)
     z = grid_height
     positions = torch.stack((x, y, z), dim=1)
-    positions = positions + 0.001 * torch.randn_like(positions, generator=generator)
+    positions = positions + 0.001 * torch.randn(positions.shape, generator=generator, dtype=positions.dtype)
     normals = torch.stack((torch.cos(grid_angle), torch.sin(grid_angle), torch.zeros_like(grid_angle)), dim=1)
     count = positions.shape[0]
     scale = torch.tensor([surfel_scale, surfel_scale, surfel_thickness]).expand(count, 3).clone()
@@ -202,7 +202,7 @@ def _sphere_surface(
     unit = torch.stack((x_unit, y_unit, z_unit), dim=1)
     unit = unit / unit.norm(dim=1, keepdim=True).clamp_min(1e-12)
     positions = radius * unit
-    positions = positions + 0.001 * torch.randn_like(positions, generator=generator)
+    positions = positions + 0.001 * torch.randn(positions.shape, generator=generator, dtype=positions.dtype)
     quaternions = _quaternions_aligning_z_to_batch(unit)
     scale = torch.tensor([surfel_scale, surfel_scale, surfel_thickness]).expand(count, 3).clone()
     covariances = covariance_from_scale_rotation(scale, quaternions)
@@ -228,7 +228,7 @@ def _spherical_patch(
     y = radius * torch.sin(theta_v) * torch.cos(theta_u)
     z = radius * (torch.cos(theta_u) * torch.cos(theta_v))
     positions = torch.stack((x, y, z - radius), dim=1)  # patch centered near origin
-    positions = positions + 0.001 * torch.randn_like(positions, generator=generator)
+    positions = positions + 0.001 * torch.randn(positions.shape, generator=generator, dtype=positions.dtype)
     unit_normal = torch.nn.functional.normalize(torch.stack((x, y, z), dim=1), dim=1)
     count = positions.shape[0]
     scale = torch.tensor([surfel_scale, surfel_scale, surfel_thickness]).expand(count, 3).clone()
@@ -322,7 +322,7 @@ def make_density_variation_scene(kind: str, *, seed: int = 0) -> GaussianReliabi
 
     positions_xy = torch.stack((grid_u * base_spacing * stretch, grid_v * base_spacing * stretch), dim=-1).reshape(-1, 2)
     positions = torch.cat((positions_xy, torch.zeros((positions_xy.shape[0], 1))), dim=1)
-    positions = positions + 0.001 * torch.randn_like(positions, generator=generator)
+    positions = positions + 0.001 * torch.randn(positions.shape, generator=generator, dtype=positions.dtype)
     count = positions.shape[0]
     scale = torch.tensor([0.05, 0.05, 0.002]).expand(count, 3).clone()
     quaternion = _identity_quaternion(count)
