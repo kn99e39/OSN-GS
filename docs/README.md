@@ -11,6 +11,7 @@
 - [Worklog 139: Physical-Chart-Constrained Surface Representative](worklogs/139_physical_chart_surface_representative_closure.md): frozen physical chart를 보존하는 graph B-spline representative, controlled continuation A/B 및 architecture 판정 ([output](../output/confirmed/139_physical_chart_surface_representative/README.md))
 - [Worklog 146: 산출물 폴더 Worklog 번호 정규화](worklogs/146_output_worklog_prefix_normalization.md): `output/` 및 `output/confirmed/`의 Worklog 산출물 루트에 대응 번호 prefix를 적용하고 demo/문서 참조를 동기화
 - [Worklog 147: Evidence-Supported Parametric Domain Materialization Audit](worklogs/147_evidence_supported_parametric_domain_materialization_audit.md): WL145 support annotation의 `248/3840` exact replay mismatch(`314/3840`)를 확인해 replacement mask 없이 중단
+- [Worklog 156: Region-Owned TSDF Support Fragmentation Causal Attribution Audit](worklogs/156_region_owned_tsdf_support_fragmentation_causal_attribution.md): frozen W153/W154/W155 exact replay에서 Region 0/2/5 frontier 원인을 분해하고 `TSDF_FIELD_STARVATION_DOMINANT` 판정과 matched PNG/README 산출물을 기록
 - [output/ 폴더 관리 규약](output_folder_conventions.md): gitignore된 `output/`의 번호 매김·`confirmed/` 이동·preview_png 통합 규칙(참조용 유일 문서)
 - [Worklog 126: WL123 Fixed Observed/Occluded Gaussian Visualization](worklogs/126_wl123_fixed_observed_occluded_gaussian_visualization.md): WL125의 고정 Gaussian visualization 계약으로 생성한 실제 Original Scene / Observed/Occluded 결과
 - [Worklog 127: Novel-View Observed/Occluded Inspection Correction](worklogs/127_novel_view_observed_occluded_inspection_correction.md): query camera set 밖 novel inspection pose에서 다시 만든 현재 Observed/Occluded 결과
@@ -526,3 +527,39 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - authoritative voxel `76,720,314`, eligible cell `21,235,312`, vertices `28,694,040`, faces `45,116,659`, connected components `582,646`가 WL127 기록과 일치하여 `SEMANTICALLY_EXACT_REPLAY`를 얻었고, face-native topology accounting을 완료했다. 다만 closure는 max 60 round에서도 닫히지 않았으며 누락 방향으로만 제한했다.
 - per-event/camera/source-cell provenance는 historical typed carrier에 저장되지 않았고 event 1527은 보존하되 `EVENT_LEVEL_NOT_AVAILABLE`로 남겼다. 네 physical-sheet review case는 모두 `NOT_REVIEWABLE`; verdict는 `TOPOLOGY_RECOVERED_PROVENANCE_GAP`이다.
 - canonical production/renderer/checkpoint/Candidate B/physical-sheet membership/NURBS/Occluded Surface는 변경·실행하지 않았다. 결과는 `output/153_raw_visible_surface_replay_construction_provenance_audit/` 및 번호 보존 `temp/153_raw_visible_surface_replay_construction_provenance_audit/`에 있다.
+
+## 2026-09-03 Worklog 154 Gaussian-Region-Owned TSDF와 Boundary-First NURBS Candidate F
+
+- [Worklog 154](worklogs/154_gaussian_region_owned_tsdf_boundary_first_nurbs.md)에 Candidate F의 Gaussian identity → direct TSDF zero-surface sample → nearest Gaussian region ownership → native TSDF cell component → boundary-first chart → WL139 NURBS fit 경로를 기록했다.
+- `torch_gaussian_region_owned_tsdf.py`와 real replay runner를 추가했고, Gaussian region ID/2DGS intrinsic normal/unknown TSDF/ambiguous-unassigned support/representative abstain을 모두 별도 accounting으로 보존한다. production visible-surface constructor는 변경하지 않았다.
+- synthetic Candidate F contract 5개와 기존 region-coherent partition 회귀 16개가 통과했다. real replay는 `COMPLETE_CANDIDATE_REPLAY`로 종료했고, direct TSDF sample `21,235,312`개, native support component `495,970`개, materialized representative `1,263`개를 기록했다. matched `Original Scene`/`Observed-Occluded` visualization pair와 전체 report는 `output/154_gaussian_region_owned_tsdf_boundary_first_nurbs/candidate_f_report.json`에 있다.
+- 전체 `pytest -q`는 100%까지 실행했으나 기존 dirty worktree에서 삭제된 WL149 `temp/` report를 요구하는 historical test와 Windows pytest temp cleanup 권한 오류로 종료됐다. Candidate F focused 5개와 기존 region decomposition 16개는 별도로 통과했다.
+
+## 2026-09-03 Worklog 155 Intrinsic-Normal Gaussian Surface Region Real-Scene Viability Audit
+
+- [Worklog 155](worklogs/155_intrinsic_normal_gaussian_region_viability_audit.md)는 W154 Candidate F가 사용하는 trained 2DGS surfel `t_w` → 기존 `partition_surfels_region_coherent` → Gaussian region ID 경로를 partition 변경 없이 standalone replay하고, covariance/eigen normal drift 및 `lambda2/lambda3` rule 부재를 계약 수준에서 확인했다.
+- 동일 checkpoint를 두 번 replay해 deterministic mapping hash `06c9e1cbc730f06581895b32ad683e8822c7626eb3de9017fa8f83aaf0248bce`, final region `104,977`, accepted Surface Region `64,892`를 얻었다. W154 Gaussian ID/region/accepted-mask exact join은 `True`다.
+- 기존 graph accounting, 세 고정 real-scene camera의 A–F matched review export, `tabletop`/`table_side`/`vase_neighbor`/`background_lower` target, event 1527 lineage와 W154 per-region TSDF attribution을 모두 별도 보존했다. production partition 및 downstream feedback은 없다.
+- 정량 fragmentation/support 신호는 확보했지만 physical-sheet plausibility를 자동 판정하지 않아 architecture verdict는 `UNRESOLVED`로 남겼다. W155 focused + 기존 region partition 회귀는 `21 passed`다.
+- W155 review render PPM 23개는 PNG로 변환했고 report 경로를 PNG 우선으로 갱신했다. 원본 PPM은 provenance 보존을 위해 남겨 두었다.
+- W155 시각화 관련 디렉터리 39곳에 view 의미·palette·공통 조건·review 제한을 설명하는 UTF-8 `README.md`를 각각 추가했다. nested camera/iteration 항목도 상위 README에만 의존하지 않는다.
+
+## 2026-09-03 Worklog 157 Same-Region TSDF Component Separation Topology and Spatial-Provenance Audit
+
+- [Worklog 157](worklogs/157_same_region_tsdf_component_separation_topology_spatial_provenance_audit.md)는 W153–W156 frozen data에서 Region component 사이 exact lattice separation, 6/18/26 diagnostic connectivity, one-cell gap intervening state, remote tiny-island spatial provenance를 분리 감사했다. production membership/connectivity/field/Boundary First/NURBS는 변경하지 않았다.
+- Region 0은 `3,133,747` owned samples, `41,319` native components, largest `2,968,372 (94.7228%)`였고, separation은 `EDGE_TOUCH 24,763`, `CORNER_TOUCH 3,464`, `ONE_CELL_AXIAL_GAP 2,579`, `OTHER_NEAR_GAP 10,442`, `REMOTE 70`으로 기록됐다. Region 2/5도 control로 보존했다.
+- Region 0의 6/18/26 component count는 `41,319/19,713/16,079`이며, 30,059 one-cell gap 중 29,147개가 authoritative-but-not-zero-surface였다. edge/corner digital adjacency와 true local TSDF gap이 동시에 실질 증거로 확인되어 architecture verdict는 **`MIXED_COMPONENT_STRUCTURE`**다.
+- remote tiny island은 `170` components / `271` samples로 non-largest population을 지배하지 않았고, matched common-world review에서 주로 table lower/side geometry와 pavement/grass/peripheral background에 희소하게 분포했다. semantic label로 자동 확정하지 않았다.
+- W157 출력은 `output/157_same_region_tsdf_component_separation_topology_spatial_provenance/`에 있으며, canonical `Original Scene`/`Observed-Occluded` pair를 PNG-only로 보존했다. 35 PNG, 0 PPM, 63 directories 전체에 README가 있다. focused tests는 `4 passed`다.
+
+## 2026-09-04 Worklog 158 Mesh-Free Implicit Zero-Set Connectivity Contract 및 Candidate G 감사
+
+- [Worklog 158](worklogs/158_mesh_free_implicit_zero_set_connectivity_candidate_g_audit.md)은 WL153 frozen scalar field에서 전역 mesh 없이 bounded local Lewiner zero-set incidence를 추출하고, WL157 edge/corner separation을 실제 shared lattice-edge entity 기준으로 재분류했다.
+- 합성 A–H는 모두 통과했지만 real Region 0/2/5에서 exact corner-degenerate 및 multi-patch cell ambiguity가 남아 Stop Condition A인 **`ZERO_SET_CONNECTIVITY_CONTRACT_GAP`**으로 종료했다. Candidate G는 진단용 NPZ/report로만 보존하고 production/Boundary First/WL139 경로에는 승격하지 않았다.
+- Region 0/2/5 Candidate G graph는 각각 `89,330/22,796/19,887` components, raw ambiguous incidence cell은 `10,772/3,594/3,507`개였다. WL157 one-cell gap `30,059`개와 ownership/scalar field/native 6-face semantics는 유지했다.
+- 상세 report는 `output/158_mesh_free_implicit_zero_set_connectivity_candidate_g/worklog_158_report.json`에 있으며, frozen canonical Gaussian pair는 PNG-only로 복사했고 output 하위 시각화 항목 README를 추가했다. focused tests는 `9 passed`다.
+
+## 운영 기본값
+
+- 무거운 replay·training·CUDA 작업·대규모 test suite는 SSH `LabServer63` 환경에서 우선 실행한다. 시작 전 GPU 점유/경합 가능성을 확인하고, 경합이 있으면 작업을 시작하지 않고 사용자에게 알린다.
+- 중간 시각화 산출물은 가능한 경우 PNG로 저장한다. renderer가 PPM만 만들면 PNG로 변환해 주 산출물로 사용하고, provenance/호환성에 필요한 경우에만 PPM을 함께 보존한다.

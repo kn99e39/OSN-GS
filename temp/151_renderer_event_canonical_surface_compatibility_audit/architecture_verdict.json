@@ -1,8 +1,0 @@
-{
-  "candidate_c": "not implemented",
-  "canonical_production_modified": false,
-  "compatibility": false,
-  "event_1527": "not representable under the canonical input contract; not manually removed",
-  "verdict": "A. CONTRACT_GAP",
-  "why": "Renderer events contain geometric/rendering provenance but not the canonical local-region, topology, boundary, covariance/reliability, or physical-sheet ownership semantics."
-}

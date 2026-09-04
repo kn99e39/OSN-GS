@@ -1,5 +1,0 @@
-{
-  "candidate": "Candidate C — Canonical Pre-Fit Ownership Restoration",
-  "reason": "Compatibility gate failed; implementing it would require new semantics rather than representation plumbing.",
-  "status": "NOT_IMPLEMENTED_STOP_CONDITION_A"
-}

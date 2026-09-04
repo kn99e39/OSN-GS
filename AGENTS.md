@@ -36,6 +36,22 @@ Run with `require_escalated` whenever a command needs any of the following:
 - Any command that previously failed with `-1073741502`
 
 Do not spend time retrying those commands inside the restricted sandbox. Treat the failure as an environment limitation and either rerun once with `require_escalated` or use a smaller static/file-based check.
+
+## Heavy Workload Host Preference
+
+- For heavy replays, training, CUDA jobs, and large test suites, prefer the SSH-connected `LabServer63` host over this Windows checkout.
+- Before starting a GPU-heavy job there, check whether the target GPU is already occupied or likely to contend with another job. If GPU contention is detected or reasonably likely, stop before launching the workload and notify the user.
+- Do not silently fall back to a competing GPU or continue a heavy workload locally without informing the user.
+
+## Intermediate Visualization Output Preference
+
+- Save intermediate visualization artifacts as PNG whenever the renderer or conversion path allows it.
+- If a renderer emits only PPM, convert it promptly and make the PNG the primary review artifact. Retain the PPM only when required for provenance or compatibility, and document that exception.
+
+## Visualization Artifact README Rule
+
+- Every intermediate visualization directory and each of its visualization subdirectories must contain a UTF-8 `README.md` explaining what the visualization means, its input/state semantics, palette or legend, shared rendering conditions, and review limitations.
+- When a visualization has nested iteration or camera folders, place the explanation at those nested artifact levels as well; do not rely only on a top-level README.
 ## Korean Markdown Encoding Rules
 
 - 한글이 포함된 `.md` 파일은 반드시 UTF-8 또는 UTF-8 with BOM을 보존해서 다룬다.
