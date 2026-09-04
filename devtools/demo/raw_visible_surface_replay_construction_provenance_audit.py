@@ -31,6 +31,26 @@ if str(REPO_ROOT) not in sys.path:
 OUTPUT_ROOT = REPO_ROOT / "output" / "153_raw_visible_surface_replay_construction_provenance_audit"
 TEMP_ROOT = REPO_ROOT / "temp" / "153_raw_visible_surface_replay_construction_provenance_audit"
 
+TEMP_COPY_EXCLUDED_NAMES = frozenset({"replay_cache"})
+
+
+def _mirror_output_to_temp(source: Path, target: Path) -> dict[str, Any]:
+    """Mirror lightweight audit artifacts while excluding large replay caches."""
+    copied: list[str] = []
+    excluded: list[str] = []
+    target.mkdir(parents=True, exist_ok=True)
+    for child in source.iterdir():
+        if child.name in TEMP_COPY_EXCLUDED_NAMES:
+            excluded.append(child.name)
+            continue
+        destination = target / child.name
+        if child.is_dir():
+            shutil.copytree(child, destination, dirs_exist_ok=True)
+        else:
+            shutil.copy2(child, destination)
+        copied.append(child.name)
+    return {"copied": sorted(copied), "excluded": sorted(excluded), "excluded_names": sorted(TEMP_COPY_EXCLUDED_NAMES)}
+
 CHECKPOINT = REPO_ROOT / "output" / "arch_2dgs_coverage_first_surface" / "2dgs_run1" / "30000" / "checkpoint.pt"
 SOURCE_PATH = REPO_ROOT / "DATASET"
 RAW_POINT_PLY = (
@@ -712,13 +732,8 @@ typed `ExtractedSurface` replay를 보존하는 진단 전용 산출물이다.
 최종 판정이다. PNG는 opaque display-only vertex preview이며 metrics/geometry를 바꾸지 않는다.
 """
     (OUTPUT_ROOT / "README.md").write_text(readme, encoding="utf-8")
-    TEMP_ROOT.mkdir(parents=True, exist_ok=True)
-    for child in OUTPUT_ROOT.iterdir():
-        destination = TEMP_ROOT / child.name
-        if child.is_dir():
-            shutil.copytree(child, destination, dirs_exist_ok=True)
-        else:
-            shutil.copy2(child, destination)
+    temp_mirror = _mirror_output_to_temp(OUTPUT_ROOT, TEMP_ROOT)
+    result["temp_mirror"] = temp_mirror
     return result
 
 

@@ -559,7 +559,22 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - Region 0/2/5 Candidate G graph는 각각 `89,330/22,796/19,887` components, raw ambiguous incidence cell은 `10,772/3,594/3,507`개였다. WL157 one-cell gap `30,059`개와 ownership/scalar field/native 6-face semantics는 유지했다.
 - 상세 report는 `output/158_mesh_free_implicit_zero_set_connectivity_candidate_g/worklog_158_report.json`에 있으며, frozen canonical Gaussian pair는 PNG-only로 복사했고 output 하위 시각화 항목 README를 추가했다. focused tests는 `9 passed`다.
 
+
+## 2026-09-04 Worklog 159 Partial Zero-Set Topology / Explicit Ambiguity Contract
+
+- [Worklog 159](worklogs/159_partial_zero_set_topology_ambiguity_contract_audit.md)은 W158 `ZERO_SET_CONNECTIVITY_CONTRACT_GAP`을 재감사해 deterministic multi-patch와 genuine topology ambiguity를 분리했다. Candidate H는 deterministic shared zero-crossing entity만 guaranteed edge로 사용하고 ambiguity leverage를 별도 측정했다.
+- Region 0/2/5의 deterministic multi-patch는 `129,810/41,068/40,153`, genuine ambiguity는 `10,787/3,744/3,517`이다. 서로 다른 H components를 접하는 ambiguous cell이 `3/2/1`개 있어 최종 verdict는 **`AMBIGUITY_IS_MACRO_TOPOLOGY_CRITICAL`**이다. 따라서 Boundary First/WL139는 조건부 보류했고, ambiguity가 포함된 real-scene A–H common-world PNG는 생성했다.
+- W158 primary counts는 exact 재현됐다. Candidate H/Report는 `output/159_partial_zero_set_topology_ambiguity_contract_audit/`에 있으며 PNG 26개, PPM 0개, visualization directories README 전부 충족이다.
+
+## 2026-09-04 Worklog 160 Per-View Projective-SDF Occlusion / Global Persistent-Observability Audit
+
+- [Worklog 160](worklogs/160_per_view_projective_sdf_occlusion_global_persistent_observability.md)은 W153의 frozen per-camera renderer `median_depth`와 historical Candidate-B를 projective-SDF 관점에서 재생해, per-view ordering과 all-relevant global persistent-occlusion contract를 감사했다. Gaussian center `1,190,469`개 × 161 camera의 `191,665,509`개 pair가 exact agreement `1.0`, disagreement `0`이었다.
+- synthetic A–H는 모두 통과했고, 최종 verdict는 **`HISTORICAL_GLOBAL_STATE_ALREADY_VALID`**이다. 기존 Candidate-B와 `aggregate_global`이 이미 요구된 renderer-relative per-view ordering 및 all-relevant global aggregation을 제공하므로 production path는 변경하지 않았다.
+- fused TSDF scalar sign shortcut은 global per-view state와 `711,376`개 disagreement을 보여 occlusion oracle로 승격하지 않았다. `UNKNOWN`을 `OCCLUDED`로 추정하지 않았으며, W154–W159 downstream support/topology/NURBS 결과도 보존했다.
+- W160 산출물은 `output/160_per_view_projective_sdf_occlusion_global_persistent_observability/`에 있으며 PNG 12개, PPM 0개, 모든 visualization directory README 충족이다. focused tests는 `4 passed`다.
 ## 운영 기본값
 
 - 무거운 replay·training·CUDA 작업·대규모 test suite는 SSH `LabServer63` 환경에서 우선 실행한다. 시작 전 GPU 점유/경합 가능성을 확인하고, 경합이 있으면 작업을 시작하지 않고 사용자에게 알린다.
 - 중간 시각화 산출물은 가능한 경우 PNG로 저장한다. renderer가 PPM만 만들면 PNG로 변환해 주 산출물로 사용하고, provenance/호환성에 필요한 경우에만 PPM을 함께 보존한다.
+- W153 `output/.../replay_cache/`는 대형 provenance cache이므로 `temp/` mirror에 복사하지 않는다.
+- 고정 camera PNG batch는 각 visualization directory에 공통 README.md 하나와 <camera_name>.png를 직접 둔다. cameras/<camera_name>/render.png 및 camera별 중복 README는 만들지 않는다.

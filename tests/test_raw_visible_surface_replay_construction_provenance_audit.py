@@ -107,3 +107,17 @@ def test_numbered_output_contract_and_display_preview_are_noncanonical():
     assert wl153.TEMP_ROOT.name.startswith("153_")
     assert "typed ``ExtractedSurface``" in wl153.__doc__
     assert "connectivity" in wl153.__doc__
+
+
+def test_temp_mirror_excludes_replay_cache(tmp_path):
+    source = tmp_path / "output"
+    target = tmp_path / "temp"
+    (source / "replay_cache").mkdir(parents=True)
+    (source / "replay_cache" / "field.npz").write_bytes(b"large-cache-placeholder")
+    (source / "report.json").write_text("{}", encoding="utf-8")
+
+    result = wl153._mirror_output_to_temp(source, target)
+
+    assert result["excluded"] == ["replay_cache"]
+    assert not (target / "replay_cache").exists()
+    assert (target / "report.json").exists()

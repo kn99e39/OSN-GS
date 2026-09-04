@@ -52,6 +52,7 @@ Do not spend time retrying those commands inside the restricted sandbox. Treat t
 
 - Every intermediate visualization directory and each of its visualization subdirectories must contain a UTF-8 `README.md` explaining what the visualization means, its input/state semantics, palette or legend, shared rendering conditions, and review limitations.
 - When a visualization has nested iteration or camera folders, place the explanation at those nested artifact levels as well; do not rely only on a top-level README.
+- Fixed-camera PNG batches use one common README in each visualization directory and save files directly as <camera_name>.png. Do not create cameras/<camera_name>/render.png trees or duplicate per-camera README files unless a camera has genuinely distinct non-shared metadata.
 ## Korean Markdown Encoding Rules
 
 - 한글이 포함된 `.md` 파일은 반드시 UTF-8 또는 UTF-8 with BOM을 보존해서 다룬다.
@@ -161,3 +162,5 @@ This is a mandatory review/output rule for every Gaussian visualization batch.
 - Additional frontier/topology/identity/residual views are allowed only after the mandatory pair and must include their own legend and state definition. Do not vary the required item set or palette per worklog.
 
 Historical outputs that used synthetic marker Gaussians, including WL123 `EVENT_IDENTITY_EFFECT`, remain historical diagnostics and are not canonical Gaussian visualizations.
+
+- W153 `output/153_raw_visible_surface_replay_construction_provenance_audit/replay_cache/`는 대형 중간 cache다. 이후 output→temp mirror에서는 이 directory를 제외하고, report에 제외 사실을 기록한다.
