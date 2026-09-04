@@ -586,3 +586,10 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - 중간 시각화 산출물은 가능한 경우 PNG로 저장한다. renderer가 PPM만 만들면 PNG로 변환해 주 산출물로 사용하고, provenance/호환성에 필요한 경우에만 PPM을 함께 보존한다.
 - W153 `output/.../replay_cache/`는 대형 provenance cache이므로 `temp/` mirror에 복사하지 않는다.
 - 고정 camera PNG batch는 각 visualization directory에 공통 README.md 하나와 <camera_name>.png를 직접 둔다. cameras/<camera_name>/render.png 및 camera별 중복 README는 만들지 않는다.
+
+## 2026-09-04 Worklog 162 Renderer Median-Event Direct-Observation Semantic Validity Audit
+
+- Worklog 162(worklogs/162_renderer_median_event_direct_observation_semantic_validity_audit.md)는 W160 historical Candidate-B를 변경하지 않고 W155 기존 stable_gaussian_id -> region_id/membership_status와 W153 renderer median-depth map을 exact join했다. frozen tabletop positive control은 기존 W155 region_id=1인 65,471개 Gaussian이다.
+- 세 fixed tabletop ROI의 exact GLOBAL_OCCLUDED projection은 869건이며, 기존 tabletop Region 밖 A 625, 기존 region_id=1 B 175, W155 ambiguous C 69로 분리됐다. tabletop positive control global state는 OBSERVED 59,274, OCCLUDED 6,197, UNRESOLVED 0이다.
+- image/world signal의 조건부 결과는 MIXED지만, median-depth map에 contributing Gaussian stable ID/Region ID가 없어 SAME_REGION_MEDIAN_ORDERING_CONFLICT는 계산하지 않았다. 최종 verdict는 RENDERER_PROVENANCE_CONTRACT_GAP이며 human review가 필요하다. W161 spatial field와 직접 join하지 않았다.
+- output은 output/162_renderer_median_event_direct_observation_semantic_validity_audit/에 있고 PNG 27개/PPM 0개, 모든 11개 directory의 UTF-8 README, full cross-view NPZ/JSON을 보존한다. focused W162/W160/W161 tests는 11 passed다. Candidate-B, renderer, production, W155 mapping 및 W154–W161 결과는 변경하지 않았다.
