@@ -572,6 +572,14 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - synthetic A–H는 모두 통과했고, 최종 verdict는 **`HISTORICAL_GLOBAL_STATE_ALREADY_VALID`**이다. 기존 Candidate-B와 `aggregate_global`이 이미 요구된 renderer-relative per-view ordering 및 all-relevant global aggregation을 제공하므로 production path는 변경하지 않았다.
 - fused TSDF scalar sign shortcut은 global per-view state와 `711,376`개 disagreement을 보여 occlusion oracle로 승격하지 않았다. `UNKNOWN`을 `OCCLUDED`로 추정하지 않았으며, W154–W159 downstream support/topology/NURBS 결과도 보존했다.
 - W160 산출물은 `output/160_per_view_projective_sdf_occlusion_global_persistent_observability/`에 있으며 PNG 12개, PPM 0개, 모든 visualization directory README 충족이다. focused tests는 `4 passed`다.
+
+## 2026-09-04 Worklog 161 Global Persistent-Occlusion Spatial Domain / Occluded-Region Contract Audit
+
+- [Worklog 161](worklogs/161_global_persistent_occlusion_spatial_domain_audit.md)은 W160 executable relevance semantics를 source 기준으로 재조정하고, `GEOMETRICALLY_RELEVANT`와 `RENDERER_EVIDENCE_AVAILABLE`를 분리했다. 161개 camera의 Gaussian-center audit에서 relevant `55,452,404`쌍, evidence available `55,452,404`쌍, relevant-but-no-evidence `0`쌍이었다. Historical semantics는 relevant/no-event를 `UNRESOLVED`로 유지하는 Semantics A로 확정됐다.
+- hypothetical Semantics B와의 실제 global state 차이는 `0`이었지만, synthetic mixed case에서는 missing evidence를 `NON_RELEVANT`로 제거할 경우 `UNRESOLVED`가 `OCCLUDED`로 바뀔 수 있음을 확인했다. 따라서 absence of evidence를 occluded vote로 만들지 않는 historical contract를 유지했다.
+- 기존 visible-surface voxel partition, Gaussian-derived hierarchy, W153 sparse authoritative TSDF, boundary-local continuation strip 중 승인된 all-space pre-latent spatial query domain/resolution/indexing contract는 없었다. 최종 verdict는 **`OCCLUSION_DOMAIN_CONTRACT_GAP`**이며 새 bounds, voxel size, spatial field, Occluded Region, PNG visualization은 만들지 않았다.
+- W161 report와 blocked-review README는 `output/161_global_persistent_occlusion_spatial_domain_audit/`에 있으며 `HUMAN_REVIEW_REQUIRED`를 유지한다. Gate O2는 열려 있고 Gate V/continuation에는 진입하지 않았다. focused tests는 `4 passed`다.
+
 ## 운영 기본값
 
 - 무거운 replay·training·CUDA 작업·대규모 test suite는 SSH `LabServer63` 환경에서 우선 실행한다. 시작 전 GPU 점유/경합 가능성을 확인하고, 경합이 있으면 작업을 시작하지 않고 사용자에게 알린다.
