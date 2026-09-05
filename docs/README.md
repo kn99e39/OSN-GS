@@ -606,3 +606,24 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - W160 Historical Candidate-B global state는 exact 재현됐다. 전체 1,190,469개 baseline은 `OBSERVED 798,304 / OCCLUDED 391,457 / UNRESOLVED 708`, candidate는 `OBSERVED 1,186,747 / OCCLUDED 3,512 / UNRESOLVED 210`이며 historical `OCCLUDED → OBSERVED`는 `387,945`개다. exact contributor pair는 `46,751,214`, positive primitive은 `1,181,613`, zero-contributor는 `8,856`개다.
 - W162 Region 1 `65,471`개와 baseline `59,274/6,197/0`을 보존했고, candidate는 `65,453/18/0`, `OCCLUDED → OBSERVED`는 `6,179`, unchanged `OCCLUDED`는 `18`이다. frozen review camera 6개에서 diagnostic/canonical RGB·alpha·median depth가 모두 bitwise equal이고 synthetic A–F도 통과했다.
 - output은 `output/confirmed/164_canonical_renderer_contributor_primitive_observability_historical_candidate_b_controlled_ab/`에 PNG 33개/PPM 0개, 모든 visualization directory 개별 UTF-8 README 및 camera direct layout으로 저장했다. 정량 verdict는 `MIXED`로 보류하며 physical first-hit truth, arbitrary XYZ occlusion, W161 Gate O2는 계속 열려 있다.
+
+## 2026-09-05 Worklog 165 Historical Candidate-B Arbitrary-Point Occlusion Sufficiency Audit
+
+- [Worklog 165](worklogs/165_historical_candidate_b_arbitrary_point_occlusion_sufficiency_audit.md)는 Historical Candidate-B를 변경하지 않고, fixed fronto-parallel plane / oblique plane / sphere의 exact analytic first blocker depth `z*`와 canonical renderer median `m`을 비교했다. Candidate-B는 `observed_occluded.candidate_b_median_depth.classify_view`를 그대로 호출했고 W160 aggregation·W161 paused status·W162–W164를 보존했다.
+- fronto-parallel hit ray에서는 `m < z*`가 0이고 equality 2,304건으로 camera-depth sanity control을 통과했지만, finite surface 밖 no-hit ray에도 valid median이 coarse 1,792/dense 1,272건 있었다. oblique plane은 coarse/dense에서 `m < z*` 748/1,010건, interior strict-front 606/848건이었다. sphere는 coarse/dense hit ray 1,356건 전부 `m < z*`였고 interior strict-front가 각각 1,124건이었다.
+- executable strict B counterexample은 coarse/dense sphere에서 모두 확인했다. coarse representative는 `m=3.3358161 < z(q)=3.6721480 < z*=4.0084799`, dense representative는 `m=3.6581535 < z(q)=3.8550744 < z*=4.0519955`이며 두 경우 모두 Candidate-B=`OCCLUDED`, analytic GT=`GT_DIRECT_ACCESS`다. no-hit valid-median C cases도 별도 확인했다.
+- fixed dense replay에서도 strict interior failure가 남아 최종 verdict는 **`BEHIND_MEDIAN_NOT_SUFFICIENT`**다. 이는 Candidate-B 수정이나 대체를 의미하지 않으며, W161 spatial Occlusion Domain construction은 계속 paused/open이다. real-scene 3 camera × 기존 3 ROI × 4 ladder는 `NON-ORACLE REVIEW REFERENCE`로만 저장했다.
+- output은 `output/165_historical_candidate_b_arbitrary_point_occlusion_sufficiency_audit/`이며 synthetic/real-scene visualization type별 UTF-8 README, PNG primary/PPM 0개, raw report JSON을 보존한다. `W153 replay_cache`는 대형 중간 cache라 temp mirror에서 제외했다.
+
+## 2026-09-05 Worklog 166 Historical SDF/TSDF Zero-Level Surface Mesh Export
+
+- [Worklog 166](worklogs/166_historical_sdf_zero_surface_mesh_export.md)은 W153의 기준 commit `943a764` typed `ExtractedSurface` replay를 source로 삼아 historical SDF/TSDF zero-level surface를 외부 viewer용 OBJ와 raw NPZ로 export했다. source vertex/face row order, world coordinates, connectivity, degenerate geometry를 변경하지 않았다.
+- `output/166_historical_sdf_zero_surface_mesh_export/`에 `historical_sdf_zero_surface.obj`(약 2.98 GB), byte-identical `historical_sdf_zero_surface_raw.npz`, `mesh_export_report.json`, UTF-8 `README.md`를 보존했다. source/export는 `28,694,040` vertices와 `45,116,659` faces이며 전수 OBJ round-trip count/connectivity/bounds 검증이 통과했다.
+- W153 faces-adjacency accounting을 재대조해 `582,646` components, `12,153,565` boundary edges, `35` non-manifold edges, `28` degenerate faces를 그대로 기록했다. FBX는 `FBX_EXPORT_UNAVAILABLE`이며 외부 dependency를 설치하지 않았다. 이 diagnostic export는 Occlusion semantics나 hidden-surface identity를 검증하지 않는다.
+
+## 2026-09-05 Worklog 167 Raw SDF/TSDF Zero-Set Surface as Explicit Camera-Ray Blocker
+
+- [Worklog 167](worklogs/167_raw_zero_set_ray_blocker_audit.md)는 W166 historical raw zero-set mesh를 변경하지 않고 exact two-sided Möller–Trumbore camera-ray blocker로 질의했다. production behavior, Candidate-B, NURBS, mesh repair/filtering은 변경하지 않았다.
+- Synthetic fronto-parallel plane / oblique plane / sphere control에서 interior miss `0`, false blocker `0`을 확인했다. oblique plane의 `154` miss는 support/silhouette boundary에만 남았고, sphere의 raw voxelization 지연(`p95 0.0507h`)도 보정하지 않고 보존했다.
+- Frozen `DSC07960.JPG`, `DSC08003.JPG`, `DSC08043.JPG`와 W162–W165 ROI에서 총 `1,259` sampled rays가 `HIT 1,259 / NO_HIT 0 / AMBIGUOUS 0`이었다. major component `1,242`, disconnected fragment `17`을 attribution-only로 기록했으며, real hidden-space truth는 주장하지 않았다.
+- 결과는 [`output/167_raw_zero_set_ray_blocker_audit/`](../output/167_raw_zero_set_ray_blocker_audit/)에 JSON/PNG/README로 보존했다. 최종 verdict는 `REAL_SCENE_REVIEW_REQUIRED`이며 focused test는 `11 passed`이다. `docs/current_framework.md` 및 production pipeline은 diagnostic-only 범위이므로 수정하지 않았다.
