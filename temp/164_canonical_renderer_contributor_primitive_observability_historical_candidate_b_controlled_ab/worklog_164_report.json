@@ -1,0 +1,1361 @@
+{
+  "status": "COMPLETE_WL164_CANONICAL_RENDERER_CONTRIBUTOR_PRIMITIVE_OBSERVABILITY_HISTORICAL_CANDIDATE_B_CONTROLLED_AB",
+  "batch": "Worklog 164 -- Canonical Renderer-Contributor Primitive Observability and Historical Candidate-B Controlled A/B",
+  "intent_alignment": {
+    "status": "PASS",
+    "diagnostic_only": true,
+    "preserved_historical_candidate_b": true,
+    "changed_only": "positive OBSERVED override for exact canonical primitive-camera contributor bits",
+    "arbitrary_xyz_not_promoted": true,
+    "human_review_required": true
+  },
+  "implementation_fidelity": {
+    "status": "PASS",
+    "point_query_state_type": "POINT_QUERY_STATE",
+    "primitive_observation_state_type": "PRIMITIVE_OBSERVATION_STATE",
+    "contributor_predicate": "CONTRIBUTED_IN_CAMERA",
+    "participation_source": "existing isolated diagnostic sibling per-primitive forward_accepted bit from canonical acceptance path",
+    "prefix_K16_used_for_participation": false,
+    "contribution_magnitude_threshold": false,
+    "new_alpha_or_T_threshold": false,
+    "percentage_or_confidence_rule": false,
+    "relevance_semantics_changed": false,
+    "historical_non_contributor_occluded_rule_changed": false,
+    "candidate_global_aggregation": "frozen w160.aggregate_global"
+  },
+  "architecture_result": "MIXED",
+  "architecture_result_reason": "Quantitative A/B isolates the positive primitive observation rule and leaves arbitrary point-query OCCLUDED semantics open; human qualitative review is required before any architecture success or overpermissiveness claim.",
+  "1_semantic_type_separation": {
+    "POINT_QUERY_STATE": "immutable Gaussian-center Candidate-B median-depth ordering state; arbitrary XYZ-compatible contract",
+    "PRIMITIVE_OBSERVATION_STATE": "POINT_QUERY_STATE plus exact canonical primitive contributor positive OBSERVED override",
+    "not_equivalent": true,
+    "raw_per_camera_artifact": "C:\\Projects\\OSN-GS\\output\\confirmed\\164_canonical_renderer_contributor_primitive_observability_historical_candidate_b_controlled_ab\\w164_per_camera_states.npz"
+  },
+  "2_historical_baseline_preservation": {
+    "w160_frozen_global_state_exact_reproduced": true,
+    "candidate_b_modified": false,
+    "w160_state_modified": false,
+    "w161_modified": false,
+    "w162_w163_modified": false,
+    "production_renderer_modified": false,
+    "median_depth_changed": false
+  },
+  "3_exact_contributor_participation_contract": {
+    "predicate": "CONTRIBUTED_IN_CAMERA",
+    "definition": "forward_accepted[g,v] == 1 means primitive g passed the frozen canonical forward acceptance path for at least one rendered pixel in camera v",
+    "camera_count": 161,
+    "primitive_count": 1190469,
+    "pair_count": 191665509,
+    "contributor_pair_count": 46751214,
+    "positive_primitive_count": 1181613,
+    "zero_positive_primitive_count": 8856,
+    "raw_artifact": "C:\\Projects\\OSN-GS\\output\\confirmed\\164_canonical_renderer_contributor_primitive_observability_historical_candidate_b_controlled_ab\\w164_contributor_evidence.npz",
+    "zero_positive_is_not_occluded_proof": true
+  },
+  "4_canonical_render_equivalence": {
+    "validation_cameras": [
+      "DSC07957.JPG",
+      "DSC07960.JPG",
+      "DSC08003.JPG",
+      "DSC08043.JPG",
+      "DSC08048.JPG",
+      "DSC08139.JPG"
+    ],
+    "all_bitwise_equal": true,
+    "per_camera": {
+      "DSC07957.JPG": {
+        "render_bitwise_equal": true,
+        "alpha_bitwise_equal": true,
+        "median_depth_bitwise_equal": true,
+        "render_max_abs_diff": 0.0,
+        "alpha_max_abs_diff": 0.0,
+        "median_depth_max_abs_diff": 0.0,
+        "renderer_canonical_unchanged": true
+      },
+      "DSC07960.JPG": {
+        "render_bitwise_equal": true,
+        "alpha_bitwise_equal": true,
+        "median_depth_bitwise_equal": true,
+        "render_max_abs_diff": 0.0,
+        "alpha_max_abs_diff": 0.0,
+        "median_depth_max_abs_diff": 0.0,
+        "renderer_canonical_unchanged": true
+      },
+      "DSC08003.JPG": {
+        "render_bitwise_equal": true,
+        "alpha_bitwise_equal": true,
+        "median_depth_bitwise_equal": true,
+        "render_max_abs_diff": 0.0,
+        "alpha_max_abs_diff": 0.0,
+        "median_depth_max_abs_diff": 0.0,
+        "renderer_canonical_unchanged": true
+      },
+      "DSC08043.JPG": {
+        "render_bitwise_equal": true,
+        "alpha_bitwise_equal": true,
+        "median_depth_bitwise_equal": true,
+        "render_max_abs_diff": 0.0,
+        "alpha_max_abs_diff": 0.0,
+        "median_depth_max_abs_diff": 0.0,
+        "renderer_canonical_unchanged": true
+      },
+      "DSC08048.JPG": {
+        "render_bitwise_equal": true,
+        "alpha_bitwise_equal": true,
+        "median_depth_bitwise_equal": true,
+        "render_max_abs_diff": 0.0,
+        "alpha_max_abs_diff": 0.0,
+        "median_depth_max_abs_diff": 0.0,
+        "renderer_canonical_unchanged": true
+      },
+      "DSC08139.JPG": {
+        "render_bitwise_equal": true,
+        "alpha_bitwise_equal": true,
+        "median_depth_bitwise_equal": true,
+        "render_max_abs_diff": 0.0,
+        "alpha_max_abs_diff": 0.0,
+        "median_depth_max_abs_diff": 0.0,
+        "renderer_canonical_unchanged": true
+      }
+    },
+    "diagnostic_did_not_replace_canonical": true
+  },
+  "5_full_scene_ab": {
+    "population_count": 1190469,
+    "baseline_point_query_state_counts": {
+      "UNRESOLVED": 708,
+      "OBSERVED": 798304,
+      "OCCLUDED": 391457
+    },
+    "candidate_primitive_observation_state_counts": {
+      "UNRESOLVED": 210,
+      "OBSERVED": 1186747,
+      "OCCLUDED": 3512
+    },
+    "transition_matrix": {
+      "OBSERVED": {
+        "OBSERVED": 798304,
+        "OCCLUDED": 0,
+        "UNRESOLVED": 0
+      },
+      "OCCLUDED": {
+        "OBSERVED": 387945,
+        "OCCLUDED": 3512,
+        "UNRESOLVED": 0
+      },
+      "UNRESOLVED": {
+        "OBSERVED": 498,
+        "OCCLUDED": 0,
+        "UNRESOLVED": 210
+      }
+    },
+    "historical_global_occluded_to_candidate_global_observed": 387945,
+    "historical_global_occluded_to_candidate_global_unresolved": 0,
+    "historical_global_occluded_unchanged_global_occluded": 3512,
+    "historical_global_occluded_changed_fraction": 0.991028388814097,
+    "contributor_camera_count_distribution_per_primitive": {
+      "count": 1190469,
+      "min": 0,
+      "p05": 4.0,
+      "p50": 30.0,
+      "p95": 147.0,
+      "max": 161,
+      "bins": {
+        "zero_cameras": 8856,
+        "exactly_1_camera": 11823,
+        "2_to_5_cameras": 98918,
+        "6_to_10_cameras": 218999,
+        "11_to_20_cameras": 152703,
+        "greater_than_20_cameras": 699170
+      }
+    },
+    "contributor_positive_primitive_count": 1181613,
+    "contributor_zero_camera_primitive_count": 8856
+  },
+  "6_region0_control": {
+    "population_count": 248086,
+    "baseline_point_query_state_counts": {
+      "UNRESOLVED": 0,
+      "OBSERVED": 198552,
+      "OCCLUDED": 49534
+    },
+    "candidate_primitive_observation_state_counts": {
+      "UNRESOLVED": 0,
+      "OBSERVED": 248056,
+      "OCCLUDED": 30
+    },
+    "transition_matrix": {
+      "OBSERVED": {
+        "OBSERVED": 198552,
+        "OCCLUDED": 0,
+        "UNRESOLVED": 0
+      },
+      "OCCLUDED": {
+        "OBSERVED": 49504,
+        "OCCLUDED": 30,
+        "UNRESOLVED": 0
+      },
+      "UNRESOLVED": {
+        "OBSERVED": 0,
+        "OCCLUDED": 0,
+        "UNRESOLVED": 0
+      }
+    },
+    "historical_global_occluded_to_candidate_global_observed": 49504,
+    "historical_global_occluded_to_candidate_global_unresolved": 0,
+    "historical_global_occluded_unchanged_global_occluded": 30,
+    "historical_global_occluded_changed_fraction": 0.9993943553922559,
+    "contributor_camera_count_distribution_per_primitive": {
+      "count": 248086,
+      "min": 0,
+      "p05": 35.0,
+      "p50": 50.0,
+      "p95": 103.0,
+      "max": 161,
+      "bins": {
+        "zero_cameras": 106,
+        "exactly_1_camera": 3,
+        "2_to_5_cameras": 2,
+        "6_to_10_cameras": 3,
+        "11_to_20_cameras": 6,
+        "greater_than_20_cameras": 247966
+      }
+    },
+    "contributor_positive_primitive_count": 247980,
+    "contributor_zero_camera_primitive_count": 106
+  },
+  "7_region1_control": {
+    "population_count": 65471,
+    "baseline_point_query_state_counts": {
+      "UNRESOLVED": 0,
+      "OBSERVED": 59274,
+      "OCCLUDED": 6197
+    },
+    "candidate_primitive_observation_state_counts": {
+      "UNRESOLVED": 0,
+      "OBSERVED": 65453,
+      "OCCLUDED": 18
+    },
+    "transition_matrix": {
+      "OBSERVED": {
+        "OBSERVED": 59274,
+        "OCCLUDED": 0,
+        "UNRESOLVED": 0
+      },
+      "OCCLUDED": {
+        "OBSERVED": 6179,
+        "OCCLUDED": 18,
+        "UNRESOLVED": 0
+      },
+      "UNRESOLVED": {
+        "OBSERVED": 0,
+        "OCCLUDED": 0,
+        "UNRESOLVED": 0
+      }
+    },
+    "historical_global_occluded_to_candidate_global_observed": 6179,
+    "historical_global_occluded_to_candidate_global_unresolved": 0,
+    "historical_global_occluded_unchanged_global_occluded": 18,
+    "historical_global_occluded_changed_fraction": 0.9970953687268033,
+    "contributor_camera_count_distribution_per_primitive": {
+      "count": 65471,
+      "min": 0,
+      "p05": 128.0,
+      "p50": 150.0,
+      "p95": 157.0,
+      "max": 161,
+      "bins": {
+        "zero_cameras": 298,
+        "exactly_1_camera": 8,
+        "2_to_5_cameras": 19,
+        "6_to_10_cameras": 20,
+        "11_to_20_cameras": 47,
+        "greater_than_20_cameras": 65079
+      }
+    },
+    "contributor_positive_primitive_count": 65173,
+    "contributor_zero_camera_primitive_count": 298,
+    "frozen_w162_population_count": 65471,
+    "frozen_w162_historical_global_state_counts": {
+      "OBSERVED": 59274,
+      "OCCLUDED": 6197,
+      "UNRESOLVED": 0
+    },
+    "w162_population_unchanged": true,
+    "historical_global_occluded_contributor_camera_bins": {
+      "zero_cameras": 18,
+      "exactly_1_camera": 1,
+      "2_to_5_cameras": 3,
+      "6_to_10_cameras": 4,
+      "11_to_20_cameras": 12,
+      "greater_than_20_cameras": 6159
+    }
+  },
+  "8_table_side_vase_background_controls": {
+    "table_side_lower_geometry": {
+      "population_count": 2832,
+      "baseline_point_query_state_counts": {
+        "UNRESOLVED": 0,
+        "OBSERVED": 0,
+        "OCCLUDED": 2832
+      },
+      "candidate_primitive_observation_state_counts": {
+        "UNRESOLVED": 0,
+        "OBSERVED": 2821,
+        "OCCLUDED": 11
+      },
+      "transition_matrix": {
+        "OBSERVED": {
+          "OBSERVED": 0,
+          "OCCLUDED": 0,
+          "UNRESOLVED": 0
+        },
+        "OCCLUDED": {
+          "OBSERVED": 2821,
+          "OCCLUDED": 11,
+          "UNRESOLVED": 0
+        },
+        "UNRESOLVED": {
+          "OBSERVED": 0,
+          "OCCLUDED": 0,
+          "UNRESOLVED": 0
+        }
+      },
+      "historical_global_occluded_to_candidate_global_observed": 2821,
+      "historical_global_occluded_to_candidate_global_unresolved": 0,
+      "historical_global_occluded_unchanged_global_occluded": 11,
+      "historical_global_occluded_changed_fraction": 0.9961158192090396,
+      "contributor_camera_count_distribution_per_primitive": {
+        "count": 2832,
+        "min": 0,
+        "p05": 53.0,
+        "p50": 78.0,
+        "p95": 154.0,
+        "max": 161,
+        "bins": {
+          "zero_cameras": 11,
+          "exactly_1_camera": 1,
+          "2_to_5_cameras": 3,
+          "6_to_10_cameras": 3,
+          "11_to_20_cameras": 9,
+          "greater_than_20_cameras": 2805
+        }
+      },
+      "contributor_positive_primitive_count": 2821,
+      "contributor_zero_camera_primitive_count": 11
+    },
+    "vase_foreground_structure": {
+      "population_count": 4304,
+      "baseline_point_query_state_counts": {
+        "UNRESOLVED": 0,
+        "OBSERVED": 0,
+        "OCCLUDED": 4304
+      },
+      "candidate_primitive_observation_state_counts": {
+        "UNRESOLVED": 0,
+        "OBSERVED": 4283,
+        "OCCLUDED": 21
+      },
+      "transition_matrix": {
+        "OBSERVED": {
+          "OBSERVED": 0,
+          "OCCLUDED": 0,
+          "UNRESOLVED": 0
+        },
+        "OCCLUDED": {
+          "OBSERVED": 4283,
+          "OCCLUDED": 21,
+          "UNRESOLVED": 0
+        },
+        "UNRESOLVED": {
+          "OBSERVED": 0,
+          "OCCLUDED": 0,
+          "UNRESOLVED": 0
+        }
+      },
+      "historical_global_occluded_to_candidate_global_observed": 4283,
+      "historical_global_occluded_to_candidate_global_unresolved": 0,
+      "historical_global_occluded_unchanged_global_occluded": 21,
+      "historical_global_occluded_changed_fraction": 0.9951208178438662,
+      "contributor_camera_count_distribution_per_primitive": {
+        "count": 4304,
+        "min": 0,
+        "p05": 42.0,
+        "p50": 61.0,
+        "p95": 153.0,
+        "max": 161,
+        "bins": {
+          "zero_cameras": 21,
+          "exactly_1_camera": 2,
+          "2_to_5_cameras": 1,
+          "6_to_10_cameras": 0,
+          "11_to_20_cameras": 5,
+          "greater_than_20_cameras": 4275
+        }
+      },
+      "contributor_positive_primitive_count": 4283,
+      "contributor_zero_camera_primitive_count": 21
+    },
+    "background_lower": {
+      "population_count": 10896,
+      "baseline_point_query_state_counts": {
+        "UNRESOLVED": 0,
+        "OBSERVED": 8119,
+        "OCCLUDED": 2777
+      },
+      "candidate_primitive_observation_state_counts": {
+        "UNRESOLVED": 0,
+        "OBSERVED": 10876,
+        "OCCLUDED": 20
+      },
+      "transition_matrix": {
+        "OBSERVED": {
+          "OBSERVED": 8119,
+          "OCCLUDED": 0,
+          "UNRESOLVED": 0
+        },
+        "OCCLUDED": {
+          "OBSERVED": 2757,
+          "OCCLUDED": 20,
+          "UNRESOLVED": 0
+        },
+        "UNRESOLVED": {
+          "OBSERVED": 0,
+          "OCCLUDED": 0,
+          "UNRESOLVED": 0
+        }
+      },
+      "historical_global_occluded_to_candidate_global_observed": 2757,
+      "historical_global_occluded_to_candidate_global_unresolved": 0,
+      "historical_global_occluded_unchanged_global_occluded": 20,
+      "historical_global_occluded_changed_fraction": 0.9927979834353619,
+      "contributor_camera_count_distribution_per_primitive": {
+        "count": 10896,
+        "min": 0,
+        "p05": 24.0,
+        "p50": 145.0,
+        "p95": 154.0,
+        "max": 161,
+        "bins": {
+          "zero_cameras": 55,
+          "exactly_1_camera": 5,
+          "2_to_5_cameras": 3,
+          "6_to_10_cameras": 14,
+          "11_to_20_cameras": 19,
+          "greater_than_20_cameras": 10800
+        }
+      },
+      "contributor_positive_primitive_count": 10841,
+      "contributor_zero_camera_primitive_count": 55
+    }
+  },
+  "9_contributor_evidence_accounting": {
+    "historical_global_state_by_contributor_presence": {
+      "contributing_in_at_least_one_camera": {
+        "UNRESOLVED": 498,
+        "OBSERVED": 793170,
+        "OCCLUDED": 387945
+      },
+      "contributing_in_zero_cameras": {
+        "UNRESOLVED": 210,
+        "OBSERVED": 5134,
+        "OCCLUDED": 3512
+      }
+    },
+    "contributor_camera_pair_count": 46751214,
+    "primitive_count_with_positive_evidence": 1181613,
+    "primitive_count_with_zero_positive_evidence": 8856,
+    "zero_positive_evidence_is_not_occluded_proof": true,
+    "full_primitive_contributor_camera_count_distribution": {
+      "count": 1190469,
+      "min": 0,
+      "p05": 4.0,
+      "p50": 30.0,
+      "p95": 147.0,
+      "max": 161,
+      "bins": {
+        "zero_cameras": 8856,
+        "exactly_1_camera": 11823,
+        "2_to_5_cameras": 98918,
+        "6_to_10_cameras": 218999,
+        "11_to_20_cameras": 152703,
+        "greater_than_20_cameras": 699170
+      }
+    },
+    "cross_tab_by_historical_global_state": {
+      "OBSERVED": {
+        "contributor_positive": 793170,
+        "contributor_zero": 5134
+      },
+      "OCCLUDED": {
+        "contributor_positive": 387945,
+        "contributor_zero": 3512
+      },
+      "UNRESOLVED": {
+        "contributor_positive": 498,
+        "contributor_zero": 210
+      }
+    },
+    "raw_artifact": "C:\\Projects\\OSN-GS\\output\\confirmed\\164_canonical_renderer_contributor_primitive_observability_historical_candidate_b_controlled_ab\\w164_contributor_evidence.npz"
+  },
+  "10_synthetic_contracts": {
+    "all_pass": true,
+    "cases": [
+      {
+        "name": "A_accepted_behind_median_becomes_primitive_observed",
+        "expected": "OBSERVED",
+        "actual": "OBSERVED",
+        "baseline_point_query": "OCCLUDED",
+        "pass": true
+      },
+      {
+        "name": "B_accepted_before_median_is_primitive_observed",
+        "expected": "OBSERVED",
+        "actual": "OBSERVED",
+        "traversal_relation": "BEFORE_MEDIAN_EVENT is irrelevant to positive acceptance",
+        "pass": true
+      },
+      {
+        "name": "C_not_accepted_baseline_occluded_unchanged",
+        "expected": "OCCLUDED",
+        "actual": "OCCLUDED",
+        "pass": true
+      },
+      {
+        "name": "D_not_accepted_baseline_observed_unchanged",
+        "expected": "OBSERVED",
+        "actual": "OBSERVED",
+        "pass": true
+      },
+      {
+        "name": "E_truncated_pixel_prefix_does_not_override_exact_bit",
+        "expected": "OBSERVED",
+        "actual": "OBSERVED",
+        "prefix_not_used": true,
+        "pass": true
+      },
+      {
+        "name": "F_arbitrary_xyz_without_identity_refused",
+        "expected": "not applicable",
+        "actual": "NOT_APPLICABLE_WITHOUT_CANONICAL_PRIMITIVE_IDENTITY",
+        "error": "point-query state and contributor bit shape mismatch",
+        "pass": true
+      }
+    ],
+    "note": "Synthetic PASS verifies mechanics only; it is not physical surface ground truth."
+  },
+  "11_quantitative_result": {
+    "full_scene": {
+      "population_count": 1190469,
+      "baseline_point_query_state_counts": {
+        "UNRESOLVED": 708,
+        "OBSERVED": 798304,
+        "OCCLUDED": 391457
+      },
+      "candidate_primitive_observation_state_counts": {
+        "UNRESOLVED": 210,
+        "OBSERVED": 1186747,
+        "OCCLUDED": 3512
+      },
+      "transition_matrix": {
+        "OBSERVED": {
+          "OBSERVED": 798304,
+          "OCCLUDED": 0,
+          "UNRESOLVED": 0
+        },
+        "OCCLUDED": {
+          "OBSERVED": 387945,
+          "OCCLUDED": 3512,
+          "UNRESOLVED": 0
+        },
+        "UNRESOLVED": {
+          "OBSERVED": 498,
+          "OCCLUDED": 0,
+          "UNRESOLVED": 210
+        }
+      },
+      "historical_global_occluded_to_candidate_global_observed": 387945,
+      "historical_global_occluded_to_candidate_global_unresolved": 0,
+      "historical_global_occluded_unchanged_global_occluded": 3512,
+      "historical_global_occluded_changed_fraction": 0.991028388814097,
+      "contributor_camera_count_distribution_per_primitive": {
+        "count": 1190469,
+        "min": 0,
+        "p05": 4.0,
+        "p50": 30.0,
+        "p95": 147.0,
+        "max": 161,
+        "bins": {
+          "zero_cameras": 8856,
+          "exactly_1_camera": 11823,
+          "2_to_5_cameras": 98918,
+          "6_to_10_cameras": 218999,
+          "11_to_20_cameras": 152703,
+          "greater_than_20_cameras": 699170
+        }
+      },
+      "contributor_positive_primitive_count": 1181613,
+      "contributor_zero_camera_primitive_count": 8856
+    },
+    "region0": {
+      "population_count": 248086,
+      "baseline_point_query_state_counts": {
+        "UNRESOLVED": 0,
+        "OBSERVED": 198552,
+        "OCCLUDED": 49534
+      },
+      "candidate_primitive_observation_state_counts": {
+        "UNRESOLVED": 0,
+        "OBSERVED": 248056,
+        "OCCLUDED": 30
+      },
+      "transition_matrix": {
+        "OBSERVED": {
+          "OBSERVED": 198552,
+          "OCCLUDED": 0,
+          "UNRESOLVED": 0
+        },
+        "OCCLUDED": {
+          "OBSERVED": 49504,
+          "OCCLUDED": 30,
+          "UNRESOLVED": 0
+        },
+        "UNRESOLVED": {
+          "OBSERVED": 0,
+          "OCCLUDED": 0,
+          "UNRESOLVED": 0
+        }
+      },
+      "historical_global_occluded_to_candidate_global_observed": 49504,
+      "historical_global_occluded_to_candidate_global_unresolved": 0,
+      "historical_global_occluded_unchanged_global_occluded": 30,
+      "historical_global_occluded_changed_fraction": 0.9993943553922559,
+      "contributor_camera_count_distribution_per_primitive": {
+        "count": 248086,
+        "min": 0,
+        "p05": 35.0,
+        "p50": 50.0,
+        "p95": 103.0,
+        "max": 161,
+        "bins": {
+          "zero_cameras": 106,
+          "exactly_1_camera": 3,
+          "2_to_5_cameras": 2,
+          "6_to_10_cameras": 3,
+          "11_to_20_cameras": 6,
+          "greater_than_20_cameras": 247966
+        }
+      },
+      "contributor_positive_primitive_count": 247980,
+      "contributor_zero_camera_primitive_count": 106
+    },
+    "region1": {
+      "population_count": 65471,
+      "baseline_point_query_state_counts": {
+        "UNRESOLVED": 0,
+        "OBSERVED": 59274,
+        "OCCLUDED": 6197
+      },
+      "candidate_primitive_observation_state_counts": {
+        "UNRESOLVED": 0,
+        "OBSERVED": 65453,
+        "OCCLUDED": 18
+      },
+      "transition_matrix": {
+        "OBSERVED": {
+          "OBSERVED": 59274,
+          "OCCLUDED": 0,
+          "UNRESOLVED": 0
+        },
+        "OCCLUDED": {
+          "OBSERVED": 6179,
+          "OCCLUDED": 18,
+          "UNRESOLVED": 0
+        },
+        "UNRESOLVED": {
+          "OBSERVED": 0,
+          "OCCLUDED": 0,
+          "UNRESOLVED": 0
+        }
+      },
+      "historical_global_occluded_to_candidate_global_observed": 6179,
+      "historical_global_occluded_to_candidate_global_unresolved": 0,
+      "historical_global_occluded_unchanged_global_occluded": 18,
+      "historical_global_occluded_changed_fraction": 0.9970953687268033,
+      "contributor_camera_count_distribution_per_primitive": {
+        "count": 65471,
+        "min": 0,
+        "p05": 128.0,
+        "p50": 150.0,
+        "p95": 157.0,
+        "max": 161,
+        "bins": {
+          "zero_cameras": 298,
+          "exactly_1_camera": 8,
+          "2_to_5_cameras": 19,
+          "6_to_10_cameras": 20,
+          "11_to_20_cameras": 47,
+          "greater_than_20_cameras": 65079
+        }
+      },
+      "contributor_positive_primitive_count": 65173,
+      "contributor_zero_camera_primitive_count": 298
+    },
+    "table_side_lower": {
+      "population_count": 2832,
+      "baseline_point_query_state_counts": {
+        "UNRESOLVED": 0,
+        "OBSERVED": 0,
+        "OCCLUDED": 2832
+      },
+      "candidate_primitive_observation_state_counts": {
+        "UNRESOLVED": 0,
+        "OBSERVED": 2821,
+        "OCCLUDED": 11
+      },
+      "transition_matrix": {
+        "OBSERVED": {
+          "OBSERVED": 0,
+          "OCCLUDED": 0,
+          "UNRESOLVED": 0
+        },
+        "OCCLUDED": {
+          "OBSERVED": 2821,
+          "OCCLUDED": 11,
+          "UNRESOLVED": 0
+        },
+        "UNRESOLVED": {
+          "OBSERVED": 0,
+          "OCCLUDED": 0,
+          "UNRESOLVED": 0
+        }
+      },
+      "historical_global_occluded_to_candidate_global_observed": 2821,
+      "historical_global_occluded_to_candidate_global_unresolved": 0,
+      "historical_global_occluded_unchanged_global_occluded": 11,
+      "historical_global_occluded_changed_fraction": 0.9961158192090396,
+      "contributor_camera_count_distribution_per_primitive": {
+        "count": 2832,
+        "min": 0,
+        "p05": 53.0,
+        "p50": 78.0,
+        "p95": 154.0,
+        "max": 161,
+        "bins": {
+          "zero_cameras": 11,
+          "exactly_1_camera": 1,
+          "2_to_5_cameras": 3,
+          "6_to_10_cameras": 3,
+          "11_to_20_cameras": 9,
+          "greater_than_20_cameras": 2805
+        }
+      },
+      "contributor_positive_primitive_count": 2821,
+      "contributor_zero_camera_primitive_count": 11
+    },
+    "vase_curved_neighbor": {
+      "population_count": 4304,
+      "baseline_point_query_state_counts": {
+        "UNRESOLVED": 0,
+        "OBSERVED": 0,
+        "OCCLUDED": 4304
+      },
+      "candidate_primitive_observation_state_counts": {
+        "UNRESOLVED": 0,
+        "OBSERVED": 4283,
+        "OCCLUDED": 21
+      },
+      "transition_matrix": {
+        "OBSERVED": {
+          "OBSERVED": 0,
+          "OCCLUDED": 0,
+          "UNRESOLVED": 0
+        },
+        "OCCLUDED": {
+          "OBSERVED": 4283,
+          "OCCLUDED": 21,
+          "UNRESOLVED": 0
+        },
+        "UNRESOLVED": {
+          "OBSERVED": 0,
+          "OCCLUDED": 0,
+          "UNRESOLVED": 0
+        }
+      },
+      "historical_global_occluded_to_candidate_global_observed": 4283,
+      "historical_global_occluded_to_candidate_global_unresolved": 0,
+      "historical_global_occluded_unchanged_global_occluded": 21,
+      "historical_global_occluded_changed_fraction": 0.9951208178438662,
+      "contributor_camera_count_distribution_per_primitive": {
+        "count": 4304,
+        "min": 0,
+        "p05": 42.0,
+        "p50": 61.0,
+        "p95": 153.0,
+        "max": 161,
+        "bins": {
+          "zero_cameras": 21,
+          "exactly_1_camera": 2,
+          "2_to_5_cameras": 1,
+          "6_to_10_cameras": 0,
+          "11_to_20_cameras": 5,
+          "greater_than_20_cameras": 4275
+        }
+      },
+      "contributor_positive_primitive_count": 4283,
+      "contributor_zero_camera_primitive_count": 21
+    },
+    "background_controls": {
+      "population_count": 10896,
+      "baseline_point_query_state_counts": {
+        "UNRESOLVED": 0,
+        "OBSERVED": 8119,
+        "OCCLUDED": 2777
+      },
+      "candidate_primitive_observation_state_counts": {
+        "UNRESOLVED": 0,
+        "OBSERVED": 10876,
+        "OCCLUDED": 20
+      },
+      "transition_matrix": {
+        "OBSERVED": {
+          "OBSERVED": 8119,
+          "OCCLUDED": 0,
+          "UNRESOLVED": 0
+        },
+        "OCCLUDED": {
+          "OBSERVED": 2757,
+          "OCCLUDED": 20,
+          "UNRESOLVED": 0
+        },
+        "UNRESOLVED": {
+          "OBSERVED": 0,
+          "OCCLUDED": 0,
+          "UNRESOLVED": 0
+        }
+      },
+      "historical_global_occluded_to_candidate_global_observed": 2757,
+      "historical_global_occluded_to_candidate_global_unresolved": 0,
+      "historical_global_occluded_unchanged_global_occluded": 20,
+      "historical_global_occluded_changed_fraction": 0.9927979834353619,
+      "contributor_camera_count_distribution_per_primitive": {
+        "count": 10896,
+        "min": 0,
+        "p05": 24.0,
+        "p50": 145.0,
+        "p95": 154.0,
+        "max": 161,
+        "bins": {
+          "zero_cameras": 55,
+          "exactly_1_camera": 5,
+          "2_to_5_cameras": 3,
+          "6_to_10_cameras": 14,
+          "11_to_20_cameras": 19,
+          "greater_than_20_cameras": 10800
+        }
+      },
+      "contributor_positive_primitive_count": 10841,
+      "contributor_zero_camera_primitive_count": 55
+    },
+    "transition_matrix": {
+      "OBSERVED": {
+        "OBSERVED": 798304,
+        "OCCLUDED": 0,
+        "UNRESOLVED": 0
+      },
+      "OCCLUDED": {
+        "OBSERVED": 387945,
+        "OCCLUDED": 3512,
+        "UNRESOLVED": 0
+      },
+      "UNRESOLVED": {
+        "OBSERVED": 498,
+        "OCCLUDED": 0,
+        "UNRESOLVED": 210
+      }
+    },
+    "historical_global_occluded_to_candidate_global_observed": 387945,
+    "historical_global_occluded_to_candidate_global_unresolved": 0,
+    "unchanged_global_occluded": 3512
+  },
+  "12_qualitative_review_exports": {
+    "status": "HUMAN_REVIEW_REQUIRED",
+    "review_root": "C:\\Projects\\OSN-GS\\output\\confirmed\\164_canonical_renderer_contributor_primitive_observability_historical_candidate_b_controlled_ab\\review_views",
+    "visualizations": [
+      "original_scene",
+      "historical_global_state",
+      "contributor_aware_global_state",
+      "historical_global_occluded_only",
+      "contributor_aware_global_occluded_only",
+      "baseline_occluded_to_observed",
+      "contributor_observed_primitives",
+      "region0_state_ab",
+      "region1_state_ab",
+      "tabletop_vase_contact_ab",
+      "common_world"
+    ],
+    "png_primary": true,
+    "ppm_count": 0,
+    "camera_layout": "<camera_name_stem>.png directly inside each visualization directory",
+    "readme_per_visualization": true
+  },
+  "13_human_review_questions": [
+    "broad tabletop red GLOBAL OCCLUDED가 contributor-aware candidate에서 얼마나 감소하는가?",
+    "어떤 red population이 남는가?",
+    "removed OCCLUDED가 명확한 rendered visible structure에 집중되는가?",
+    "hidden-looking population을 candidate가 과도하게 OBSERVED로 바꾸지 않는가?",
+    "Region 0과 Region 1의 A/B 변화가 어떻게 다른가?",
+    "tabletop-vase contact, table-side/lower, background control의 변화는 contributor rule이 permissive한지 시사하는가?",
+    "common-world에서 changed primitive가 observed scene geometry에 속하는 것으로 보이는가, projection overlap처럼 보이는가?"
+  ],
+  "14_architecture_interpretation": {
+    "provisional_verdict": "MIXED",
+    "allowed_verdicts": [
+      "CONTRIBUTOR_PRIMITIVE_OBSERVATION_SUPPORTED",
+      "CONTRIBUTOR_PRIMITIVE_OBSERVATION_OVERPERMISSIVE",
+      "CONTRIBUTOR_RULE_REPAIRS_MEDIAN_CONFLICT_BUT_POINT_QUERY_REMAINS_OPEN",
+      "NO_MATERIAL_EFFECT",
+      "MIXED",
+      "UNRESOLVED"
+    ],
+    "adopted_claim": "renderer contributor -> canonical primitive observation evidence exists",
+    "rejected_claim": "renderer contributor -> physical surface ground truth",
+    "point_query_occlusion": "remains scientifically open; Gate O2 is not closed",
+    "qualitative_success_declared": false
+  },
+  "15_retained_rejected_open": {
+    "retained": [
+      "historical Candidate-B",
+      "W160 point-query state/cache",
+      "W161 OCCLUSION_DOMAIN_CONTRACT_GAP and paused status",
+      "W162 populations",
+      "W163 raw provenance",
+      "canonical checkpoint/renderer/cameras/stable IDs/W155 mapping",
+      "intrinsic t_w, TSDF, topology, Boundary First, NURBS, continuation"
+    ],
+    "rejected": [
+      "K=16 prefix non-inclusion as NOT_CONTRIBUTOR",
+      "contribution magnitude threshold",
+      "contributor count voting",
+      "zero contributor as OCCLUDED proof",
+      "arbitrary XYZ contributor semantics",
+      "first-hit physical truth",
+      "new ROI/Region/spatial field"
+    ],
+    "open": [
+      "human qualitative architecture review",
+      "physical first-hit truth",
+      "arbitrary XYZ OCCLUDED contract",
+      "W161 spatial-domain construction remains paused"
+    ]
+  },
+  "w162_w163_reconciliation": {
+    "w162_raw": "C:\\Projects\\OSN-GS\\output\\confirmed\\162_renderer_median_event_direct_observation_semantic_validity_audit\\w162_tabletop_cross_view_raw.npz",
+    "w163_raw": {
+      "available": true,
+      "path": "C:\\Projects\\OSN-GS\\output\\163_renderer_contributor_provenance_median_event_observation_semantics_attribution_audit\\w163_query_provenance_raw.npz",
+      "query_count": 6197,
+      "camera_count": 161,
+      "query_participation_exact_pair_count": 1724,
+      "query_stable_id_count": 6197
+    },
+    "region1_rows": 65471,
+    "w163_exact_conflict_source_preserved": true
+  },
+  "inputs": {
+    "checkpoint": "C:\\Projects\\OSN-GS\\output\\arch_2dgs_coverage_first_surface\\2dgs_run1\\30000\\checkpoint.pt",
+    "checkpoint_sha256": "4e49b916d668acf5eb0a1cc31b979caa86c5fd8743ac9632f36d7e9c1c72c9e2",
+    "iteration": 30000,
+    "source": "C:\\Projects\\OSN-GS\\DATASET",
+    "camera_names": [
+      "DSC07957.JPG",
+      "DSC07958.JPG",
+      "DSC07959.JPG",
+      "DSC07960.JPG",
+      "DSC07961.JPG",
+      "DSC07962.JPG",
+      "DSC07963.JPG",
+      "DSC07965.JPG",
+      "DSC07966.JPG",
+      "DSC07967.JPG",
+      "DSC07968.JPG",
+      "DSC07969.JPG",
+      "DSC07970.JPG",
+      "DSC07971.JPG",
+      "DSC07973.JPG",
+      "DSC07974.JPG",
+      "DSC07975.JPG",
+      "DSC07976.JPG",
+      "DSC07977.JPG",
+      "DSC07978.JPG",
+      "DSC07979.JPG",
+      "DSC07981.JPG",
+      "DSC07982.JPG",
+      "DSC07983.JPG",
+      "DSC07984.JPG",
+      "DSC07985.JPG",
+      "DSC07986.JPG",
+      "DSC07987.JPG",
+      "DSC07989.JPG",
+      "DSC07990.JPG",
+      "DSC07991.JPG",
+      "DSC07992.JPG",
+      "DSC07993.JPG",
+      "DSC07994.JPG",
+      "DSC07995.JPG",
+      "DSC07997.JPG",
+      "DSC07998.JPG",
+      "DSC07999.JPG",
+      "DSC08000.JPG",
+      "DSC08001.JPG",
+      "DSC08002.JPG",
+      "DSC08003.JPG",
+      "DSC08005.JPG",
+      "DSC08006.JPG",
+      "DSC08007.JPG",
+      "DSC08008.JPG",
+      "DSC08009.JPG",
+      "DSC08010.JPG",
+      "DSC08011.JPG",
+      "DSC08013.JPG",
+      "DSC08014.JPG",
+      "DSC08015.JPG",
+      "DSC08016.JPG",
+      "DSC08017.JPG",
+      "DSC08018.JPG",
+      "DSC08019.JPG",
+      "DSC08021.JPG",
+      "DSC08022.JPG",
+      "DSC08023.JPG",
+      "DSC08024.JPG",
+      "DSC08025.JPG",
+      "DSC08026.JPG",
+      "DSC08027.JPG",
+      "DSC08029.JPG",
+      "DSC08030.JPG",
+      "DSC08031.JPG",
+      "DSC08032.JPG",
+      "DSC08033.JPG",
+      "DSC08034.JPG",
+      "DSC08035.JPG",
+      "DSC08037.JPG",
+      "DSC08038.JPG",
+      "DSC08039.JPG",
+      "DSC08040.JPG",
+      "DSC08041.JPG",
+      "DSC08042.JPG",
+      "DSC08043.JPG",
+      "DSC08045.JPG",
+      "DSC08046.JPG",
+      "DSC08047.JPG",
+      "DSC08048.JPG",
+      "DSC08049.JPG",
+      "DSC08050.JPG",
+      "DSC08051.JPG",
+      "DSC08053.JPG",
+      "DSC08054.JPG",
+      "DSC08055.JPG",
+      "DSC08056.JPG",
+      "DSC08057.JPG",
+      "DSC08058.JPG",
+      "DSC08059.JPG",
+      "DSC08061.JPG",
+      "DSC08062.JPG",
+      "DSC08063.JPG",
+      "DSC08064.JPG",
+      "DSC08065.JPG",
+      "DSC08066.JPG",
+      "DSC08067.JPG",
+      "DSC08069.JPG",
+      "DSC08070.JPG",
+      "DSC08071.JPG",
+      "DSC08072.JPG",
+      "DSC08073.JPG",
+      "DSC08074.JPG",
+      "DSC08075.JPG",
+      "DSC08077.JPG",
+      "DSC08078.JPG",
+      "DSC08079.JPG",
+      "DSC08080.JPG",
+      "DSC08081.JPG",
+      "DSC08082.JPG",
+      "DSC08083.JPG",
+      "DSC08085.JPG",
+      "DSC08086.JPG",
+      "DSC08087.JPG",
+      "DSC08088.JPG",
+      "DSC08089.JPG",
+      "DSC08090.JPG",
+      "DSC08091.JPG",
+      "DSC08093.JPG",
+      "DSC08094.JPG",
+      "DSC08095.JPG",
+      "DSC08096.JPG",
+      "DSC08097.JPG",
+      "DSC08098.JPG",
+      "DSC08099.JPG",
+      "DSC08101.JPG",
+      "DSC08102.JPG",
+      "DSC08103.JPG",
+      "DSC08104.JPG",
+      "DSC08105.JPG",
+      "DSC08106.JPG",
+      "DSC08107.JPG",
+      "DSC08109.JPG",
+      "DSC08110.JPG",
+      "DSC08111.JPG",
+      "DSC08112.JPG",
+      "DSC08113.JPG",
+      "DSC08114.JPG",
+      "DSC08115.JPG",
+      "DSC08117.JPG",
+      "DSC08118.JPG",
+      "DSC08119.JPG",
+      "DSC08120.JPG",
+      "DSC08121.JPG",
+      "DSC08122.JPG",
+      "DSC08123.JPG",
+      "DSC08125.JPG",
+      "DSC08126.JPG",
+      "DSC08127.JPG",
+      "DSC08128.JPG",
+      "DSC08129.JPG",
+      "DSC08130.JPG",
+      "DSC08131.JPG",
+      "DSC08133.JPG",
+      "DSC08134.JPG",
+      "DSC08135.JPG",
+      "DSC08136.JPG",
+      "DSC08137.JPG",
+      "DSC08138.JPG",
+      "DSC08139.JPG"
+    ],
+    "camera_meta": {
+      "train_camera_count": 161,
+      "held_out_camera_count": 24,
+      "llffhold": 8
+    },
+    "w153_cache": "C:\\Projects\\OSN-GS\\output\\confirmed\\153_raw_visible_surface_replay_construction_provenance_audit\\replay_cache",
+    "w153_replay_cache_excluded_from_temp_mirror": true,
+    "w153_depth_cache": {
+      "path": "C:\\Projects\\OSN-GS\\output\\confirmed\\153_raw_visible_surface_replay_construction_provenance_audit\\replay_cache\\renderer_median_depth_maps.npz",
+      "file_sha256": "bbcc2913a5443b5d9930d5d55d5ed023e61dcb134026792ab3431179ac7a99e4",
+      "array_sha256": "77c78ae9feb19b3f63bc9cd0145d35944d3d0a8afd06a516f973ddeb17f70c8e",
+      "runtime": {
+        "camera_meta": {
+          "train_camera_count": 161,
+          "held_out_camera_count": 24,
+          "llffhold": 8
+        },
+        "camera_names": [
+          "DSC07957.JPG",
+          "DSC07958.JPG",
+          "DSC07959.JPG",
+          "DSC07960.JPG",
+          "DSC07961.JPG",
+          "DSC07962.JPG",
+          "DSC07963.JPG",
+          "DSC07965.JPG",
+          "DSC07966.JPG",
+          "DSC07967.JPG",
+          "DSC07968.JPG",
+          "DSC07969.JPG",
+          "DSC07970.JPG",
+          "DSC07971.JPG",
+          "DSC07973.JPG",
+          "DSC07974.JPG",
+          "DSC07975.JPG",
+          "DSC07976.JPG",
+          "DSC07977.JPG",
+          "DSC07978.JPG",
+          "DSC07979.JPG",
+          "DSC07981.JPG",
+          "DSC07982.JPG",
+          "DSC07983.JPG",
+          "DSC07984.JPG",
+          "DSC07985.JPG",
+          "DSC07986.JPG",
+          "DSC07987.JPG",
+          "DSC07989.JPG",
+          "DSC07990.JPG",
+          "DSC07991.JPG",
+          "DSC07992.JPG",
+          "DSC07993.JPG",
+          "DSC07994.JPG",
+          "DSC07995.JPG",
+          "DSC07997.JPG",
+          "DSC07998.JPG",
+          "DSC07999.JPG",
+          "DSC08000.JPG",
+          "DSC08001.JPG",
+          "DSC08002.JPG",
+          "DSC08003.JPG",
+          "DSC08005.JPG",
+          "DSC08006.JPG",
+          "DSC08007.JPG",
+          "DSC08008.JPG",
+          "DSC08009.JPG",
+          "DSC08010.JPG",
+          "DSC08011.JPG",
+          "DSC08013.JPG",
+          "DSC08014.JPG",
+          "DSC08015.JPG",
+          "DSC08016.JPG",
+          "DSC08017.JPG",
+          "DSC08018.JPG",
+          "DSC08019.JPG",
+          "DSC08021.JPG",
+          "DSC08022.JPG",
+          "DSC08023.JPG",
+          "DSC08024.JPG",
+          "DSC08025.JPG",
+          "DSC08026.JPG",
+          "DSC08027.JPG",
+          "DSC08029.JPG",
+          "DSC08030.JPG",
+          "DSC08031.JPG",
+          "DSC08032.JPG",
+          "DSC08033.JPG",
+          "DSC08034.JPG",
+          "DSC08035.JPG",
+          "DSC08037.JPG",
+          "DSC08038.JPG",
+          "DSC08039.JPG",
+          "DSC08040.JPG",
+          "DSC08041.JPG",
+          "DSC08042.JPG",
+          "DSC08043.JPG",
+          "DSC08045.JPG",
+          "DSC08046.JPG",
+          "DSC08047.JPG",
+          "DSC08048.JPG",
+          "DSC08049.JPG",
+          "DSC08050.JPG",
+          "DSC08051.JPG",
+          "DSC08053.JPG",
+          "DSC08054.JPG",
+          "DSC08055.JPG",
+          "DSC08056.JPG",
+          "DSC08057.JPG",
+          "DSC08058.JPG",
+          "DSC08059.JPG",
+          "DSC08061.JPG",
+          "DSC08062.JPG",
+          "DSC08063.JPG",
+          "DSC08064.JPG",
+          "DSC08065.JPG",
+          "DSC08066.JPG",
+          "DSC08067.JPG",
+          "DSC08069.JPG",
+          "DSC08070.JPG",
+          "DSC08071.JPG",
+          "DSC08072.JPG",
+          "DSC08073.JPG",
+          "DSC08074.JPG",
+          "DSC08075.JPG",
+          "DSC08077.JPG",
+          "DSC08078.JPG",
+          "DSC08079.JPG",
+          "DSC08080.JPG",
+          "DSC08081.JPG",
+          "DSC08082.JPG",
+          "DSC08083.JPG",
+          "DSC08085.JPG",
+          "DSC08086.JPG",
+          "DSC08087.JPG",
+          "DSC08088.JPG",
+          "DSC08089.JPG",
+          "DSC08090.JPG",
+          "DSC08091.JPG",
+          "DSC08093.JPG",
+          "DSC08094.JPG",
+          "DSC08095.JPG",
+          "DSC08096.JPG",
+          "DSC08097.JPG",
+          "DSC08098.JPG",
+          "DSC08099.JPG",
+          "DSC08101.JPG",
+          "DSC08102.JPG",
+          "DSC08103.JPG",
+          "DSC08104.JPG",
+          "DSC08105.JPG",
+          "DSC08106.JPG",
+          "DSC08107.JPG",
+          "DSC08109.JPG",
+          "DSC08110.JPG",
+          "DSC08111.JPG",
+          "DSC08112.JPG",
+          "DSC08113.JPG",
+          "DSC08114.JPG",
+          "DSC08115.JPG",
+          "DSC08117.JPG",
+          "DSC08118.JPG",
+          "DSC08119.JPG",
+          "DSC08120.JPG",
+          "DSC08121.JPG",
+          "DSC08122.JPG",
+          "DSC08123.JPG",
+          "DSC08125.JPG",
+          "DSC08126.JPG",
+          "DSC08127.JPG",
+          "DSC08128.JPG",
+          "DSC08129.JPG",
+          "DSC08130.JPG",
+          "DSC08131.JPG",
+          "DSC08133.JPG",
+          "DSC08134.JPG",
+          "DSC08135.JPG",
+          "DSC08136.JPG",
+          "DSC08137.JPG",
+          "DSC08138.JPG",
+          "DSC08139.JPG"
+        ],
+        "h": 0.012105485424399376,
+        "mu": 0.03631645627319813,
+        "seed_voxels": 10614923,
+        "seed_voxels_out_of_range": 2,
+        "depth_sha256": "77c78ae9feb19b3f63bc9cd0145d35944d3d0a8afd06a516f973ddeb17f70c8e",
+        "renderer_runtime": {
+          "status": "PROCESS_LOCAL_PREBUILT_EXTENSION_LOADED",
+          "path": "C:\\Users\\dna10\\AppData\\Local\\Temp\\osn_gs_diff_surfel_rasterization_qdepth\\osn_gs_diff_surfel_rasterization_qdepth_c.pyd",
+          "sha256": "4476a4791a612c98fcc5aefa80e79d88bf13dd4a8d043e4fc4112c3e77ac7028",
+          "rasterize_gaussians": true
+        }
+      }
+    },
+    "w155_mapping": "C:\\Projects\\OSN-GS\\output\\confirmed\\155_intrinsic_normal_gaussian_region_viability_audit\\gaussian_id_region_status_mapping.npz",
+    "w155_mapping_sha256": "c844c2e684ac5b4a9e939758be42c2019879abe0a5bcede5165b0d8bd7fc1a9b",
+    "w155_report": "C:\\Projects\\OSN-GS\\output\\confirmed\\155_intrinsic_normal_gaussian_region_viability_audit\\worklog_155_report.json",
+    "w160_state": "C:\\Projects\\OSN-GS\\output\\confirmed\\160_per_view_projective_sdf_occlusion_global_persistent_observability\\gaussian_center_observability.npz",
+    "w161_report": "C:\\Projects\\OSN-GS\\output\\confirmed\\161_global_persistent_occlusion_spatial_domain_audit\\worklog_161_report.json",
+    "w162_raw": "C:\\Projects\\OSN-GS\\output\\confirmed\\162_renderer_median_event_direct_observation_semantic_validity_audit\\w162_tabletop_cross_view_raw.npz",
+    "w162_review": "C:\\Projects\\OSN-GS\\output\\confirmed\\162_renderer_median_event_direct_observation_semantic_validity_audit\\review_projection_records.json",
+    "w163_raw": "C:\\Projects\\OSN-GS\\output\\163_renderer_contributor_provenance_median_event_observation_semantics_attribution_audit\\w163_query_provenance_raw.npz"
+  },
+  "outputs": {
+    "report": "C:\\Projects\\OSN-GS\\output\\confirmed\\164_canonical_renderer_contributor_primitive_observability_historical_candidate_b_controlled_ab\\worklog_164_report.json",
+    "global_ab_raw": "C:\\Projects\\OSN-GS\\output\\confirmed\\164_canonical_renderer_contributor_primitive_observability_historical_candidate_b_controlled_ab\\w164_global_ab_raw.npz",
+    "per_camera_states": "C:\\Projects\\OSN-GS\\output\\confirmed\\164_canonical_renderer_contributor_primitive_observability_historical_candidate_b_controlled_ab\\w164_per_camera_states.npz",
+    "contributor_evidence": "C:\\Projects\\OSN-GS\\output\\confirmed\\164_canonical_renderer_contributor_primitive_observability_historical_candidate_b_controlled_ab\\w164_contributor_evidence.npz",
+    "review_root": "C:\\Projects\\OSN-GS\\output\\confirmed\\164_canonical_renderer_contributor_primitive_observability_historical_candidate_b_controlled_ab\\review_views",
+    "visualization_output_format": "PNG primary; no PPM emitted"
+  },
+  "forbidden_changes": {
+    "candidate_b": false,
+    "w160": false,
+    "w161": false,
+    "w162_w163": false,
+    "production_renderer": false,
+    "regions": false,
+    "intrinsic_t_w": false,
+    "tsdf": false,
+    "topology": false,
+    "boundary_first": false,
+    "nurbs": false,
+    "continuation": false,
+    "latent_geometry": false
+  },
+  "runtime_seconds": {
+    "total": 27.115695476531982
+  }
+}
