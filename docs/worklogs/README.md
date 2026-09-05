@@ -281,4 +281,6 @@
 
 - [Worklog 166: Historical SDF/TSDF Zero-Level Surface Mesh Export](166_historical_sdf_zero_surface_mesh_export.md)
 - [Worklog 167: Raw SDF/TSDF Zero-Set Surface as Explicit Camera-Ray Blocker](167_raw_zero_set_ray_blocker_audit.md)
+- [Worklog 167-1: Close Image-Space Review Exports for W167](167_1_image_space_review_exports.md)
+- [Worklog 167-2: Depth-Preserving Local 3D Review of W167 First-hit Geometry](167_2_depth_preserving_local_3d_review.md)
   - W153 `943a764` typed `ExtractedSurface` replay를 변경 없이 외부 viewer용 OBJ와 raw NPZ로 export했다. `28,694,040` vertices / `45,116,659` faces의 전수 OBJ round-trip이 count, world-coordinate bounds, connectivity 모두 exact였고, W153 native faces-adjacency accounting `582,646` components를 재대조했다. raw NPZ는 byte-identical copy이며 FBX는 `FBX_EXPORT_UNAVAILABLE`로 남겼다. 이 diagnostic export는 occlusion semantics나 hidden-surface identity를 검증하지 않는다.

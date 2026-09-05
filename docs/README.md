@@ -627,3 +627,10 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - Synthetic fronto-parallel plane / oblique plane / sphere control에서 interior miss `0`, false blocker `0`을 확인했다. oblique plane의 `154` miss는 support/silhouette boundary에만 남았고, sphere의 raw voxelization 지연(`p95 0.0507h`)도 보정하지 않고 보존했다.
 - Frozen `DSC07960.JPG`, `DSC08003.JPG`, `DSC08043.JPG`와 W162–W165 ROI에서 총 `1,259` sampled rays가 `HIT 1,259 / NO_HIT 0 / AMBIGUOUS 0`이었다. major component `1,242`, disconnected fragment `17`을 attribution-only로 기록했으며, real hidden-space truth는 주장하지 않았다.
 - 결과는 [`output/167_raw_zero_set_ray_blocker_audit/`](../output/167_raw_zero_set_ray_blocker_audit/)에 JSON/PNG/README로 보존했다. 최종 verdict는 `REAL_SCENE_REVIEW_REQUIRED`이며 focused test는 `11 passed`이다. `docs/current_framework.md` 및 production pipeline은 diagnostic-only 범위이므로 수정하지 않았다.
+
+## 2026-09-06 Worklog 167-1 Close Image-Space Review Exports for W167
+
+- [Worklog 167-2: Depth-Preserving Local 3D Review of W167 First-hit Geometry](worklogs/167_2_depth_preserving_local_3d_review.md)
+- [Worklog 167-1](worklogs/167_1_image_space_review_exports.md)은 W167의 저장된 real-scene ray records와 original RGB frame만 사용해 full-frame first-hit overlay, 네 target close crop, component provenance crop, query ladder crop, 조건부 non-top-20 spotlight를 추가했다. W167 geometry, blocker logic, query semantics, component ranking, architecture verdict는 변경하지 않았다.
+- `DSC07960.JPG`, `DSC08003.JPG`, `DSC08043.JPG`의 ROI count를 그대로 재현했고, 모든 expected first-hit/query projection이 image bounds 안에 있었다. W167-associated non-top-20 coverage는 target/camera association 합계 `24`건(겹치는 contact/vase 포함), unique first-hit fragment `17`건이며 attribution-only로 유지했다.
+- 결과는 [`output/167_raw_zero_set_ray_blocker_audit/real_scene/review_views/`](../output/167_raw_zero_set_ray_blocker_audit/real_scene/review_views/)에 shared-README + direct camera PNG layout으로 보존했다. tight crop 밖의 기존 association은 숨기거나 재분류하지 않았고, 최종 판단은 여전히 `REAL_SCENE_REVIEW_REQUIRED`이다. focused test는 `6 passed`이다.
