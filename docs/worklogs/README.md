@@ -1,5 +1,8 @@
 # 작업로그 보존 정책
 
+- [Worklog 173: Tabletop multi-loop observed-support domain 원인 분석](173_tabletop_multi_loop_domain_attribution.md)
+  - W172134 loop 모두 closed,132 simple,2 self-contact; inter-loop contact9쌍. Chart134 unsupported regions와 native→chart face-connectivity 변화 및 height conflict를 분리했다. `MIXED_ATTRIBUTION`, PNG9/README9, 관련 focused tests22 passed. Loop repair와 NURBS/domain 구현 없이 종료했다.
+
 - [Worklog 172: W171 fragmentation gate와 structural fit 실패 원인](172_fragmentation_gate_vs_structural_fit_audit.md)
   - 두 real coherent largest-component 진단에서도 134/1,841개 boundary loop로 abstain했다. W171 complete-support baseline은 보존했고 LSQ capacity는 미검증이다. PNG 8개, README 9개, focused tests `5 passed`. Component filtering은 production으로 채택하지 않았다.
 

@@ -1,5 +1,11 @@
 # OSN-GS 문서 안내
 
+## 2026-09-06 Worklog 173 — Tabletop multi-loop domain 원인 분석
+
+- [Worklog 173](worklogs/173_tabletop_multi_loop_domain_attribution.md)은 W172 tabletop15,189 row와134 loop를 exact 보존했다. 모든 loop는 개별 closed지만132개만 simple이고, L000/L009 self-contact와 inter-loop contact9쌍이 있다. 131 simple-hole trace,1 exterior trace,2 compound trace가134 unsupported chart regions를 설명한다.
+- Chart occupied face-components는2개(6,608+1 cell), vertex-connectivity는1개다. Native6-face component1개에서 chart face-connectivity가 달라지는 edge3개를 확인했다. 같은 chart bin의 최대 height span은32.88685h다. Verdict는 **`MIXED_ATTRIBUTION`**: observed-support holes와 exactly-one-loop rejection gate는 확인했지만, 정상 단일 carrier가 그 gate 하나 때문에만 reject됐다는 결론은 미입증이다.
+- `output/173_tabletop_multi_loop_domain_attribution/`에 필수7 family PNG9개, README9개, 전체134-loop inventory와 world/chart correspondence를 저장했다. 관련 focused tests **22 passed**, 마지막 W173 focused tests **9 passed**. W171/W172 output, boundary/fitter, production은 유지했고 loop repair·NURBS fit·다음 domain 설계는 실행하지 않았다.
+
 ## 2026-09-06 Worklog 172 — W171 fragmentation gate와 structural fit 실패 원인
 
 - [Worklog 172](worklogs/172_fragmentation_gate_vs_structural_fit_audit.md)은 W171 baseline을 그대로 두고 두 real coherent case의 largest native component만 진단 대조군으로 실행했다. Tabletop 15,189/17,965개(84.5477%), curved/vase 111,601/118,030개(94.5531%)를 원본 row 그대로 사용했다.
