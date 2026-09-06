@@ -6,6 +6,12 @@
 - W174 row 4043/4051의 owner Gaussian은 stable ID 4,937,175 / 3,929,355이며 모두 subset 1 core다. 저장된 103-triangle path의 owner도 전부 같은 subset, boundary crossing 0이다. **Nearest-center ownership이지 renderer/TSDF contributor의 causal provenance는 아니다.** W150 `form_surface_regions`의 mutual-tangent·consensus·bridge/path 계약은 W154에서 실행되지 않으며 W97 identity 보존과 구분한다.
 - `output/175_gaussian_normal_local_surface_lineage_audit/`: PNG 9개, 자체 한글 README 10개, 344 contextual subset 전체 inventory. Focused tests **42 passed**, frozen 파일 1,505개 hash 보존. Partition/ownership/geometry/chart/NURBS/production은 변경하지 않았다. 기존 W174 staged 변경은 W175 commit과 분리해 보존한다.
 
+## 2026-09-06 Worklog 174 — Tabletop reference zero-set surface-complex 원인 분석
+
+- [Worklog 174](worklogs/174_reference_surface_complex_attribution.md)는 지시서가 전제한 frozen zero-set **triangle**이 저장소에 존재한 적이 없음을 먼저 확인하고(셀당 1점, `mesh_intermediate: false`), 사용자 승인 하에 동일 frozen corner scalar에서 결정론적 marching-cubes로 재추출했다. 각 cell을 자기만의 2x2x2 block으로 넣어 ownership이 구조적으로 exact하며 distance/threshold 매칭을 쓰지 않는다. 15,189 cell 전부가 triangle을 냈고 단위 cell 이탈 0건이다.
+- Reference surface는 triangle 31,149 / welded vertex 17,177 / **triangle-connected component 132개**이며 최대 성분이 91.02%다. Native 6-face 인접 30,821쌍 중 **1,595쌍(5.18%)이 표면 인접이 아니고 역방향은 0**이라, native 연결성이 표면 연결성을 일방향으로 과다추정한다. W173 height witness(row 4043/4051)는 native cell L1 46 거리임에도 **같은 component에서 102 edge step으로 연결**되어 `CHART_COLLAPSE_SAME_SURFACE`로 귀속됐다.
+- Verdict는 **`MIXED_ATTRIBUTION`**: W154 planar chart가 coherent surface를 실제로 파괴하지만(519 bin이 서로 다른 component 병합, height span 최대 32.89h), support 자체도 charting 이전에 이미 132 component와 427개 다중-patch cell을 갖는다. `output/174_reference_surface_complex_attribution/`에 PNG 8개, README 7개, component 전체 목록을 저장했다. W174 focused **17 passed**, W171~W174 합산 **39 passed**. Region 분할·chart 재설계·NURBS fit은 하지 않았다.
+
 ## 2026-09-06 Worklog 173 — Tabletop multi-loop domain 원인 분석
 
 - [Worklog 173](worklogs/173_tabletop_multi_loop_domain_attribution.md)은 W172 tabletop15,189 row와134 loop를 exact 보존했다. 모든 loop는 개별 closed지만132개만 simple이고, L000/L009 self-contact와 inter-loop contact9쌍이 있다. 131 simple-hole trace,1 exterior trace,2 compound trace가134 unsupported chart regions를 설명한다.

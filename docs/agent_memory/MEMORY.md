@@ -63,3 +63,5 @@
 - [Evidence-bounded projective TSDF](project_evidence_bounded_projective_tsdf.md) — WL127: renderer median depth fused directly into a TSDF, NO topology/KNN/region/boundary/chart used to construct; evidence coverage 89.84% vs historical 58.47%, ray-hit 99.88%; verdict **B** (premise viable, fixed TSDF insufficient); NURBS handoff PROMISING
 - [Worklog 127 TSDF code layout](project_worklog127_tsdf_code_layout.md) — isolated construction modules + AST isolation test, skimage mask is single-corner, frontier-only closure, --cache gotchas
 - [View README analysis required](feedback_view_readme_analysis_required.md) — every view README needs a 분석 및 평가 section grounded in that batch's report numbers, from WL127 onward
+- [Zero-set 삼각형 미저장](project_zero_set_triangles_never_persisted.md) — W154 계보는 셀당 1점(surface-nets); 삼각형은 frozen corner_values에서 재추출
+- [W174 surface complex 결과](project_worklog174_surface_complex_layout.md) — native 연결성의 일방향 과다추정; W173 witness는 chart 접힘
