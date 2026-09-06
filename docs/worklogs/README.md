@@ -305,3 +305,7 @@
 - [Worklog 169: W168 Strict Premature Zero-Set Blocker Counterexample Attribution](169_w168_strict_premature_zero_set_blocker_counterexample_attribution.md)
 - [Worklog 170: Construction-Native Conservative Blocker Certificate Audit](170_construction_native_conservative_blocker_certificate_audit.md)
   - W153 `943a764` typed `ExtractedSurface` replay를 변경 없이 외부 viewer용 OBJ와 raw NPZ로 export했다. `28,694,040` vertices / `45,116,659` faces의 전수 OBJ round-trip이 count, world-coordinate bounds, connectivity 모두 exact였고, W153 native faces-adjacency accounting `582,646` components를 재대조했다. raw NPZ는 byte-identical copy이며 FBX는 `FBX_EXPORT_UNAVAILABLE`로 남겼다. 이 diagnostic export는 occlusion semantics나 hidden-surface identity를 검증하지 않는다.
+## 2026-09-07 Worklog 177 — Intrinsic-normal structural contract composition audit
+
+- [Worklog 177](177_intrinsic_normal_structural_local_surface_decomposition_controlled_composition_audit.md): W150 structural constructor가 covariance full-frame·scale·reliability·affinity에 의존하므로 learned intrinsic `t_w`를 normal만 바꾸는 clean substitution은 성립하지 않는다. **`NO_CLEAN_NORMAL_SUBSTITUTION`**.
+- Candidate C 구현/replay/real-scene visualization은 gate 실패에서 중단했다. W97/W154 baseline과 W150 historical lineage를 `NOT_COMPARABLE`로 분리해 기록했으며, production behavior와 기존 산출물은 변경하지 않았다.

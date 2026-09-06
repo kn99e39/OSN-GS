@@ -687,3 +687,8 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 # 2026-09-06 Worklog 176 — Historical Local Surface Decomposition 계약 복원
 
 - [Worklog 176](worklogs/176_historical_local_surface_decomposition_contract_reconstruction.md): **`CONTRACT_SPLIT_ACROSS_MULTIPLE_HISTORICAL_BRANCHES`**. W154는 W96/W97 intrinsic `t_w` partition을 실제로 소비하고 W97→W154→W171 identity는 보존하지만, W150 `form_surface_regions`의 covariance/consensus/bridge/path 계약은 호출하지 않는다. W10/W31–W38/W150의 structural safeguard branch와 W96–W100/W154의 intrinsic-normal branch를 합친 승인 구현은 보존된 역사에서 확인되지 않았다. 새 hybrid, same-checkpoint control, decomposition/NURBS/TSDF 변경, 비교 visualization은 실행하지 않고 drift 지점에서 종료했다.
+## 2026-09-07 Worklog 177 — Intrinsic-normal structural contract composition audit
+
+- [Worklog 177](worklogs/177_intrinsic_normal_structural_local_surface_decomposition_controlled_composition_audit.md)는 W150 `form_surface_regions`의 covariance structural safeguards에 learned intrinsic `t_w`를 **normal만** 치환할 수 있는지 dependency audit했다.
+- `GaussianCovarianceFrame`의 tangent axes/scales, covariance-based reliability, affinity의 tangent residual/footprint/normal-thickness, W150 bridge/path safeguards가 normal scalar와 inseparable하므로 최종 verdict는 **`NO_CLEAN_NORMAL_SUBSTITUTION`**이다.
+- Candidate C, real-scene replay, W177 A–G visualization은 clean gate failure로 실행하지 않았다. W97/W154/W155 baseline, W174 witness, tabletop/zero-set identity는 보존했고 production/TSDF/NURBS는 변경하지 않았다. [정적 report](../output/177_intrinsic_structural_dependency_audit/worklog_177_report.json)
