@@ -647,3 +647,9 @@ Boundary candidate 전달 경로(no_gap 분류 → representative selection → 
 - [Worklog 169](worklogs/169_w168_strict_premature_zero_set_blocker_counterexample_attribution.md)은 W168 premature ray `2,428`개를 frozen first-hit triangle에 exact join하고, hit XYZ·세 vertex analytic residual과 80-digit Decimal ray/analytic intersection sign을 계측했다. W168 네 fixture/NPZ를 exact 재현했으며 실행 전후 artifact SHA-256도 동일하다.
 - fronto-parallel `84`개와 layered `1,038`개는 high precision에서 `z_s-z*=0`이 되어 `NUMERICAL_ORDERING_ONLY`였다. oblique `1,306`개는 모두 음의 sign을 유지해 `GEOMETRIC_FRONT_BIAS`이며, 최대 displacement는 `1.5084e-8 world = 3.0167e-7 h`로 매우 작다. sphere에는 premature ray가 없다.
 - 최종 attribution은 `MIXED`: stable geometric front-bias `1,306`, finite-precision ordering artifact `1,122`, unresolved/reversal `0`이다. W168 strict failure는 보존하되 prevalence와 displacement magnitude를 분리했고 epsilon, correction, filtering, blocker semantics 수정은 하지 않았다. W169 focused tests는 `4 passed`, W168/W169 combined tests는 `9 passed`다.
+
+## 2026-09-06 Worklog 170 Construction-Native Conservative Blocker Certificate Audit
+
+- [Worklog 170](worklogs/170_construction_native_conservative_blocker_certificate_audit.md)은 W168 네 fixture의 raw zero-set first hit `9,428`개에서 owning cell, eight-corner TSDF value/`support_count`, marching-cubes interpolation 및 ray/cell extent를 전수 감사했다. 모든 hit cell은 eight-corner authoritative/sign-changing이었고 W168/W169 artifact hash는 실행 전후 동일했다.
+- `SparseProjectiveTSDF`는 fused mean `value`와 contributor 수만 저장하며 per-view value, source-camera identity, projective-depth extrema를 보존하지 않는다. `h`, `mu`, cell diagonal/ray chord, iso-value 및 W169 empirical error도 construction semantics상 physical surface의 one-sided bound가 아니다.
+- 최종 verdict는 `NO_CONSTRUCTION_NATIVE_BLOCKER_CERTIFICATE`다. `BEHIND_ZEROSET`은 representation-level geometry fact로만 유지하며 `CERTIFIED_BLOCKED`를 정의하지 않았다. epsilon/margin/filtering/global state 변경 없이 W161 pause를 보존했고 focused tests는 `4 passed`다.
