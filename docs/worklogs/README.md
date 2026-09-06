@@ -1,5 +1,8 @@
 # 작업로그 보존 정책
 
+- [Worklog 176: Historical Local Surface Decomposition 계약 복원과 W154 Architecture Drift 귀속](176_historical_local_surface_decomposition_contract_reconstruction.md)
+  - **`CONTRACT_SPLIT_ACROSS_MULTIPLE_HISTORICAL_BRANCHES`**. W154의 실제 active path는 intrinsic `t_w` 기반 W97이며 W175 lineage는 보존되지만, W150의 `form_surface_regions`(covariance frame + consensus/bridge/path)는 호출되지 않는다. A–D intent를 동시에 만족하는 단일 승인 implementation이 없어 W150/W97 hybrid control과 새 visualization을 실행하지 않고 종료했다.
+
 - [Worklog 175: Gaussian-normal Local Surface subset ownership 계보 감사](175_gaussian_normal_local_surface_lineage_audit.md)
   - W96/W97 계열 identity는 W154 전체 21,235,312 sample의 exact join과 W171 tabletop 17,965점에서 보존됐다. W174 witness 두 owner와 103-triangle path도 subset 1 core이며 downstream subset merge 0이다. W150의 richer constructor 계약은 별도 미호출 경로라는 한계를 명시한다. PNG 9/README 10, 344-subset inventory, focused 42 passed. 수정·재분해·NURBS fit 없이 종료했다.
 
