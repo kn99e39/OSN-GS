@@ -1,5 +1,8 @@
 # 작업로그 보존 정책
 
+- [Worklog 172: W171 fragmentation gate와 structural fit 실패 원인](172_fragmentation_gate_vs_structural_fit_audit.md)
+  - 두 real coherent largest-component 진단에서도 134/1,841개 boundary loop로 abstain했다. W171 complete-support baseline은 보존했고 LSQ capacity는 미검증이다. PNG 8개, README 9개, focused tests `5 passed`. Component filtering은 production으로 채택하지 않았다.
+
 - [Worklog 171: Zero-Set-Derived Visible Structural NURBS Audit with Review Visualizations](171_zero_set_derived_visible_structural_nurbs_audit.md)
   - Zero-set support를 authoritative geometry로 고정하고 W154 boundary-first fit을 재사용했다. Synthetic coherent controls는 materialize됐지만 real tabletop/curved-vase complete support는 각각 313/1,925개 component로 분절되어 abstain했고, mixed/contact도 49,872개 component를 모두 보존한 채 abstain했다. Verdict는 `NO_CURRENT_ZERO_SET_SUPPORT_NOT_RELIABLY_STRUCTURALLY_FIT_READY`; focused test `5 passed`.
 
