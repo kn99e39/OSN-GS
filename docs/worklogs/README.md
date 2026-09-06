@@ -1,5 +1,8 @@
 # 작업로그 보존 정책
 
+- [Worklog 171: Zero-Set-Derived Visible Structural NURBS Audit with Review Visualizations](171_zero_set_derived_visible_structural_nurbs_audit.md)
+  - Zero-set support를 authoritative geometry로 고정하고 W154 boundary-first fit을 재사용했다. Synthetic coherent controls는 materialize됐지만 real tabletop/curved-vase complete support는 각각 313/1,925개 component로 분절되어 abstain했고, mixed/contact도 49,872개 component를 모두 보존한 채 abstain했다. Verdict는 `NO_CURRENT_ZERO_SET_SUPPORT_NOT_RELIABLY_STRUCTURALLY_FIT_READY`; focused test `5 passed`.
+
 이 디렉터리는 현재 의사결정과 구현을 계속하는 데 필요한 최소 기록만 보존한다. 이전 실험, 폐기된 방법론, 과거 게이트의 세부 경과는 작업 디렉터리에서 제거했으며 필요할 때 Git 이력으로 복구한다.
 
 각 worklog가 만드는 실측 export는 `output/`(gitignore됨) 아래 번호가 매겨진 폴더에 쌓인다 — 폴더 명명·`confirmed/` 이동·preview_png 배치 규약은 [output/ 폴더 관리 규약](../output_folder_conventions.md)을 참조한다.

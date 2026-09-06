@@ -1,5 +1,11 @@
 # OSN-GS 문서 안내
 
+## 2026-09-06 Worklog 171 Zero-Set-Derived Visible Structural NURBS Audit
+
+- [Worklog 171](worklogs/171_zero_set_derived_visible_structural_nurbs_audit.md)은 frozen raw zero-set support만 geometry로 사용해 bounded visible NURBS materialization을 감사했다. Synthetic planar/curved single-sheet는 1 component, closed loop 1개, rank 32/32로 materialize됐고 layered control은 2 component라 abstain했다.
+- 사전 고정 real tabletop/curved-vase target은 각각 313/1,925개 native component였고 mixed/contact는 49,872개 component였다. Fragment 삭제나 largest-component rescue 없이 모두 abstain했으며 최종 verdict는 `NO_CURRENT_ZERO_SET_SUPPORT_NOT_RELIABLY_STRUCTURALLY_FIT_READY`다.
+- Output은 `output/171_zero_set_derived_visible_structural_nurbs_audit/`에 report, case artifacts, PNG 30개와 visualization/case별 README 14개를 보존한다. PPM, W153 replay-cache 복사, production/current-framework 변경은 없다. Focused test는 `5 passed`다.
+
 ## 현재 기준 문서
 
 - [Urgent Work Master](Urgent_Work/OSN_GS_Urgent_Work_Master.md): 현재 방향, 활성 작업, 승인 경계의 단일 기준
