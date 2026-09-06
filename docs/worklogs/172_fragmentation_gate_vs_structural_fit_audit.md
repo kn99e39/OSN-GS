@@ -72,3 +72,13 @@ W171이 처음 중단된 직접 원인은 complete-support fragmentation gate였
 - 미해결: 현 support의 multi-loop chart에서 LSQ에 도달하지 못했으므로, coherent physical surface에 대한 NURBS capacity와 boundary-domain 계약의 적합성은 이번 결과만으로 확정할 수 없다. 해결책은 구현하거나 자동 제안하지 않았다.
 
 Focused test **5 passed (4.37s)**. W171 파일/결과 보존, deterministic largest identity와 동률 처리, 선택 row의 원본 일치, 기존 함수 호출 및 default 인수 유지, valid PNG/README와 boundary artifact 생성을 확인했다. 전체 regression은 실행하지 않았다. 로컬 CPU에서 기존 배열만 읽었고 replay cache를 temp에 복사하지 않았다. Output은 repository 기존 규약대로 gitignore된 로컬 산출물이며 코드·테스트·Worklog는 commit한다.
+
+## 8. 추가 요청: 렌더링 뷰 투영
+
+[렌더 투영 README](../../output/172_render_view_projection_review/README.md)에 fixed camera `DSC07960.png`, `DSC08003.png`, `DSC08043.png`를 직접 저장했다. 각 PNG는 2x3 panel로 Original Scene / 기존 W164 Observed-Occluded pair와 두 case의 complete-support 강조 / selected-component boundary 투영을 보여 준다. 기존 W164 iteration 30000, 1,190,469-row canonical render를 재사용했으며 GPU 재렌더링은 없다. Shared README에 모든 palette, 입력 상태, rendering 조건과 한계를 기록했다.
+
+투영에는 canonical `observed_occluded.shared.project_queries`의 half-pixel mapping `((ndc+1)*size-1)/2`를 사용한다. Image y는 아래로 증가하며 별도 flip이 없다. W155/W171 RGB-overlay helper는 y-flip과 `(size-1)` mapping을 사용하므로 이번 renderer overlay에 재사용하지 않았다. W171 원본은 보존했고 W172 support/boundary/fit도 재계산하지 않았다. 모든 입력 source 및 render hash를 검증했다.
+
+세 카메라 검토에서 tabletop target은 상판 일부에 대응한다. 반면 기존 `curved/vase` target의 largest component는 vase 자체에 대응하지 않는 넓은 scene 영역으로 투영된다. 따라서 이 control을 vase의 coherent physical sheet에 대한 fit-capacity 검증이라고 해석할 수 없다. 현재 실패 수치/판정은 그대로 유지한다.
+
+모든 row를 투영하며 canonical near/frustum 밖 row만 표시하지 않는다. Depth occlusion culling은 없어 앞 물체 위로 뒤 support가 겹칠 수 있다. Orange는 chart-plane 경계이며 physical surface edge가 아니다. 기존 mandatory pair의 state 역시 W164 historical reference로서 W172의 새 visibility 판정이 아니다. 이번 추가물은 PNG 3개와 README 1개이며 원래 W172 3D output과 별도 directory에 보존한다. 추가 focused tests는 **3 passed (1.21s)**로 renderer half-pixel/y 방향, source 보존, camera PNG와 전체 row 투영 accounting을 확인했다.

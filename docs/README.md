@@ -5,6 +5,7 @@
 - [Worklog 172](worklogs/172_fragmentation_gate_vs_structural_fit_audit.md)은 W171 baseline을 그대로 두고 두 real coherent case의 largest native component만 진단 대조군으로 실행했다. Tabletop 15,189/17,965개(84.5477%), curved/vase 111,601/118,030개(94.5531%)를 원본 row 그대로 사용했다.
 - 단일 component에서도 boundary loop가 각각 134/1,841개여서 `native_support_boundary_has_multiple_loops`로 abstain했다. Fragmentation gate 이후에도 boundary/domain 계약에서 막혔으며 **LSQ와 NURBS 표현 용량 자체는 아직 미검증**이다. Largest-component filtering을 production으로 채택하지 않았다.
 - `output/172_fragmentation_gate_vs_structural_fit_audit/`에 PNG 8개, README 9개, baseline hash manifest와 선택 support/boundary provenance를 저장했다. Focused tests `5 passed`; W171 candidate/output, W154 fitter, production과 W161 pause는 유지했다.
+- 추가 렌더 투영은 `output/172_render_view_projection_review/`의 camera PNG 3개와 공통 README에 있다. 기존 W164 Original Scene / Observed-Occluded pair와 W172 support/boundary를 함께 표시한다. Canonical half-pixel projection을 사용하며 depth culling은 없다. Curved/vase로 명명된 component가 vase 자체에 대응하지 않는다는 시각 검토 한계를 Worklog에 기록했다.
 
 ## 2026-09-06 Worklog 171 Zero-Set-Derived Visible Structural NURBS Audit
 
