@@ -1,5 +1,8 @@
 # 작업로그 보존 정책
 
+- [Worklog 175: Gaussian-normal Local Surface subset ownership 계보 감사](175_gaussian_normal_local_surface_lineage_audit.md)
+  - W96/W97 계열 identity는 W154 전체 21,235,312 sample의 exact join과 W171 tabletop 17,965점에서 보존됐다. W174 witness 두 owner와 103-triangle path도 subset 1 core이며 downstream subset merge 0이다. W150의 richer constructor 계약은 별도 미호출 경로라는 한계를 명시한다. PNG 9/README 10, 344-subset inventory, focused 42 passed. 수정·재분해·NURBS fit 없이 종료했다.
+
 - [Worklog 173: Tabletop multi-loop observed-support domain 원인 분석](173_tabletop_multi_loop_domain_attribution.md)
   - W172134 loop 모두 closed,132 simple,2 self-contact; inter-loop contact9쌍. Chart134 unsupported regions와 native→chart face-connectivity 변화 및 height conflict를 분리했다. `MIXED_ATTRIBUTION`, PNG9/README9, 관련 focused tests22 passed. Loop repair와 NURBS/domain 구현 없이 종료했다.
 

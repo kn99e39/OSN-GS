@@ -1,5 +1,11 @@
 # OSN-GS 문서 안내
 
+## 2026-09-06 Worklog 175 — Gaussian-normal subset → zero-set ownership 계보 감사
+
+- [Worklog 175](worklogs/175_gaussian_normal_local_surface_lineage_audit.md): **`CANONICAL_LOCAL_SURFACE_IDENTITY_PRESERVED`**, W96/W97 intrinsic-normal coverage-first 계열의 동일 W154/W155 checkpoint 기준이다. W154 21,235,312 sample의 stable-ID/region/status/ownership을 exact join했고 W171 tabletop 17,965점은 W97 subset 1(전체 Gaussian 65,471개)의 owner 3,315개에서 왔다. Downstream subset merge는 0이다.
+- W174 row 4043/4051의 owner Gaussian은 stable ID 4,937,175 / 3,929,355이며 모두 subset 1 core다. 저장된 103-triangle path의 owner도 전부 같은 subset, boundary crossing 0이다. **Nearest-center ownership이지 renderer/TSDF contributor의 causal provenance는 아니다.** W150 `form_surface_regions`의 mutual-tangent·consensus·bridge/path 계약은 W154에서 실행되지 않으며 W97 identity 보존과 구분한다.
+- `output/175_gaussian_normal_local_surface_lineage_audit/`: PNG 9개, 자체 한글 README 10개, 344 contextual subset 전체 inventory. Focused tests **42 passed**, frozen 파일 1,505개 hash 보존. Partition/ownership/geometry/chart/NURBS/production은 변경하지 않았다. 기존 W174 staged 변경은 W175 commit과 분리해 보존한다.
+
 ## 2026-09-06 Worklog 173 — Tabletop multi-loop domain 원인 분석
 
 - [Worklog 173](worklogs/173_tabletop_multi_loop_domain_attribution.md)은 W172 tabletop15,189 row와134 loop를 exact 보존했다. 모든 loop는 개별 closed지만132개만 simple이고, L000/L009 self-contact와 inter-loop contact9쌍이 있다. 131 simple-hole trace,1 exterior trace,2 compound trace가134 unsupported chart regions를 설명한다.
