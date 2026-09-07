@@ -1,5 +1,10 @@
 # OSN-GS 문서 안내
 
+## 2026-09-07 Worklog 178 — W97 Region-Level Anti-Chaining Contract Discovery
+
+- [Worklog 178](worklogs/178_region_level_anti_chaining_contract_discovery.md): **`PROVENANCE_LIMITED` / `REAL_TABLE_RIM_PROVENANCE_GAP`**. W97을 immutable baseline으로 두고 merge chronology·q1/q2/q3·pathwise normal evolution·critical graph support를 diagnostic-only로 기록했다. Table Rim/side historical stable-ID lineage는 복원되지 않아 W171 curved/vase를 substitute로 쓰지 않았다.
+- Synthetic controls에서는 planar 1 region, smooth 120° cylinder 1→3 (rejection 46), strong 90° bend 1→2 (23), pathological chain 1→2 (5), parallel shortcut 1→1 (0)을 unchanged W97로 재현했다. 이는 real replacement contract가 아니다.
+- `output/178_region_level_anti_chaining_contract_discovery/`에 matched report, full synthetic chronology/PNG/README, current checkpoint negative replay NPZ와 real context PNG를 저장했다. Focused W178+W97 tests는 **25 passed**이며 production/partition/TSDF/NURBS는 변경하지 않았다.
 ## 2026-09-06 Worklog 175 — Gaussian-normal subset → zero-set ownership 계보 감사
 
 - [Worklog 175](worklogs/175_gaussian_normal_local_surface_lineage_audit.md): **`CANONICAL_LOCAL_SURFACE_IDENTITY_PRESERVED`**, W96/W97 intrinsic-normal coverage-first 계열의 동일 W154/W155 checkpoint 기준이다. W154 21,235,312 sample의 stable-ID/region/status/ownership을 exact join했고 W171 tabletop 17,965점은 W97 subset 1(전체 Gaussian 65,471개)의 owner 3,315개에서 왔다. Downstream subset merge는 0이다.

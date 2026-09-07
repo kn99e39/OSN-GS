@@ -1,5 +1,7 @@
 # 작업로그 보존 정책
 
+- [Worklog 178: W97 Region-Level Anti-Chaining Contract Discovery](178_region_level_anti_chaining_contract_discovery.md)
+  - **`PROVENANCE_LIMITED` / `REAL_TABLE_RIM_PROVENANCE_GAP`**. W97 membership을 바꾸지 않고 region-growth chronology, q-spectrum, path, graph-support를 기록했다. Real Table Rim stable-ID lineage는 부재하며, synthetic curved/chain controls의 correlation을 새 contract로 승격하지 않았다. Focused W178+W97 tests는 25 passed다.
 - [Worklog 176: Historical Local Surface Decomposition 계약 복원과 W154 Architecture Drift 귀속](176_historical_local_surface_decomposition_contract_reconstruction.md)
   - **`CONTRACT_SPLIT_ACROSS_MULTIPLE_HISTORICAL_BRANCHES`**. W154의 실제 active path는 intrinsic `t_w` 기반 W97이며 W175 lineage는 보존되지만, W150의 `form_surface_regions`(covariance frame + consensus/bridge/path)는 호출되지 않는다. A–D intent를 동시에 만족하는 단일 승인 implementation이 없어 W150/W97 hybrid control과 새 visualization을 실행하지 않고 종료했다.
 
