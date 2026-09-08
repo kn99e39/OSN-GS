@@ -1,5 +1,8 @@
 # 작업로그 보존 정책
 
+- [Worklog 179: Renderer-Native Three-State Observation Evidence Contract](179_renderer_native_three_state_observation_evidence_contract.md)
+  - **`NO_RENDERER_NATIVE_THREE_STATE_CONTRACT`**. Primitive `forward_accepted` is positive observation only; false is not OCCLUDED evidence. qdepth termination/reached remain raw point-query renderer events, not epistemic F. Stops: `SUBJECT_TYPE_MISMATCH` and `OCCLUDED_NOT_POSITIVELY_IDENTIFIABLE`.
+
 - [Worklog 178: W97 Region-Level Anti-Chaining Contract Discovery](178_region_level_anti_chaining_contract_discovery.md)
   - **`PROVENANCE_LIMITED` / `REAL_TABLE_RIM_PROVENANCE_GAP`**. W97 membership을 바꾸지 않고 region-growth chronology, q-spectrum, path, graph-support를 기록했다. Real Table Rim stable-ID lineage는 부재하며, synthetic curved/chain controls의 correlation을 새 contract로 승격하지 않았다. Focused W178+W97 tests는 25 passed다.
 - [Worklog 176: Historical Local Surface Decomposition 계약 복원과 W154 Architecture Drift 귀속](176_historical_local_surface_decomposition_contract_reconstruction.md)

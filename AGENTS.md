@@ -127,9 +127,9 @@ Do not spend time retrying those commands inside the restricted sandbox. Treat t
 
 ## Multi-Agent Handoff Rules
 
-- The user is working with multiple agents, including Codex and Claude. Keep `docs/README.md` updated as the primary follow-up/worklog file whenever implementation direction, important defaults, or known risks change.
+- The user is working with multiple agents, including Codex and Claude. `docs/README.md` is retired and must not be recreated. Use individual files in `docs/worklogs/` as the authoritative Korean worklogs, and keep `docs/worklogs/README.md` as their compact index whenever implementation direction, important defaults, or known risks change.
 - Keep `docs/architecture.md` focused on framework-level design decisions. Keep `AGENTS.md` focused on environment, workflow, and agent-operation rules.
-- When changing notebook training behavior, record the user-visible knobs and their intended semantics in `docs/README.md`.
+- When changing notebook training behavior, record the user-visible knobs and their intended semantics in the relevant worklog; update `docs/current_framework.md` as well only when the active pipeline changes.
 - Do not rely on chat-only memory for decisions such as "NURBS/Voxel must stay strongly integrated" or "uncertain-to-certain promotion is forbidden".
 - 2026-07-24: `docs/agent_memory/` is an in-repo mirror of Claude Code's persistent auto-memory (user-preference/feedback/project-state notes accumulated across Claude sessions on this project), kept there specifically so Codex and other agents can read it too. See `docs/agent_memory/README.md` for the sync convention. Claude keeps this mirror in sync whenever it updates its own memory; other agents should treat it as read-only project history, not as instructions.
 
@@ -138,7 +138,7 @@ Do not spend time retrying those commands inside the restricted sandbox. Treat t
 - For substantial multi-part work, create `docs/worklogs/` if needed.
 - After each completed implementation area, add a short Markdown report containing: work performed, result, evaluation, and remaining risks.
 - Write worklogs in Korean. Keep headings, status, conclusions, decisions, metrics interpretation, and follow-up risks in Korean; technical identifiers, commands, paths, and literal API/CLI names may remain in English.
-- Keep these reports concise and link the final status from `docs/README.md` so Codex and Claude can continue from the same evidence.
+- Keep these reports concise and link the final status from `docs/worklogs/README.md` so Codex and Claude can continue from the same evidence.
 
 
 ## Repository-Wide Pytest Timeout Handling
